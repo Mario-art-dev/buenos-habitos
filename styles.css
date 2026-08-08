@@ -46,7 +46,7 @@ body{
 }
 .brand{ font-weight:800; font-size:1.05rem; display:flex; align-items:center; gap:8px; }
 .brand span{ background: linear-gradient(90deg, var(--accent), var(--accent-2)); -webkit-background-clip:text; background-clip:text; color:transparent; }
-.clock{ font-variant-numeric: tabular-nums; color: var(--muted); font-weight:600; }
+.clock{ font-variant-numeric: tabular-nums; color: var(--muted); font-weight:600; font-size:1.05rem; }
 
 .tab-content{
   flex:1;
@@ -331,7 +331,7 @@ body{
 }
 .lock-content h1{ font-size: 1.6rem; margin: 0 0 8px; }
 .lock-subtitle{ color: var(--muted); margin: 0 0 18px; font-size:0.92rem; line-height:1.5; }
-.lock-timer{ font-size:0.85rem; color: var(--warn); font-weight:700; margin-bottom: 18px; min-height: 1.2em; }
+.lock-timer{ font-size:0.85rem; color: var(--warn); font-weight:700; margin-bottom: 18px; min-height: 1.2em; font-variant-numeric: tabular-nums; }
 
 .lock-queue{ color: var(--muted); font-size:0.75rem; margin-bottom: 14px; }
 
@@ -389,7 +389,7 @@ body{
 .bar-label{ width:70px; font-size:0.72rem; color: var(--muted); flex-shrink:0; }
 .bar-track{ flex:1; height:10px; background: rgba(255,255,255,0.06); border-radius:8px; overflow:hidden; }
 .bar-fill{ height:100%; background: linear-gradient(90deg, var(--accent), var(--good)); }
-.bar-val{ width:34px; text-align:right; font-size:0.72rem; color: var(--muted); flex-shrink:0; }
+.bar-val{ width:34px; text-align:right; font-size:0.72rem; color: var(--muted); flex-shrink:0; font-variant-numeric: tabular-nums; }
 
 .stat-grid{ display:grid; grid-template-columns: repeat(3,1fr); gap:10px; margin-bottom: 6px; }
 .stat-box{ background: var(--card); border:1px solid var(--border); border-radius:14px; padding:14px 8px; text-align:center; }
