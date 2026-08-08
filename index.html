@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<meta name="theme-color" content="#0f1220" />
+<title>Buenos Hábitos</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⏰</text></svg>" />
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="assets/icon.svg" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Buenos Hábitos" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<div id="app">
+
+  <!-- LOCK SCREEN (hidden by default) -->
+  <div id="lockScreen" class="lock-screen hidden" role="alertdialog" aria-modal="true">
+    <div class="lock-content">
+      <div class="lock-icon" id="lockIcon">⏰</div>
+      <div class="lock-eyebrow">Tarea pendiente</div>
+      <h1 id="lockTaskName">Nombre de la tarea</h1>
+      <p id="lockSubtitle" class="lock-subtitle">Completa esto para poder seguir usando el móvil.</p>
+      <div id="lockTimer" class="lock-timer"></div>
+
+      <div class="lock-queue" id="lockQueue"></div>
+
+      <button id="btnComplete" class="btn btn-complete">
+        <span class="btn-complete-fill" id="btnCompleteFill"></span>
+        <span class="btn-complete-label">Mantén pulsado: Ya lo hice ✅</span>
+      </button>
+
+      <div class="lock-secondary-row">
+        <button id="btnSnooze" class="btn-link">Posponer 5 min</button>
+        <button id="btnMute" class="btn-link">🔊 Silenciar</button>
+      </div>
+      <div id="snoozeInfo" class="snooze-info"></div>
+      <div class="lock-warning" id="lockWarning"></div>
+    </div>
+  </div>
+
+  <!-- MAIN APP -->
+  <div id="mainApp" class="main-app">
+    <header class="topbar">
+      <div class="brand">⏰ <span>Buenos Hábitos</span></div>
+      <div class="clock" id="clockNow">--:--</div>
+    </header>
+
+    <main id="tabContent" class="tab-content"></main>
+
+    <nav class="tabbar">
+      <button class="tab-btn active" data-tab="hoy">🏠<span>Hoy</span></button>
+      <button class="tab-btn" data-tab="tareas">✅<span>Tareas</span></button>
+      <button class="tab-btn" data-tab="eventos">⚡<span>Eventos</span></button>
+      <button class="tab-btn" data-tab="progreso">📈<span>Progreso</span></button>
+    </nav>
+  </div>
+
+  <!-- MODAL: Add/Edit task -->
+  <div id="modalOverlay" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h2 id="modalTitle">Nueva tarea</h2>
+        <button id="modalClose" class="icon-btn">✕</button>
+      </div>
+      <form id="taskForm" class="modal-body">
+        <input type="hidden" id="taskId" />
+
+        <label class="field">
+          <span>Icono</span>
+          <input type="text" id="taskIcon" maxlength="2" placeholder="💪" value="💪" />
+        </label>
+
+        <label class="field">
+          <span>Nombre de la tarea</span>
+          <input type="text" id="taskName" placeholder="Ir al gimnasio" required />
+        </label>
+
+        <label class="field">
+          <span>Tipo de horario</span>
+          <select id="taskType">
+            <option value="fixed">Hora fija (ej. cada día a las 18:00)</option>
+            <option value="window">Franja horaria (ej. entre 13:00 y 15:00)</option>
+            <option value="event">Después de un evento (ej. 20 min después de comer)</option>
+          </select>
+        </label>
+
+        <div id="fieldsFixed" class="type-fields">
+          <label class="field">
+            <span>Hora</span>
+            <input type="time" id="taskTime" value="08:00" />
+          </label>
+        </div>
+
+        <div id="fieldsWindow" class="type-fields hidden">
+          <div class="field-row">
+            <label class="field">
+              <span>Desde</span>
+              <input type="time" id="taskWindowStart" value="13:00" />
+            </label>
+            <label class="field">
+              <span>Hasta</span>
+              <input type="time" id="taskWindowEnd" value="15:00" />
+            </label>
+          </div>
+        </div>
+
+        <div id="fieldsEvent" class="type-fields hidden">
+          <label class="field">
+            <span>Evento que lo dispara</span>
+            <select id="taskEventId"></select>
+          </label>
+          <label class="field">
+            <span>Minutos después del evento</span>
+            <input type="number" id="taskDelay" min="0" max="240" value="20" />
+          </label>
+        </div>
+
+        <label class="field">
+          <span>Días</span>
+          <div class="days-row" id="daysRow">
+            <button type="button" class="day-chip" data-day="1">L</button>
+            <button type="button" class="day-chip" data-day="2">M</button>
+            <button type="button" class="day-chip" data-day="3">X</button>
+            <button type="button" class="day-chip" data-day="4">J</button>
+            <button type="button" class="day-chip" data-day="5">V</button>
+            <button type="button" class="day-chip" data-day="6">S</button>
+            <button type="button" class="day-chip" data-day="0">D</button>
+          </div>
+        </label>
+
+        <label class="field field-switch">
+          <span>
+            Bloquear el móvil hasta completarla
+            <small>Si está desactivado, solo recibirás un recordatorio.</small>
+          </span>
+          <input type="checkbox" id="taskEnforce" checked />
+        </label>
+
+        <div class="modal-actions">
+          <button type="button" id="taskDelete" class="btn btn-danger hidden">Eliminar</button>
+          <button type="submit" class="btn btn-primary">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Add event -->
+  <div id="eventModalOverlay" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-header">
+        <h2>Nuevo evento</h2>
+        <button id="eventModalClose" class="icon-btn">✕</button>
+      </div>
+      <form id="eventForm" class="modal-body">
+        <label class="field">
+          <span>Icono</span>
+          <input type="text" id="eventIcon" maxlength="2" placeholder="🍽️" value="🍽️" />
+        </label>
+        <label class="field">
+          <span>Nombre del evento</span>
+          <input type="text" id="eventName" placeholder="Acabo de comer" required />
+        </label>
+        <div class="modal-actions">
+          <button type="submit" class="btn btn-primary">Guardar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

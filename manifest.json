@@ -1,0 +1,14 @@
+{
+  "name": "Buenos Hábitos",
+  "short_name": "Buenos Hábitos",
+  "description": "Alarmas y tareas que se quedan bloqueando la pantalla hasta que las completas.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "portrait",
+  "background_color": "#0f1220",
+  "theme_color": "#0f1220",
+  "icons": [
+    { "src": "assets/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
