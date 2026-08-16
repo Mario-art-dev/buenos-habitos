@@ -27,9 +27,10 @@ puesto en pantalla y los subtítulos ya quemados — listo para descargar o publ
 - **SQLite + Prisma** — guarda trabajos, clips, hashtags y tokens de las cuentas conectadas.
 - **`yt-dlp`** — descarga el vídeo fuente.
 - **`ffmpeg`** — recorta cada momento y lo recompone a formato vertical.
-- **Whisper (OpenAI)** — transcribe el audio con marcas de tiempo.
-- **Claude o GPT** — analiza la transcripción y decide los mejores momentos, títulos,
-  descripciones, puntuación de viralidad y hashtags.
+- **Whisper** — transcribe el audio con marcas de tiempo, vía la API de OpenAI (de pago) o
+  con `faster-whisper` en el propio servidor (gratis).
+- **Gemini, Claude o GPT** — analiza la transcripción y decide los mejores momentos, títulos,
+  descripciones, puntuación de viralidad y hashtags. Gemini tiene capa gratuita.
 - Un **worker** aparte (`worker/index.ts`) procesa los vídeos en segundo plano, para no
   bloquear la web mientras se descarga/transcribe/corta (puede tardar varios minutos por vídeo).
   Ese mismo worker ejecuta el **planificador de publicación automática** cada minuto.
@@ -58,12 +59,42 @@ puesto en pantalla y los subtítulos ya quemados — listo para descargar o publ
    pero la responsabilidad de esa elección es tuya. Si prefieres evitar el riesgo, no añadas
    música: el vídeo queda listo igualmente con el audio original de cada clip.
 
+## Modo 100% gratis (sin pagar nada de IA)
+
+La app puede funcionar sin ningún coste de API. Pon esto en tu `.env`:
+
+```bash
+AI_PROVIDER="gemini"              # Google Gemini tiene capa gratuita
+GEMINI_API_KEY="tu-clave"         # gratis en https://aistudio.google.com/apikey
+TRANSCRIPTION_PROVIDER="local"    # transcribe en tu propio servidor, sin API
+```
+
+- **Gemini** analiza el vídeo, elige los mejores momentos y escribe títulos, descripciones,
+  hashtags y la puntuación de viralidad. Su capa gratuita tiene límites de peticiones por
+  minuto y por día; para un uso normal (unos pocos vídeos al día) sobra. Si te pasas del
+  límite, la app fallará ese trabajo con un error de Gemini y podrás reintentarlo más tarde.
+- **Whisper local** (`faster-whisper`) transcribe el audio en el propio servidor: gratis, sin
+  claves y sin límite de tamaño de archivo. A cambio es más lento y consume CPU —
+  con `LOCAL_WHISPER_MODEL="base"` va bien; `small` transcribe mejor y tarda más.
+
+**Dónde alojarlo gratis:** esta app necesita un servidor de verdad con disco persistente
+(descarga vídeos, los corta con ffmpeg y guarda los shorts). Los planes gratuitos tipo
+Vercel o Render **no sirven**: no conservan los archivos entre reinicios y tienen muy poca
+memoria para procesar vídeo. La opción realmente gratuita es una máquina del plan
+**"Always Free" de Oracle Cloud** (4 núcleos ARM, 24 GB de RAM, 200 GB de disco, gratis de
+forma permanente), que aguanta ffmpeg y Whisper local sin problema. También vale cualquier
+ordenador propio que puedas dejar encendido.
+
+> Nota: el modo gratis solo cubre la IA y el alojamiento. Conectar YouTube y TikTok sigue
+> necesitando que crees tus propias credenciales OAuth (que también son gratuitas, pero
+> requieren darte de alta como desarrollador en cada plataforma — ver más abajo).
+
 ## Puesta en marcha (Docker, recomendado)
 
 ```bash
 cp .env.example .env
-# edita .env y rellena como mínimo: APP_PASSWORD, SESSION_SECRET, ANTHROPIC_API_KEY u OPENAI_API_KEY,
-# y OPENAI_API_KEY_WHISPER (o deja que use OPENAI_API_KEY si ya usas OpenAI para todo)
+# edita .env y rellena como mínimo: APP_PASSWORD, SESSION_SECRET y las claves de IA
+# (o activa el modo gratis descrito arriba)
 
 docker compose up --build -d
 ```
@@ -88,13 +119,22 @@ npm run worker            # worker que procesa los vídeos (terminal 2)
 
 ### IA (obligatorio para analizar el vídeo)
 
-- **`AI_PROVIDER`**: `anthropic` o `openai`. Es quien elige los mejores momentos, escribe
-  títulos/descripciones y puntúa la viralidad.
-  - Anthropic: consigue tu clave en https://console.anthropic.com
-  - OpenAI: consigue tu clave en https://platform.openai.com
-- **`OPENAI_API_KEY_WHISPER`**: la transcripción del audio siempre usa la API Whisper de
-  OpenAI, aunque uses Claude para el análisis. Si ya tienes `OPENAI_API_KEY`, puedes dejar
-  este campo vacío y se reutiliza automáticamente.
+- **`AI_PROVIDER`**: quién elige los mejores momentos, escribe títulos/descripciones y puntúa
+  la viralidad. Tres opciones:
+
+  | Valor | Coste | Clave |
+  |---|---|---|
+  | `gemini` | **Gratis** (capa gratuita con límites) | https://aistudio.google.com/apikey |
+  | `anthropic` | De pago por uso | https://console.anthropic.com |
+  | `openai` | De pago por uso | https://platform.openai.com |
+
+- **`TRANSCRIPTION_PROVIDER`**: cómo se transcribe el audio.
+  - `local` → **gratis**, con `faster-whisper` en tu propio servidor. No necesita ninguna clave.
+  - `openai` → API de Whisper, de pago pero más rápida. Usa `OPENAI_API_KEY_WHISPER` (o
+    reutiliza `OPENAI_API_KEY` si ya la tienes puesta).
+
+  Los dos ajustes son independientes: puedes usar Claude para el análisis y Whisper local
+  para transcribir, o Gemini gratis para todo.
 
 ### YouTube (para publicar automáticamente)
 
@@ -171,7 +211,8 @@ src/lib/pipeline/         descarga (yt-dlp), transcripción (Whisper), análisis
 src/lib/social/           OAuth, subida a YouTube / TikTok y publicación compartida (publish.ts)
 src/lib/trends/           sugerencia de hashtags
 src/lib/schedule/         ajustes y motor del planificador de publicación automática
-src/lib/ai/               proveedor de IA intercambiable (Anthropic / OpenAI), con soporte de visión
+src/lib/ai/               proveedor de IA intercambiable (Gemini / Anthropic / OpenAI), con visión
+scripts/local_whisper.py  transcripción gratuita en el propio servidor (faster-whisper)
 worker/index.ts           proceso en segundo plano: pipeline de vídeos + planificador
 prisma/schema.prisma      modelo de datos (Job, Clip, RankingItem, Publication, SocialAccount,
                           AutoPublishSettings, ScheduleWindow, AutoPublishTask)

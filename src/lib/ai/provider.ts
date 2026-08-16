@@ -18,12 +18,22 @@ export interface AIProvider {
 import { config, requireAiKey } from "@/lib/config";
 import { AnthropicProvider } from "./anthropic";
 import { OpenAIProvider } from "./openai";
+import { GeminiProvider } from "./gemini";
 
 let cached: AIProvider | null = null;
 
 export function getAIProvider(): AIProvider {
   requireAiKey();
   if (cached) return cached;
-  cached = config.ai.provider === "openai" ? new OpenAIProvider() : new AnthropicProvider();
+  switch (config.ai.provider) {
+    case "openai":
+      cached = new OpenAIProvider();
+      break;
+    case "gemini":
+      cached = new GeminiProvider();
+      break;
+    default:
+      cached = new AnthropicProvider();
+  }
   return cached;
 }

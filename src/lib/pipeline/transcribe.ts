@@ -84,9 +84,41 @@ async function transcribeChunk(client: OpenAI, filePath: string): Promise<Transc
   return [{ start: 0, end: 0, text: (result as { text: string }).text }];
 }
 
+/**
+ * Transcribe en el propio servidor con faster-whisper: sin coste de API y sin
+ * límite de tamaño de archivo (no hace falta trocear el audio).
+ */
+async function transcribeLocally(audioFilePath: string): Promise<Transcript> {
+  const scriptPath = path.resolve(process.cwd(), "scripts", "local_whisper.py");
+  const { stdout } = await run(config.transcription.pythonPath, [
+    scriptPath,
+    audioFilePath,
+    config.transcription.localModel,
+  ]);
+
+  let segments: TranscriptSegment[];
+  try {
+    segments = JSON.parse(stdout) as TranscriptSegment[];
+  } catch {
+    throw new Error("La transcripción local no devolvió un JSON válido. Revisa que faster-whisper esté instalado.");
+  }
+
+  return {
+    text: segments.map((s) => s.text).join(" "),
+    segments,
+  };
+}
+
 export async function transcribeAudio(audioFilePath: string): Promise<Transcript> {
+  if (config.transcription.provider === "local") {
+    return transcribeLocally(audioFilePath);
+  }
+
   if (!config.whisper.apiKey) {
-    throw new Error("Falta OPENAI_API_KEY (o OPENAI_API_KEY_WHISPER) para transcribir el audio.");
+    throw new Error(
+      "Falta OPENAI_API_KEY (o OPENAI_API_KEY_WHISPER) para transcribir el audio. " +
+        "Si quieres transcribir gratis en tu propio servidor, pon TRANSCRIPTION_PROVIDER=\"local\" en el .env."
+    );
   }
   const client = new OpenAI({ apiKey: config.whisper.apiKey });
 

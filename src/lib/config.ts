@@ -16,11 +16,20 @@ export const config = {
   sessionSecret: optional("SESSION_SECRET", "dev-secret-change-me"),
 
   ai: {
-    provider: (optional("AI_PROVIDER", "anthropic") as "anthropic" | "openai"),
+    provider: (optional("AI_PROVIDER", "anthropic") as "anthropic" | "openai" | "gemini"),
     anthropicApiKey: optional("ANTHROPIC_API_KEY"),
     anthropicModel: optional("ANTHROPIC_MODEL", "claude-sonnet-5"),
     openaiApiKey: optional("OPENAI_API_KEY"),
     openaiModel: optional("OPENAI_ANALYSIS_MODEL", "gpt-4o"),
+    geminiApiKey: optional("GEMINI_API_KEY"),
+    geminiModel: optional("GEMINI_MODEL", "gemini-2.0-flash"),
+  },
+
+  transcription: {
+    // "openai" = API de Whisper (de pago) | "local" = faster-whisper en el propio servidor (gratis)
+    provider: (optional("TRANSCRIPTION_PROVIDER", "openai") as "openai" | "local"),
+    localModel: optional("LOCAL_WHISPER_MODEL", "base"),
+    pythonPath: optional("PYTHON_PATH", "python3"),
   },
 
   whisper: {
@@ -82,5 +91,8 @@ export function requireAiKey(): void {
   }
   if (config.ai.provider === "openai" && !config.ai.openaiApiKey) {
     throw new Error("AI_PROVIDER=openai pero falta OPENAI_API_KEY en .env");
+  }
+  if (config.ai.provider === "gemini" && !config.ai.geminiApiKey) {
+    throw new Error("AI_PROVIDER=gemini pero falta GEMINI_API_KEY en .env");
   }
 }
