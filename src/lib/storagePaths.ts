@@ -55,6 +55,15 @@ export function candidateCardPath(jobId: string, clipId: string, key: string): s
   return path.join(tmpDir(jobId), `${clipId}_card_${key}.mp4`);
 }
 
+/** Clip principal ya cortado, antes de envolverlo con las tarjetas de comentario narrado. */
+export function clipBodyPath(jobId: string, clipId: string): string {
+  return path.join(tmpDir(jobId), `${clipId}_body.mp4`);
+}
+
+export function narrationAudioPath(jobId: string, clipId: string, key: string): string {
+  return path.join(tmpDir(jobId), `${clipId}_narration_${key}.wav`);
+}
+
 export function musicSegmentPath(jobId: string, clipId: string): string {
   return path.join(tmpDir(jobId), `${clipId}_music.mp3`);
 }

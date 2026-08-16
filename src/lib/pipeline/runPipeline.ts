@@ -5,14 +5,26 @@ import {
   audioPath,
   clipVideoPath,
   clipThumbnailPath,
+  clipBodyPath,
 } from "@/lib/storagePaths";
 import { downloadSourceVideo } from "./download";
-import { extractAudio, transcribeAudio } from "./transcribe";
+import { extractAudio, transcribeAudio, type TranscriptSegment } from "./transcribe";
 import { analyzeTranscriptForClips } from "./analyze";
-import { cutVerticalClip, extractThumbnail } from "./clip";
+import { cutVerticalClip, concatClips, extractThumbnail } from "./clip";
 import { probeVideo, pickVerticalResolution } from "./probe";
 import { processRankingJob } from "./rankingPipeline";
 import { setStatus } from "./status";
+import { generateSingleCommentary } from "./commentary";
+import { renderCommentaryCard } from "./commentaryCards";
+import { config } from "@/lib/config";
+
+function transcriptExcerptFor(segments: TranscriptSegment[], startSec: number, endSec: number): string {
+  return segments
+    .filter((s) => s.end > startSec && s.start < endSec)
+    .map((s) => s.text)
+    .join(" ")
+    .trim();
+}
 
 export async function processJob(jobId: string): Promise<void> {
   const job = await db.job.findUniqueOrThrow({ where: { id: jobId } });
@@ -78,17 +90,59 @@ async function processSingleJob(jobId: string): Promise<void> {
         await db.clip.update({ where: { id: clip.id }, data: { status: "RENDERING" } });
         const outPath = clipVideoPath(jobId, clip.id);
         const thumbPath = clipThumbnailPath(jobId, clip.id);
+        const bodyPath = clipBodyPath(jobId, clip.id);
+
         await cutVerticalClip({
           sourcePath: srcPath,
-          outPath,
+          outPath: bodyPath,
           startSec: clip.startSec,
           endSec: clip.endSec,
           resolution,
         });
+
+        let commentaryIntro: string | null = null;
+        let commentaryOutro: string | null = null;
+
+        if (config.commentary.enabled) {
+          const excerpt = transcriptExcerptFor(transcript.segments, clip.startSec, clip.endSec);
+          const commentary = await generateSingleCommentary({
+            title: clip.title,
+            description: clip.description,
+            transcriptExcerpt: excerpt,
+            hook: clip.hook,
+          });
+          commentaryIntro = commentary.introText;
+          commentaryOutro = commentary.outroText;
+
+          const introCard = await renderCommentaryCard({
+            jobId,
+            clipId: clip.id,
+            key: "intro",
+            text: commentary.introText,
+            resolution,
+          });
+          const outroCard = await renderCommentaryCard({
+            jobId,
+            clipId: clip.id,
+            key: "outro",
+            text: commentary.outroText,
+            resolution,
+          });
+          await concatClips([introCard, bodyPath, outroCard], outPath);
+        } else {
+          fs.copyFileSync(bodyPath, outPath);
+        }
+
         await extractThumbnail(outPath, thumbPath);
         await db.clip.update({
           where: { id: clip.id },
-          data: { status: "READY", filePath: outPath, thumbnailPath: thumbPath },
+          data: {
+            status: "READY",
+            filePath: outPath,
+            thumbnailPath: thumbPath,
+            commentaryIntro,
+            commentaryOutro,
+          },
         });
       } catch (err) {
         await db.clip.update({

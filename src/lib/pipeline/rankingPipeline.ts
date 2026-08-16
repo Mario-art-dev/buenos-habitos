@@ -9,6 +9,7 @@ import { buildCandidateMoments, classifyCandidates, groupIntoRankings } from "./
 import { composeRanking } from "./rankingCompose";
 import { assembleRankingVideo, finalizeWithoutMusic } from "./rankingRender";
 import { setStatus } from "./status";
+import { config } from "@/lib/config";
 
 export async function processRankingJob(jobId: string): Promise<void> {
   const job = await db.job.findUniqueOrThrow({ where: { id: jobId } });
@@ -49,6 +50,7 @@ export async function processRankingJob(jobId: string): Promise<void> {
       let clipId: string | null = null;
       try {
         const composition = await composeRanking(group, title);
+        const commentaryOn = config.commentary.enabled;
         const created = await db.clip.create({
           data: {
             jobId,
@@ -62,6 +64,8 @@ export async function processRankingJob(jobId: string): Promise<void> {
             hashtags: JSON.stringify(composition.hashtags),
             category: group.category,
             musicQuery: composition.musicQuery,
+            commentaryIntro: commentaryOn ? composition.commentaryIntro : null,
+            commentaryOutro: commentaryOn ? composition.commentaryOutro : null,
             status: "RENDERING",
             rankingItems: {
               create: group.items.map((item, idx) => ({
@@ -70,6 +74,7 @@ export async function processRankingJob(jobId: string): Promise<void> {
                 endSec: item.endSec,
                 label: item.label,
                 description: item.description,
+                commentary: commentaryOn ? composition.itemCommentary[idx] ?? null : null,
               })),
             },
           },
@@ -82,11 +87,14 @@ export async function processRankingJob(jobId: string): Promise<void> {
           clipId: created.id,
           sourcePath: srcPath,
           overallTitle: composition.title,
+          overallIntroCommentary: commentaryOn ? composition.commentaryIntro : null,
+          overallOutroCommentary: commentaryOn ? composition.commentaryOutro : null,
           items: created.rankingItems.map((i) => ({
             position: i.position,
             startSec: i.startSec,
             endSec: i.endSec,
             label: i.label,
+            commentary: i.commentary,
           })),
           transcriptSegments: transcript.segments,
           resolution,

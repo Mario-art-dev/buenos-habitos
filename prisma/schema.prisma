@@ -57,6 +57,10 @@ model Clip {
   musicSourceUrl String?
   musicStartSec  Float?
 
+  // Guion del comentario/reacción narrado con IA que envuelve el clip (transparencia para el usuario)
+  commentaryIntro String?
+  commentaryOutro String?
+
   autoPublishedAt DateTime?
   createdAt       DateTime      @default(now())
   publications    Publication[]
@@ -73,6 +77,7 @@ model RankingItem {
   endSec      Float
   label       String
   description String
+  commentary  String? // frase narrada con IA para la tarjeta de este puesto
 }
 
 model Publication {

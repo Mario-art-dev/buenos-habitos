@@ -9,11 +9,14 @@ cualquier vídeo (YouTube u otro compatible con `yt-dlp`) y la app:
 3. Le pone a cada short un **título estratégico corto**, una **descripción corta** adaptada
    al canal, una **probabilidad de viralidad (0-100%)** y **hashtags** pensados para maximizar
    alcance en ese momento.
-4. Corta el clip en vertical, a la mayor resolución que dé el vídeo fuente (hasta 4K), sin
+4. Envuelve el clip con un **comentario/reacción narrado por IA** (voz en off + texto en
+   pantalla) antes y después del momento, dando su propia opinión — para que el vídeo se
+   transforme y no sea una copia directa (ver el aviso legal más abajo).
+5. Corta el clip en vertical, a la mayor resolución que dé el vídeo fuente (hasta 4K), sin
    ninguna marca de agua.
-5. Te deja publicarlo con un clic en **YouTube** y **TikTok** desde tus propias cuentas
+6. Te deja publicarlo con un clic en **YouTube** y **TikTok** desde tus propias cuentas
    conectadas, o descargarlo directamente a tu galería.
-6. Puede publicar solo, según la programación que definas (cada N horas, o en franjas
+7. Puede publicar solo, según la programación que definas (cada N horas, o en franjas
    horarias concretas como "lunes 12:00-14:00").
 
 También tiene un **modo Rankings**: le pegas un vídeo largo de recopilación (p. ej. una hora
@@ -31,11 +34,48 @@ puesto en pantalla y los subtítulos ya quemados — listo para descargar o publ
   con `faster-whisper` en el propio servidor (gratis).
 - **Gemini, Claude o GPT** — analiza la transcripción y decide los mejores momentos, títulos,
   descripciones, puntuación de viralidad y hashtags. Gemini tiene capa gratuita.
+- **Piper o la API de voz de OpenAI** — sintetiza el comentario/reacción narrado que envuelve
+  cada vídeo. Piper es gratis y corre en tu propio servidor.
 - Un **worker** aparte (`worker/index.ts`) procesa los vídeos en segundo plano, para no
   bloquear la web mientras se descarga/transcribe/corta (puede tardar varios minutos por vídeo).
   Ese mismo worker ejecuta el **planificador de publicación automática** cada minuto.
 - Hay un **login con contraseña** (`APP_PASSWORD`) porque esta app puede subir vídeos a tus
   cuentas: no la dejes accesible sin contraseña en internet.
+
+### Comentario/reacción narrado con IA
+
+Con `ENABLE_COMMENTARY="true"` (activado por defecto), cada short y cada vídeo de ranking se
+envuelve con comentario en off generado por IA:
+
+- **Shorts individuales**: una frase de intro antes del clip (presentando el momento con
+  gancho) y una frase de cierre después (con opinión/análisis), narradas con voz y mostradas
+  también como texto en pantalla.
+- **Rankings**: intro narrada para todo el vídeo, un comentario narrado en la tarjeta de cada
+  puesto (`#5`, `#4`...) y un cierre narrado al final con la conclusión del ranking.
+
+El guion generado se guarda y se muestra en la ficha de cada vídeo, para que veas exactamente
+qué se ha dicho. La voz se sintetiza con `TTS_PROVIDER`: `local` (Piper, gratis, corre en tu
+servidor) u `openai` (de pago, voz más natural). Desactívalo con `ENABLE_COMMENTARY="false"`
+si prefieres los clips sin comentario.
+
+⚠️ **Sobre "contenido original" — lo que esto soluciona y lo que NO soluciona.** Hay dos
+sistemas distintos y separados:
+
+1. **Que TikTok/YouTube consideren el vídeo "original"** para dejarte monetizar por
+   visualizaciones (política de cada plataforma). Añadir tu propio comentario/reacción y
+   transformar el vídeo **ayuda mucho** con esto — es el mismo enfoque que usan los canales de
+   reacción/análisis que sí consiguen monetizar. Pero **no hay ninguna garantía**: la detección
+   de "contenido no original" de TikTok es automática y no sigue una regla exacta que se pueda
+   cumplir con matemática.
+2. **Que el creador original del clip pueda reclamarte por derechos de autor.** Esto es un
+   asunto legal, no de la plataforma, y **añadir comentario no lo elimina**. Aunque una
+   plataforma apruebe tu monetización, el dueño de los derechos del vídeo original puede seguir
+   pidiendo que se retire o presentar una reclamación — son dos sistemas independientes, y pasar
+   el primero no te protege del segundo.
+
+En resumen: esta función mejora tus opciones en ambos frentes, pero no las garantiza. Cuanto
+más tuyo se vea el vídeo (tu voz, tu opinión, tu edición), mejor te va a ir, pero la
+responsabilidad de qué contenido reutilizas y cómo lo presentas sigue siendo tuya.
 
 ### Modo Rankings (vídeos de cuenta atrás tipo "TOP 5...")
 
@@ -76,6 +116,8 @@ TRANSCRIPTION_PROVIDER="local"    # transcribe en tu propio servidor, sin API
 - **Whisper local** (`faster-whisper`) transcribe el audio en el propio servidor: gratis, sin
   claves y sin límite de tamaño de archivo. A cambio es más lento y consume CPU —
   con `LOCAL_WHISPER_MODEL="base"` va bien; `small` transcribe mejor y tarda más.
+- La voz del comentario narrado (`TTS_PROVIDER`) ya es `local` (Piper) **por defecto**: no hace
+  falta tocar nada para que también sea gratis.
 
 **Dónde alojarlo gratis:** esta app necesita un servidor de verdad con disco persistente
 (descarga vídeos, los corta con ffmpeg y guarda los shorts). Los planes gratuitos tipo
@@ -207,12 +249,15 @@ para reducir el riesgo de reclamaciones de copyright o "strikes" en tu canal.
 ```
 src/app/                 páginas (dashboard, rankings, galería, detalle de job, ajustes, login) y rutas API
 src/lib/pipeline/         descarga (yt-dlp), transcripción (Whisper), análisis (IA), corte (ffmpeg),
-                          detección de silencios, montaje y música de los vídeos de ranking
+                          guion de comentario narrado, detección de silencios, montaje y música
+                          de los vídeos de ranking
 src/lib/social/           OAuth, subida a YouTube / TikTok y publicación compartida (publish.ts)
 src/lib/trends/           sugerencia de hashtags
 src/lib/schedule/         ajustes y motor del planificador de publicación automática
 src/lib/ai/               proveedor de IA intercambiable (Gemini / Anthropic / OpenAI), con visión
+src/lib/tts/              proveedor de voz intercambiable (Piper local gratis / OpenAI)
 scripts/local_whisper.py  transcripción gratuita en el propio servidor (faster-whisper)
+scripts/local_tts.py      voz narrada gratuita en el propio servidor (Piper)
 worker/index.ts           proceso en segundo plano: pipeline de vídeos + planificador
 prisma/schema.prisma      modelo de datos (Job, Clip, RankingItem, Publication, SocialAccount,
                           AutoPublishSettings, ScheduleWindow, AutoPublishTask)

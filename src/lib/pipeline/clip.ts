@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import { config } from "@/lib/config";
 import { run } from "./exec";
-import type { VerticalResolution } from "./probe";
+import { probeVideo, type VerticalResolution } from "./probe";
 
 const DEFAULT_RES: VerticalResolution = { width: 1080, height: 1920 };
 
@@ -13,6 +13,26 @@ function escapeDrawtext(text: string): string {
 function escapeSubtitlesPath(p: string): string {
   // ffmpeg necesita escapar ":" y "\" dentro del argumento del filtro subtitles=
   return p.replace(/\\/g, "/").replace(/:/g, "\\:");
+}
+
+/** Reparte un texto en varias líneas para que quepa en el ancho del vídeo (drawtext no envuelve solo). */
+export function wrapText(text: string, maxCharsPerLine: number): string {
+  const words = text.trim().split(/\s+/);
+  const lines: string[] = [];
+  let current = "";
+
+  for (const word of words) {
+    const candidate = current ? `${current} ${word}` : word;
+    if (candidate.length > maxCharsPerLine && current) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = candidate;
+    }
+  }
+  if (current) lines.push(current);
+
+  return lines.join("\n");
 }
 
 function buildVerticalFilter(
@@ -108,26 +128,54 @@ export async function cutVerticalClip(opts: CutClipOptions): Promise<void> {
   await run(config.ffmpegPath, args);
 }
 
-/** Genera una "tarjeta" de pocos segundos solo con texto sobre fondo negro, para transiciones de ranking. */
+/**
+ * Genera una "tarjeta" de pocos segundos con texto sobre fondo negro, para transiciones de ranking.
+ * Si se pasa `audioPath` (p.ej. una narración de IA), la tarjeta dura lo que dure ese audio y lo
+ * incluye como pista de sonido; si no, lleva una pista de audio silenciosa. Esto es necesario para
+ * que todos los fragmentos tengan el mismo número de pistas al concatenarlos con `concatClips`
+ * (si un fragmento no llevara pista de audio y otro sí, la concatenación por copia de flujo falla
+ * o desincroniza el audio).
+ */
 export async function renderTitleCard(
   outPath: string,
   text: string,
   durationSec: number,
-  resolution: VerticalResolution = DEFAULT_RES
+  resolution: VerticalResolution = DEFAULT_RES,
+  audioPath?: string,
+  fontDivisor = 9
 ): Promise<void> {
-  const fontSize = Math.round(resolution.width / 9);
-  const filter = `drawtext=text='${escapeDrawtext(
+  let finalDuration = durationSec;
+  if (audioPath) {
+    const { durationSec: audioDurationSec } = await probeVideo(audioPath);
+    finalDuration = Math.max(durationSec, audioDurationSec + 0.4);
+  }
+
+  const fontSize = Math.round(resolution.width / fontDivisor);
+  const drawtextFilter = `drawtext=text='${escapeDrawtext(
     text
   )}':fontcolor=white:fontsize=${fontSize}:fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:borderw=6:bordercolor=black@0.8:x=(w-text_w)/2:y=(h-text_h)/2`;
 
-  await run(config.ffmpegPath, [
+  const args = [
     "-y",
     "-f",
     "lavfi",
     "-i",
-    `color=c=black:s=${resolution.width}x${resolution.height}:d=${durationSec}`,
-    "-vf",
-    filter,
+    `color=c=black:s=${resolution.width}x${resolution.height}:d=${finalDuration}`,
+  ];
+
+  if (audioPath) {
+    args.push("-i", audioPath);
+  } else {
+    args.push("-f", "lavfi", "-i", `anullsrc=channel_layout=stereo:sample_rate=44100:d=${finalDuration}`);
+  }
+
+  args.push(
+    "-filter_complex",
+    `[0:v]${drawtextFilter}[v]`,
+    "-map",
+    "[v]",
+    "-map",
+    "1:a",
     "-c:v",
     "libx264",
     "-preset",
@@ -136,8 +184,15 @@ export async function renderTitleCard(
     "20",
     "-pix_fmt",
     "yuv420p",
-    outPath,
-  ]);
+    "-c:a",
+    "aac",
+    "-b:a",
+    "128k",
+    "-shortest",
+    outPath
+  );
+
+  await run(config.ffmpegPath, args);
 }
 
 /** Concatena varios mp4 con el mismo códec/resolución en un único vídeo, en el orden dado. */

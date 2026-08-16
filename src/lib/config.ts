@@ -37,6 +37,21 @@ export const config = {
     model: optional("WHISPER_MODEL", "whisper-1"),
   },
 
+  commentary: {
+    // Añade voz en off + texto de comentario/reacción con IA a cada short (intro y cierre),
+    // para reforzar que el contenido esté transformado y no sea una copia directa.
+    enabled: optional("ENABLE_COMMENTARY", "true") === "true",
+  },
+
+  tts: {
+    // "local" = Piper (gratis, corre en el propio servidor) | "openai" = API de voz de OpenAI (de pago)
+    provider: (optional("TTS_PROVIDER", "local") as "local" | "openai"),
+    localVoice: optional("LOCAL_TTS_VOICE", "es_ES-davefx-medium"),
+    openaiApiKey: optional("OPENAI_API_KEY_TTS") || optional("OPENAI_API_KEY"),
+    openaiVoice: optional("OPENAI_TTS_VOICE", "alloy"),
+    openaiModel: optional("OPENAI_TTS_MODEL", "tts-1"),
+  },
+
   google: {
     clientId: optional("GOOGLE_CLIENT_ID"),
     clientSecret: optional("GOOGLE_CLIENT_SECRET"),

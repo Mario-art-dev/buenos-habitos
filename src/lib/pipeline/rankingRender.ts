@@ -2,6 +2,8 @@ import fs from "fs";
 import type { TranscriptSegment } from "./transcribe";
 import { probeVideo, type VerticalResolution } from "./probe";
 import { cutVerticalClip, renderTitleCard, concatClips, mixBackgroundMusic, extractThumbnail, extractAudioSegment } from "./clip";
+import { renderCommentaryCard } from "./commentaryCards";
+import { getTTSProvider } from "@/lib/tts/provider";
 import {
   candidateSubClipPath,
   candidateCardPath,
@@ -10,6 +12,7 @@ import {
   clipThumbnailPath,
   srtPath,
   musicSegmentPath,
+  narrationAudioPath,
 } from "@/lib/storagePaths";
 import { run } from "./exec";
 import { config } from "@/lib/config";
@@ -19,6 +22,7 @@ export interface RenderRankingItem {
   startSec: number;
   endSec: number;
   label: string;
+  commentary?: string | null;
 }
 
 function srtTime(sec: number): string {
@@ -53,6 +57,8 @@ export async function assembleRankingVideo(params: {
   clipId: string;
   sourcePath: string;
   overallTitle: string;
+  overallIntroCommentary?: string | null;
+  overallOutroCommentary?: string | null;
   items: RenderRankingItem[]; // ya ordenados de mejor a peor (position 1..N)
   transcriptSegments: TranscriptSegment[];
   resolution: VerticalResolution;
@@ -62,13 +68,27 @@ export async function assembleRankingVideo(params: {
 
   const segmentPaths: string[] = [];
 
+  // Tarjeta de título, narrada con el comentario de intro si el comentario está activado.
   const introPath = candidateCardPath(jobId, clipId, "intro");
-  await renderTitleCard(introPath, overallTitle, 2, resolution);
+  if (params.overallIntroCommentary) {
+    const introAudioPath = narrationAudioPath(jobId, clipId, "intro");
+    await getTTSProvider().synthesize(params.overallIntroCommentary, introAudioPath);
+    await renderTitleCard(introPath, overallTitle, 2, resolution, introAudioPath);
+  } else {
+    await renderTitleCard(introPath, overallTitle, 2, resolution);
+  }
   segmentPaths.push(introPath);
 
   for (const item of playOrder) {
     const cardPath = candidateCardPath(jobId, clipId, `pos${item.position}`);
-    await renderTitleCard(cardPath, `#${item.position}\n${item.label}`, 1.4, resolution);
+    const cardText = `#${item.position}\n${item.label}`;
+    if (item.commentary) {
+      const itemAudioPath = narrationAudioPath(jobId, clipId, `pos${item.position}`);
+      await getTTSProvider().synthesize(item.commentary, itemAudioPath);
+      await renderTitleCard(cardPath, cardText, 1.4, resolution, itemAudioPath);
+    } else {
+      await renderTitleCard(cardPath, cardText, 1.4, resolution);
+    }
     segmentPaths.push(cardPath);
 
     const subPath = candidateSubClipPath(jobId, clipId, item.position);
@@ -89,6 +109,18 @@ export async function assembleRankingVideo(params: {
       subtitlesPath: subtitlesFile,
     });
     segmentPaths.push(subPath);
+  }
+
+  // Tarjeta de cierre narrada con la opinión final, si el comentario está activado.
+  if (params.overallOutroCommentary) {
+    const outroPath = await renderCommentaryCard({
+      jobId,
+      clipId,
+      key: "outro",
+      text: params.overallOutroCommentary,
+      resolution,
+    });
+    segmentPaths.push(outroPath);
   }
 
   const assembledPath = clipAssembledPath(jobId, clipId);

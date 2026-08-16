@@ -28,6 +28,8 @@ export interface ClipData {
   musicQuery?: string | null;
   musicSourceUrl?: string | null;
   musicStartSec?: number | null;
+  commentaryIntro?: string | null;
+  commentaryOutro?: string | null;
   rankingItems?: RankingItemData[];
   publications: { id: string; platform: string; status: string; remoteUrl: string | null; error: string | null }[];
 }
@@ -194,6 +196,14 @@ export default function ClipCard({ clip }: { clip: ClipData }) {
               </span>
             ))}
           </div>
+
+          {(clip.commentaryIntro || clip.commentaryOutro) && (
+            <div className="mt-3 rounded-xl border border-ink-600 bg-ink-900/40 p-3 text-xs text-slate-300">
+              <p className="mb-1 font-semibold text-slate-400">🎙️ Comentario narrado con IA (voz añadida al vídeo)</p>
+              {clip.commentaryIntro && <p>「 {clip.commentaryIntro} 」 — intro</p>}
+              {clip.commentaryOutro && <p className="mt-1">「 {clip.commentaryOutro} 」 — cierre</p>}
+            </div>
+          )}
 
           {isRanking && clip.status === "READY" && (
             <MusicPanel clip={clip} onApplied={() => setVideoVersion((v) => v + 1)} />
