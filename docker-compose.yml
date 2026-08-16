@@ -1,0 +1,36 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file: .env
+    ports:
+      - "3000:3000"
+    volumes:
+      - app_storage:/app/storage
+    restart: unless-stopped
+    depends_on:
+      - migrate
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    env_file: .env
+    volumes:
+      - app_storage:/app/storage
+    restart: unless-stopped
+    depends_on:
+      - migrate
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file: .env
+    volumes:
+      - app_storage:/app/storage
+    command: ["npx", "prisma", "db", "push"]
+
+volumes:
+  app_storage:

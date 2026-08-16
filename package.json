@@ -1,0 +1,40 @@
+{
+  "name": "escenas-virales-studio",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Generador de shorts virales con IA: analiza cualquier video, corta los mejores momentos, puntua su probabilidad viral y los publica en YouTube y TikTok.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "prisma generate && next build",
+    "start": "next start",
+    "worker": "tsx watch worker/index.ts",
+    "worker:build": "tsx worker/index.ts",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "db:push": "prisma db push",
+    "db:generate": "prisma generate",
+    "db:studio": "prisma studio"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.1",
+    "@prisma/client": "^5.22.0",
+    "clsx": "^2.1.1",
+    "googleapis": "^144.0.0",
+    "next": "^14.2.15",
+    "openai": "^4.68.4",
+    "prisma": "^5.22.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.16.11",
+    "@types/react": "^18.3.11",
+    "@types/react-dom": "^18.3.1",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.13",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.3"
+  }
+}

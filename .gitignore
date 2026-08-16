@@ -1,0 +1,24 @@
+node_modules/
+.next/
+out/
+build/
+dist/
+
+# env
+.env
+.env.local
+.env*.local
+
+# storage: downloaded videos, generated clips, thumbnails, sqlite db
+storage/*
+!storage/.gitkeep
+prisma/dev.db
+prisma/dev.db-journal
+*.db
+*.db-journal
+
+# misc
+.DS_Store
+npm-debug.log*
+*.tsbuildinfo
+next-env.d.ts

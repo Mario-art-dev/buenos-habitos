@@ -1,0 +1,77 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// SQLite no soporta enums nativos en Prisma: los estados se validan como
+// strings a nivel de aplicación (ver src/lib/types.ts).
+// JobStatus: PENDING | DOWNLOADING | TRANSCRIBING | ANALYZING | CLIPPING | DONE | FAILED
+// ClipStatus: PENDING | RENDERING | READY | FAILED
+// Platform: YOUTUBE | TIKTOK
+// PublicationStatus: PENDING | UPLOADING | PUBLISHED | DRAFT | FAILED
+
+model Job {
+  id                String   @id @default(cuid())
+  sourceUrl         String
+  sourceTitle       String?
+  sourceDurationSec Float?
+  status            String   @default("PENDING")
+  statusMessage     String?
+  error             String?
+  transcript        String?
+  sourceFilePath    String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  clips             Clip[]
+}
+
+model Clip {
+  id             String        @id @default(cuid())
+  jobId          String
+  job            Job           @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  rank           Int
+  startSec       Float
+  endSec         Float
+  title          String
+  description    String
+  hook           String?
+  viralityScore  Int
+  viralityReason String
+  hashtags       String
+  status         String        @default("PENDING")
+  filePath       String?
+  thumbnailPath  String?
+  error          String?
+  createdAt      DateTime      @default(now())
+  publications   Publication[]
+}
+
+model Publication {
+  id        String   @id @default(cuid())
+  clipId    String
+  clip      Clip     @relation(fields: [clipId], references: [id], onDelete: Cascade)
+  platform  String
+  status    String   @default("PENDING")
+  remoteId  String?
+  remoteUrl String?
+  error     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model SocialAccount {
+  id           String    @id @default(cuid())
+  platform     String    @unique
+  accountName  String?
+  accountId    String?
+  accessToken  String
+  refreshToken String?
+  expiresAt    DateTime?
+  scope        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
