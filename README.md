@@ -9,9 +9,17 @@ cualquier vídeo (YouTube u otro compatible con `yt-dlp`) y la app:
 3. Le pone a cada short un **título estratégico corto**, una **descripción corta** adaptada
    al canal, una **probabilidad de viralidad (0-100%)** y **hashtags** pensados para maximizar
    alcance en ese momento.
-4. Corta el clip en vertical 9:16 (fondo desenfocado + vídeo centrado, estilo short/reel).
+4. Corta el clip en vertical, a la mayor resolución que dé el vídeo fuente (hasta 4K), sin
+   ninguna marca de agua.
 5. Te deja publicarlo con un clic en **YouTube** y **TikTok** desde tus propias cuentas
-   conectadas.
+   conectadas, o descargarlo directamente a tu galería.
+6. Puede publicar solo, según la programación que definas (cada N horas, o en franjas
+   horarias concretas como "lunes 12:00-14:00").
+
+También tiene un **modo Rankings**: le pegas un vídeo largo de recopilación (p. ej. una hora
+de fails variados) y la IA detecta los momentos, los agrupa por categoría (fails de coches,
+de acrobacias, de animales…) y monta un vídeo de cuenta atrás por categoría, con el número de
+puesto en pantalla y los subtítulos ya quemados — listo para descargar o publicar.
 
 ## Cómo funciona por dentro
 
@@ -24,8 +32,31 @@ cualquier vídeo (YouTube u otro compatible con `yt-dlp`) y la app:
   descripciones, puntuación de viralidad y hashtags.
 - Un **worker** aparte (`worker/index.ts`) procesa los vídeos en segundo plano, para no
   bloquear la web mientras se descarga/transcribe/corta (puede tardar varios minutos por vídeo).
+  Ese mismo worker ejecuta el **planificador de publicación automática** cada minuto.
 - Hay un **login con contraseña** (`APP_PASSWORD`) porque esta app puede subir vídeos a tus
   cuentas: no la dejes accesible sin contraseña en internet.
+
+### Modo Rankings (vídeos de cuenta atrás tipo "TOP 5...")
+
+1. Detecta posibles momentos independientes por cortes de silencio en el audio (típico de
+   compilaciones editadas).
+2. Extrae un fotograma de cada momento candidato y se lo enseña a la IA (Claude/GPT con
+   visión) junto con la transcripción de ese tramo, para que decida si es un momento válido,
+   en qué categoría encaja (fails de coches, de acrobacias, de animales...) y qué puntuación
+   de impacto/gracia tiene.
+3. Agrupa los momentos por categoría; cada categoría con al menos `RANKING_MIN_ITEMS`
+   (por defecto 5) momentos se convierte en un vídeo de cuenta atrás propio (del puesto más
+   bajo al puesto 1), con una tarjeta de número por puesto y los subtítulos del audio original
+   quemados en el vídeo.
+4. La IA sugiere además el **título de una canción concreta** que pegaría como música de
+   fondo (`musicQuery`). En el detalle del vídeo puedes pegar el enlace de YouTube de esa
+   canción (o de cualquier otra) y el segundo en el que empieza el fragmento que quieres: la
+   app lo extrae con `yt-dlp` y remezcla el vídeo con esa música de fondo.
+   ⚠️ **Aviso de derechos de autor**: usar una canción con copyright como música de fondo casi
+   siempre genera una reclamación de Content ID (o similar) en la plataforma de destino,
+   aunque el resto del vídeo sea tuyo. La app lo permite porque tú decides qué canción usar,
+   pero la responsabilidad de esa elección es tuya. Si prefieres evitar el riesgo, no añadas
+   música: el vídeo queda listo igualmente con el audio original de cada clip.
 
 ## Puesta en marcha (Docker, recomendado)
 
@@ -104,6 +135,24 @@ sin tocar código: define `TRENDS_API_URL` (y opcionalmente `TRENDS_API_KEY`) ap
 endpoint que devuelva `{"hashtags": ["..."]}`, y la app combinará esos datos con la sugerencia
 de la IA (ver `src/lib/trends/hashtags.ts`).
 
+## Programación automática
+
+Desde **Ajustes → Programación automática** puedes activar dos modos (sección
+"Programación automática" en `src/components/ScheduleSettings.tsx`):
+
+- **Intervalo fijo**: cada N horas, coge el short pendiente (sin publicar todavía) con mayor
+  probabilidad de viralidad y lo sube a todas las plataformas seleccionadas y conectadas.
+- **Franjas horarias**: defines franjas por día de la semana (ej. lunes 12:00-14:00). Al
+  entrar en una franja, coge todos los shorts pendientes y los reparte dentro del tiempo que
+  quede de franja (mínimo 5 minutos entre subidas) para no parecer spam, en vez de subirlos
+  todos de golpe.
+
+Un short cuenta como "pendiente" hasta la primera vez que se publica en cualquier plataforma
+—ya sea manualmente desde su ficha o por el planificador— (campo `Clip.autoPublishedAt`), para
+que la cola automática nunca vuelva a publicar algo que ya subiste tú a mano. Las horas de las
+franjas se interpretan en la zona horaria del contenedor (variable `TZ` en `.env`, por defecto
+la que traiga la imagen si no la defines).
+
 ## Aviso legal/derechos de autor
 
 Esta app está pensada para el canal de recopilación **Escenas Virales**. Volver a subir
@@ -116,14 +165,23 @@ para reducir el riesgo de reclamaciones de copyright o "strikes" en tu canal.
 ## Estructura del proyecto
 
 ```
-src/app/                 páginas (dashboard, detalle de job, ajustes, login) y rutas API
-src/lib/pipeline/         descarga (yt-dlp), transcripción (Whisper), análisis (IA), corte (ffmpeg)
-src/lib/social/           OAuth y subida a YouTube / TikTok
+src/app/                 páginas (dashboard, rankings, galería, detalle de job, ajustes, login) y rutas API
+src/lib/pipeline/         descarga (yt-dlp), transcripción (Whisper), análisis (IA), corte (ffmpeg),
+                          detección de silencios, montaje y música de los vídeos de ranking
+src/lib/social/           OAuth, subida a YouTube / TikTok y publicación compartida (publish.ts)
 src/lib/trends/           sugerencia de hashtags
-src/lib/ai/               proveedor de IA intercambiable (Anthropic / OpenAI)
-worker/index.ts           proceso en segundo plano que ejecuta el pipeline
-prisma/schema.prisma      modelo de datos (Job, Clip, Publication, SocialAccount)
+src/lib/schedule/         ajustes y motor del planificador de publicación automática
+src/lib/ai/               proveedor de IA intercambiable (Anthropic / OpenAI), con soporte de visión
+worker/index.ts           proceso en segundo plano: pipeline de vídeos + planificador
+prisma/schema.prisma      modelo de datos (Job, Clip, RankingItem, Publication, SocialAccount,
+                          AutoPublishSettings, ScheduleWindow, AutoPublishTask)
 ```
+
+## Descarga y galería
+
+Cada short listo tiene un botón "Descargar" (sin marca de agua, con el archivo `.mp4`
+original que se generó, a la resolución elegida según el vídeo fuente). En **Galería**
+(`/gallery`) puedes ver y descargar todos los shorts de todos tus vídeos en un único sitio.
 
 ## Configuración típica de vídeo/duración
 
