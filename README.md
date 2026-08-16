@@ -24,6 +24,15 @@ de fails variados) y la IA detecta los momentos, los agrupa por categoría (fail
 de acrobacias, de animales…) y monta un vídeo de cuenta atrás por categoría, con el número de
 puesto en pantalla y los subtítulos ya quemados — listo para descargar o publicar.
 
+Y dos modos pensados para monetización con publicidad de terceros:
+
+- **Modo Producto**: subes fotos/vídeos de un producto (o pegas su enlace) y la IA escribe un
+  guion publicitario propio, lo narra con voz de IA y monta un short vertical con tu enlace de
+  afiliado, para vídeos de recomendación de producto (TikTok Shop, Amazon Afiliados, etc.).
+- **Modo Canción**: le pegas un vídeo de recopilación ya existente y el enlace de YouTube de una
+  canción, y la app detecta el ritmo (beats) de la canción y vuelve a montar los mejores
+  momentos con los cambios de plano sincronizados al compás — para vídeos tipo "hype edit".
+
 ## Cómo funciona por dentro
 
 - **Next.js 14** (App Router, TypeScript, Tailwind) — interfaz + API.
@@ -35,7 +44,10 @@ puesto en pantalla y los subtítulos ya quemados — listo para descargar o publ
 - **Gemini, Claude o GPT** — analiza la transcripción y decide los mejores momentos, títulos,
   descripciones, puntuación de viralidad y hashtags. Gemini tiene capa gratuita.
 - **Piper o la API de voz de OpenAI** — sintetiza el comentario/reacción narrado que envuelve
-  cada vídeo. Piper es gratis y corre en tu propio servidor.
+  cada vídeo, y el guion narrado de los vídeos de producto. Piper es gratis y corre en tu
+  propio servidor.
+- **`librosa`** (Python, gratis) — detecta el tempo y los golpes (beats) de la canción elegida
+  en el modo Canción, para sincronizar los cortes de vídeo con el ritmo.
 - Un **worker** aparte (`worker/index.ts`) procesa los vídeos en segundo plano, para no
   bloquear la web mientras se descarga/transcribe/corta (puede tardar varios minutos por vídeo).
   Ese mismo worker ejecuta el **planificador de publicación automática** cada minuto.
@@ -98,6 +110,42 @@ responsabilidad de qué contenido reutilizas y cómo lo presentas sigue siendo t
    aunque el resto del vídeo sea tuyo. La app lo permite porque tú decides qué canción usar,
    pero la responsabilidad de esa elección es tuya. Si prefieres evitar el riesgo, no añadas
    música: el vídeo queda listo igualmente con el audio original de cada clip.
+
+### Modo Producto (vídeos publicitarios con enlace de afiliado)
+
+1. Le das el nombre del producto, opcionalmente su enlace (afiliado o tienda) y opcionalmente
+   un anuncio existente como referencia de estructura (no se copia, solo inspira el ritmo).
+2. Subes tus propias fotos/vídeos del producto. Si no subes nada pero das el enlace, la app
+   intenta extraer fotos de esa página automáticamente (best-effort: busca las imágenes
+   principales de la página, puede fallar según cómo esté construida la web).
+3. La IA mira las fotos/fotogramas (visión) y escribe un guion propio: un gancho inicial, una
+   frase por cada foto/clip contando qué se ve y por qué mola, y una llamada a la acción final
+   mencionando el enlace.
+4. Sintetiza el guion con voz de IA y monta cada foto en vídeo con efecto Ken Burns (zoom lento),
+   o reformatea a vertical cada vídeo de producto que hayas subido, narrado encima.
+5. El enlace de afiliado queda guardado en el clip y visible en su ficha, para que lo copies a
+   la descripción/bio al publicar.
+
+⚠️ **Sobre el avatar de IA**: por ahora este modo NO genera un personaje/presentador
+ultra-realista con IA ni clona voces de terceros — eso requiere un servicio de pago aparte
+(p. ej. D-ID, HeyGen o Synthesia) y, si imita a una persona real identificable, puede chocar con
+el derecho a la propia imagen (España: Ley Orgánica 1/1982) y con el etiquetado obligatorio de
+contenido sintético del Reglamento de IA de la UE. Si más adelante quieres añadir un avatar,
+hace falta conectar una de esas plataformas.
+
+### Modo Canción (montaje al ritmo de una canción)
+
+1. Le pasas un vídeo de recopilación ya existente y el enlace de YouTube de la canción elegida.
+2. Descarga el audio de la canción y detecta su tempo (BPM) y los tiempos exactos de cada golpe
+   (beat) con `librosa`.
+3. Analiza el vídeo fuente igual que el modo Rankings (segmentación por silencios + IA con
+   visión) para elegir los mejores momentos.
+4. Corta cada momento con la duración justa para que el cambio de plano caiga en el compás de la
+   canción, concatena los cortes y sustituye el audio original del vídeo por la canción elegida.
+5. La duración final se limita con `SONG_MAX_DURATION_SEC` (60s por defecto).
+
+⚠️ Mismo aviso de derechos de autor que la música de fondo del modo Rankings: usar una canción
+con copyright puede generar una reclamación de Content ID en la plataforma de destino.
 
 ## Modo 100% gratis (sin pagar nada de IA)
 

@@ -9,7 +9,7 @@ datasource db {
 
 // SQLite no soporta enums nativos en Prisma: los estados se validan como
 // strings a nivel de aplicación (ver src/lib/types.ts).
-// Job.mode: SINGLE | RANKING
+// Job.mode: SINGLE | RANKING | PRODUCT | SONG
 // JobStatus: PENDING | DOWNLOADING | TRANSCRIBING | ANALYZING | CLIPPING | DONE | FAILED
 // ClipStatus: PENDING | RENDERING | READY | FAILED
 // Platform: YOUTUBE | TIKTOK
@@ -20,7 +20,7 @@ datasource db {
 model Job {
   id                String   @id @default(cuid())
   mode              String   @default("SINGLE")
-  sourceUrl         String
+  sourceUrl         String? // SINGLE/RANKING: vídeo a procesar. SONG: vídeo de recopilación a re-editar.
   sourceTitle       String?
   sourceDurationSec Float?
   status            String   @default("PENDING")
@@ -28,9 +28,29 @@ model Job {
   error             String?
   transcript        String?
   sourceFilePath    String?
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-  clips             Clip[]
+
+  // Solo modo PRODUCT
+  productName    String?
+  productLink    String? // enlace de afiliado/producto que se añade a la descripción
+  referenceAdUrl String? // vídeo de un anuncio existente, usado solo como inspiración de estructura (no se copia)
+
+  // Solo modo SONG
+  songUrl String? // vídeo de YouTube de la canción con la que se re-edita el vídeo
+
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  clips        Clip[]
+  productAssets ProductAsset[]
+}
+
+// Fotos/vídeos del producto subidos por el usuario para el modo PRODUCT, en orden de aparición.
+model ProductAsset {
+  id       String @id @default(cuid())
+  jobId    String
+  job      Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  filePath String
+  type     String // "image" | "video"
+  order    Int
 }
 
 model Clip {
@@ -60,6 +80,9 @@ model Clip {
   // Guion del comentario/reacción narrado con IA que envuelve el clip (transparencia para el usuario)
   commentaryIntro String?
   commentaryOutro String?
+
+  // Solo modo PRODUCT: enlace de afiliado/producto a mostrar en la descripción
+  affiliateLink String?
 
   autoPublishedAt DateTime?
   createdAt       DateTime      @default(now())

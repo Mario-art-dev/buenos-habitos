@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-dejavu-core \
     ca-certificates \
     curl \
-    && pip3 install --no-cache-dir --break-system-packages yt-dlp faster-whisper piper-tts \
+    && pip3 install --no-cache-dir --break-system-packages yt-dlp faster-whisper piper-tts librosa \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

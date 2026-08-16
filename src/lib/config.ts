@@ -84,6 +84,10 @@ export const config = {
     minSegmentSeconds: Number(optional("RANKING_MIN_SEGMENT_SECONDS", "3")),
   },
 
+  song: {
+    maxDurationSec: Number(optional("SONG_MAX_DURATION_SEC", "60")),
+  },
+
   scheduler: {
     pollIntervalMs: Number(optional("SCHEDULER_POLL_INTERVAL_MS", "60000")),
   },

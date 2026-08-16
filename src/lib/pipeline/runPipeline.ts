@@ -13,6 +13,8 @@ import { analyzeTranscriptForClips } from "./analyze";
 import { cutVerticalClip, concatClips, extractThumbnail } from "./clip";
 import { probeVideo, pickVerticalResolution } from "./probe";
 import { processRankingJob } from "./rankingPipeline";
+import { processProductJob } from "./productPipeline";
+import { processSongJob } from "./songPipeline";
 import { setStatus } from "./status";
 import { generateSingleCommentary } from "./commentary";
 import { renderCommentaryCard } from "./commentaryCards";
@@ -31,11 +33,18 @@ export async function processJob(jobId: string): Promise<void> {
   if (job.mode === "RANKING") {
     return processRankingJob(jobId);
   }
+  if (job.mode === "PRODUCT") {
+    return processProductJob(jobId);
+  }
+  if (job.mode === "SONG") {
+    return processSongJob(jobId);
+  }
   return processSingleJob(jobId);
 }
 
 async function processSingleJob(jobId: string): Promise<void> {
   const job = await db.job.findUniqueOrThrow({ where: { id: jobId } });
+  if (!job.sourceUrl) throw new Error("Este trabajo no tiene una URL de vídeo fuente.");
   try {
     // 1. Descargar el vídeo fuente
     await setStatus(jobId, "DOWNLOADING", "Descargando el vídeo original…");

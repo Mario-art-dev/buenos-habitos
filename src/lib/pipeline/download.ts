@@ -36,3 +36,31 @@ export async function downloadSourceVideo(url: string, outputPath: string): Prom
     durationSec: Number(durationRaw) || 0,
   };
 }
+
+/** Descarga solo el audio (mp3) de un vídeo de YouTube, p.ej. para usar una canción como banda sonora. */
+export async function downloadAudioOnly(url: string, outputPath: string): Promise<DownloadResult> {
+  const outNoExt = outputPath.replace(/\.mp3$/i, "");
+  await run(config.ytdlpPath, [
+    url,
+    "-x",
+    "--audio-format",
+    "mp3",
+    "--no-playlist",
+    "-o",
+    `${outNoExt}.%(ext)s`,
+  ]);
+
+  const { stdout } = await run(config.ytdlpPath, [
+    url,
+    "--no-playlist",
+    "--print",
+    "%(title)s|||%(duration)s",
+    "--skip-download",
+  ]);
+
+  const [title, durationRaw] = stdout.trim().split("|||");
+  return {
+    title: title || "Canción sin título",
+    durationSec: Number(durationRaw) || 0,
+  };
+}

@@ -6,7 +6,8 @@ import JobStatusBadge from "./JobStatusBadge";
 
 interface JobSummary {
   id: string;
-  sourceUrl: string;
+  sourceUrl: string | null;
+  productName: string | null;
   sourceTitle: string | null;
   status: string;
   createdAt: string;
@@ -17,7 +18,7 @@ export default function JobList({
   mode,
   emptyMessage = "Todavía no has generado ningún short. Pega un enlace arriba para empezar.",
 }: {
-  mode?: "SINGLE" | "RANKING";
+  mode?: "SINGLE" | "RANKING" | "PRODUCT" | "SONG";
   emptyMessage?: string;
 }) {
   const [jobs, setJobs] = useState<JobSummary[]>([]);
@@ -54,8 +55,10 @@ export default function JobList({
           className="flex items-center justify-between rounded-xl border border-ink-700 bg-ink-800 px-4 py-3 transition hover:border-brand-500/50"
         >
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-slate-100">{job.sourceTitle ?? job.sourceUrl}</p>
-            <p className="truncate text-xs text-slate-500">{job.sourceUrl}</p>
+            <p className="truncate text-sm font-medium text-slate-100">
+              {job.sourceTitle ?? job.productName ?? job.sourceUrl ?? "Sin título"}
+            </p>
+            {job.sourceUrl && <p className="truncate text-xs text-slate-500">{job.sourceUrl}</p>}
           </div>
           <div className="ml-4 flex shrink-0 items-center gap-3">
             {job.clips.length > 0 && (

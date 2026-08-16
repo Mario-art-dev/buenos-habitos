@@ -35,7 +35,7 @@ export function wrapText(text: string, maxCharsPerLine: number): string {
   return lines.join("\n");
 }
 
-function buildVerticalFilter(
+export function buildVerticalFilter(
   res: VerticalResolution,
   opts: { label?: string; subtitlesPath?: string } = {}
 ): string {
@@ -288,6 +288,174 @@ export async function extractAudioSegment(
     "mp3",
     "-b:a",
     "192k",
+    outPath,
+  ]);
+}
+
+export interface ImageSegmentOptions {
+  imagePath: string;
+  outPath: string;
+  durationSec: number;
+  resolution?: VerticalResolution;
+  caption?: string;
+  audioPath?: string;
+  zoomDirection?: "in" | "out";
+}
+
+/**
+ * Convierte una foto estática en un segmento de vídeo vertical con efecto Ken Burns (zoom lento),
+ * pie de foto opcional y narración opcional. Se usa en el modo Producto para las fotos subidas
+ * por el usuario cuando no hay vídeo de producto disponible.
+ */
+export async function renderImageSegment(opts: ImageSegmentOptions): Promise<void> {
+  const { imagePath, outPath, resolution = DEFAULT_RES, caption, audioPath, zoomDirection = "in" } = opts;
+  let finalDuration = opts.durationSec;
+  if (audioPath) {
+    const { durationSec: audioDurationSec } = await probeVideo(audioPath);
+    finalDuration = Math.max(opts.durationSec, audioDurationSec + 0.4);
+  }
+
+  const fps = 25;
+  const totalFrames = Math.max(1, Math.round(finalDuration * fps));
+  // Escala a una resolución mayor primero para que el zoompan tenga margen sin pixelar.
+  const upscaleW = resolution.width * 2;
+  const upscaleH = resolution.height * 2;
+  const zoomExpr = zoomDirection === "in" ? `min(zoom+0.0015,1.3)` : `if(eq(on,1),1.3,max(zoom-0.0015,1.0))`;
+
+  let filter =
+    `[0:v]scale=${upscaleW}:${upscaleH}:force_original_aspect_ratio=increase,crop=${upscaleW}:${upscaleH},` +
+    `zoompan=z='${zoomExpr}':d=${totalFrames}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=${resolution.width}x${resolution.height}:fps=${fps},` +
+    `format=yuv420p[zoomed]`;
+
+  let lastLabel = "zoomed";
+  if (caption) {
+    const fontSize = Math.round(resolution.width / 14);
+    const wrapped = wrapText(caption, 28);
+    filter += `;[${lastLabel}]drawtext=text='${escapeDrawtext(
+      wrapped
+    )}':fontcolor=white:fontsize=${fontSize}:fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:borderw=5:bordercolor=black@0.8:x=(w-text_w)/2:y=h-text_h-${Math.round(
+      resolution.height * 0.1
+    )}:line_spacing=10[capped]`;
+    lastLabel = "capped";
+  }
+
+  const args = ["-y", "-loop", "1", "-i", imagePath];
+  if (audioPath) {
+    args.push("-i", audioPath);
+  } else {
+    args.push("-f", "lavfi", "-i", `anullsrc=channel_layout=stereo:sample_rate=44100:d=${finalDuration}`);
+  }
+
+  args.push(
+    "-t",
+    String(finalDuration),
+    "-filter_complex",
+    filter,
+    "-map",
+    `[${lastLabel}]`,
+    "-map",
+    "1:a",
+    "-c:v",
+    "libx264",
+    "-preset",
+    "veryfast",
+    "-crf",
+    "20",
+    "-pix_fmt",
+    "yuv420p",
+    "-c:a",
+    "aac",
+    "-b:a",
+    "128k",
+    "-shortest",
+    outPath
+  );
+
+  await run(config.ffmpegPath, args);
+}
+
+export interface ProductVideoSegmentOptions {
+  sourcePath: string;
+  outPath: string;
+  resolution?: VerticalResolution;
+  narrationAudioPath?: string;
+  startSec?: number;
+  endSec?: number;
+}
+
+/**
+ * Reformatea a vertical un fragmento de vídeo de producto subido por el usuario. Si se pasa
+ * narración de IA, sustituye el audio original del clip por la narración (mezclando duración);
+ * si no, conserva el audio original del vídeo del producto.
+ */
+export async function renderProductVideoSegment(opts: ProductVideoSegmentOptions): Promise<void> {
+  const { sourcePath, outPath, resolution = DEFAULT_RES, narrationAudioPath, startSec, endSec } = opts;
+  const filter = buildVerticalFilter(resolution, {});
+
+  const args = ["-y"];
+  if (startSec !== undefined) {
+    args.push("-ss", String(startSec));
+  }
+  args.push("-i", sourcePath);
+  if (endSec !== undefined && startSec !== undefined) {
+    args.push("-t", String(Math.max(0.5, endSec - startSec)));
+  }
+
+  if (narrationAudioPath) {
+    args.push("-i", narrationAudioPath);
+  }
+
+  args.push("-filter_complex", filter, "-map", "[v]");
+
+  if (narrationAudioPath) {
+    args.push("-map", "1:a", "-c:a", "aac", "-b:a", "128k", "-shortest");
+  } else {
+    args.push("-map", "0:a?", "-c:a", "aac", "-b:a", "128k");
+  }
+
+  args.push(
+    "-c:v",
+    "libx264",
+    "-preset",
+    "veryfast",
+    "-crf",
+    "20",
+    "-pix_fmt",
+    "yuv420p",
+    "-movflags",
+    "+faststart",
+    outPath
+  );
+
+  await run(config.ffmpegPath, args);
+}
+
+/** Sustituye por completo la pista de audio de un vídeo (p.ej. sincronizar con una canción elegida). */
+export async function replaceAudioTrack(
+  videoPath: string,
+  audioPath: string,
+  outPath: string,
+  audioStartSec = 0
+): Promise<void> {
+  await run(config.ffmpegPath, [
+    "-y",
+    "-i",
+    videoPath,
+    "-ss",
+    String(Math.max(0, audioStartSec)),
+    "-i",
+    audioPath,
+    "-map",
+    "0:v",
+    "-map",
+    "1:a",
+    "-c:v",
+    "copy",
+    "-c:a",
+    "aac",
+    "-b:a",
+    "192k",
+    "-shortest",
     outPath,
   ]);
 }

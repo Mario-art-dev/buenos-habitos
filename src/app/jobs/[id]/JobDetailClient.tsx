@@ -6,8 +6,9 @@ import ClipCard, { ClipData } from "@/components/ClipCard";
 
 interface JobData {
   id: string;
-  sourceUrl: string;
+  sourceUrl: string | null;
   sourceTitle: string | null;
+  productName: string | null;
   status: string;
   statusMessage: string | null;
   error: string | null;
@@ -42,10 +43,10 @@ export default function JobDetailClient({ jobId }: { jobId: string }) {
     <div>
       <div className="mb-6">
         <div className="flex items-center gap-3">
-          <h1 className="text-xl font-bold">{job.sourceTitle ?? "Procesando vídeo…"}</h1>
+          <h1 className="text-xl font-bold">{job.sourceTitle ?? job.productName ?? "Procesando vídeo…"}</h1>
           <JobStatusBadge status={job.status} />
         </div>
-        <p className="mt-1 text-sm text-slate-500">{job.sourceUrl}</p>
+        {job.sourceUrl && <p className="mt-1 text-sm text-slate-500">{job.sourceUrl}</p>}
         {job.statusMessage && job.status !== "DONE" && (
           <p className="mt-2 text-sm text-brand-400">{job.statusMessage}</p>
         )}

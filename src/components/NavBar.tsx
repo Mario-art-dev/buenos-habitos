@@ -29,6 +29,12 @@ export default function NavBar() {
           <Link href="/rankings" className="text-slate-300 hover:text-white">
             Rankings
           </Link>
+          <Link href="/product" className="text-slate-300 hover:text-white">
+            Producto
+          </Link>
+          <Link href="/song" className="text-slate-300 hover:text-white">
+            Canción
+          </Link>
           <Link href="/gallery" className="text-slate-300 hover:text-white">
             Galería
           </Link>

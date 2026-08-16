@@ -30,6 +30,7 @@ export interface ClipData {
   musicStartSec?: number | null;
   commentaryIntro?: string | null;
   commentaryOutro?: string | null;
+  affiliateLink?: string | null;
   rankingItems?: RankingItemData[];
   publications: { id: string; platform: string; status: string; remoteUrl: string | null; error: string | null }[];
 }
@@ -144,6 +145,7 @@ export default function ClipCard({ clip }: { clip: ClipData }) {
   const yt = statusFor("YOUTUBE");
   const tt = statusFor("TIKTOK");
   const isRanking = !!clip.category;
+  const isProduct = !!clip.affiliateLink;
   const videoSrc = clip.videoUrl ? `${clip.videoUrl}?v=${videoVersion}` : null;
 
   return (
@@ -165,6 +167,10 @@ export default function ClipCard({ clip }: { clip: ClipData }) {
             {isRanking ? (
               <span className="rounded-full bg-brand-500/15 px-2 py-0.5 text-xs text-brand-400">
                 Ranking · {clip.category}
+              </span>
+            ) : isProduct ? (
+              <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-xs text-amber-400">
+                Publicidad de producto
               </span>
             ) : (
               <span className="text-xs text-slate-500">
@@ -196,6 +202,13 @@ export default function ClipCard({ clip }: { clip: ClipData }) {
               </span>
             ))}
           </div>
+
+          {clip.affiliateLink && (
+            <div className="mt-3 rounded-xl border border-amber-600/40 bg-amber-500/10 p-3 text-xs text-amber-300">
+              <p className="font-semibold">🔗 Enlace de afiliado (recuerda añadirlo en la descripción/bio):</p>
+              <p className="mt-1 break-all text-amber-200">{clip.affiliateLink}</p>
+            </div>
+          )}
 
           {(clip.commentaryIntro || clip.commentaryOutro) && (
             <div className="mt-3 rounded-xl border border-ink-600 bg-ink-900/40 p-3 text-xs text-slate-300">

@@ -13,6 +13,7 @@ import { config } from "@/lib/config";
 
 export async function processRankingJob(jobId: string): Promise<void> {
   const job = await db.job.findUniqueOrThrow({ where: { id: jobId } });
+  if (!job.sourceUrl) throw new Error("Este trabajo no tiene una URL de vídeo fuente.");
 
   try {
     await setStatus(jobId, "DOWNLOADING", "Descargando el vídeo original…");

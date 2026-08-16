@@ -68,6 +68,34 @@ export function musicSegmentPath(jobId: string, clipId: string): string {
   return path.join(tmpDir(jobId), `${clipId}_music.mp3`);
 }
 
+/** Fotos/vídeos del producto: subidos por el usuario o extraídos por scraping del enlace del producto. */
+export function productAssetsDir(jobId: string): string {
+  const dir = path.join(jobDir(jobId), "product_assets");
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+export function productAssetPath(jobId: string, index: number, ext: string): string {
+  return path.join(productAssetsDir(jobId), `asset_${index}.${ext}`);
+}
+
+export function songAudioPath(jobId: string): string {
+  return path.join(jobDir(jobId), "song.mp3");
+}
+
+export function productSegmentPath(jobId: string, clipId: string, key: string): string {
+  return path.join(tmpDir(jobId), `${clipId}_product_${key}.mp4`);
+}
+
+export function songSegmentPath(jobId: string, clipId: string, index: number): string {
+  return path.join(tmpDir(jobId), `${clipId}_song_seg_${index}.mp4`);
+}
+
+/** Vídeo del modo Canción ya montado con los cortes al ritmo, antes de sustituir el audio por la canción. */
+export function songSilentAssemblyPath(jobId: string, clipId: string): string {
+  return path.join(tmpDir(jobId), `${clipId}_song_silent.mp4`);
+}
+
 export function srtPath(jobId: string, clipId: string, position: number): string {
   return path.join(tmpDir(jobId), `${clipId}_item_${position}.srt`);
 }
