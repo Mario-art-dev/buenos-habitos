@@ -13,14 +13,21 @@ interface JobSummary {
   clips: { id: string; viralityScore: number; status: string }[];
 }
 
-export default function JobList() {
+export default function JobList({
+  mode,
+  emptyMessage = "Todavía no has generado ningún short. Pega un enlace arriba para empezar.",
+}: {
+  mode?: "SINGLE" | "RANKING";
+  emptyMessage?: string;
+}) {
   const [jobs, setJobs] = useState<JobSummary[]>([]);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     let stop = false;
     async function load() {
-      const res = await fetch("/api/jobs");
+      const qs = mode ? `?mode=${mode}` : "";
+      const res = await fetch(`/api/jobs${qs}`);
       if (!res.ok || stop) return;
       const data = await res.json();
       setJobs(data.jobs);
@@ -32,10 +39,10 @@ export default function JobList() {
       stop = true;
       clearInterval(interval);
     };
-  }, []);
+  }, [mode]);
 
   if (loaded && jobs.length === 0) {
-    return <p className="mt-10 text-center text-sm text-slate-500">Todavía no has generado ningún short. Pega un enlace arriba para empezar.</p>;
+    return <p className="mt-10 text-center text-sm text-slate-500">{emptyMessage}</p>;
   }
 
   return (
@@ -52,7 +59,7 @@ export default function JobList() {
           </div>
           <div className="ml-4 flex shrink-0 items-center gap-3">
             {job.clips.length > 0 && (
-              <span className="text-xs text-slate-400">{job.clips.length} shorts</span>
+              <span className="text-xs text-slate-400">{job.clips.length} vídeos</span>
             )}
             <JobStatusBadge status={job.status} />
           </div>

@@ -12,8 +12,8 @@ export default function HomePage() {
           probabilidad de viralidad, títulos, descripciones, hashtags y publicación en YouTube y TikTok.
         </p>
       </div>
-      <UrlForm />
-      <JobList />
+      <UrlForm mode="SINGLE" />
+      <JobList mode="SINGLE" />
     </div>
   );
 }

@@ -4,6 +4,8 @@ import { Readable } from "stream";
 import { NextRequest, NextResponse } from "next/server";
 import { resolveMediaPath, STORAGE_ROOT } from "@/lib/storagePaths";
 
+export const dynamic = "force-dynamic";
+
 const CONTENT_TYPES: Record<string, string> = {
   ".mp4": "video/mp4",
   ".jpg": "image/jpeg",

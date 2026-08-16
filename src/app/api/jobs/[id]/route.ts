@@ -3,10 +3,17 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { jobDir, toMediaUrl } from "@/lib/storagePaths";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   const job = await db.job.findUnique({
     where: { id: params.id },
-    include: { clips: { orderBy: { rank: "asc" }, include: { publications: true } } },
+    include: {
+      clips: {
+        orderBy: { rank: "asc" },
+        include: { publications: true, rankingItems: { orderBy: { position: "desc" } } },
+      },
+    },
   });
 
   if (!job) {

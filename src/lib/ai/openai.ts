@@ -9,14 +9,22 @@ export class OpenAIProvider implements AIProvider {
     this.client = new OpenAI({ apiKey: config.ai.openaiApiKey });
   }
 
-  async chatJson({ system, prompt, maxTokens = 4096 }: AIChatOptions): Promise<string> {
+  async chatJson({ system, prompt, images = [], maxTokens = 4096 }: AIChatOptions): Promise<string> {
+    const content: OpenAI.Chat.ChatCompletionContentPart[] = [
+      { type: "text", text: prompt },
+      ...images.map((img) => ({
+        type: "image_url" as const,
+        image_url: { url: `data:${img.mediaType};base64,${img.base64}` },
+      })),
+    ];
+
     const response = await this.client.chat.completions.create({
       model: config.ai.openaiModel,
       max_tokens: maxTokens,
       response_format: { type: "json_object" },
       messages: [
         ...(system ? [{ role: "system" as const, content: system }] : []),
-        { role: "user" as const, content: prompt },
+        { role: "user" as const, content },
       ],
     });
 

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { handleYouTubeOAuthCallback } from "@/lib/social/youtube";
 import { config } from "@/lib/config";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get("code");
   const error = req.nextUrl.searchParams.get("error");

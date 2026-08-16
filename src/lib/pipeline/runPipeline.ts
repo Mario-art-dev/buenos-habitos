@@ -10,17 +10,20 @@ import { downloadSourceVideo } from "./download";
 import { extractAudio, transcribeAudio } from "./transcribe";
 import { analyzeTranscriptForClips } from "./analyze";
 import { cutVerticalClip, extractThumbnail } from "./clip";
-
-async function setStatus(jobId: string, status: string, statusMessage?: string) {
-  await db.job.update({
-    where: { id: jobId },
-    data: { status, statusMessage },
-  });
-}
+import { probeVideo, pickVerticalResolution } from "./probe";
+import { processRankingJob } from "./rankingPipeline";
+import { setStatus } from "./status";
 
 export async function processJob(jobId: string): Promise<void> {
   const job = await db.job.findUniqueOrThrow({ where: { id: jobId } });
+  if (job.mode === "RANKING") {
+    return processRankingJob(jobId);
+  }
+  return processSingleJob(jobId);
+}
 
+async function processSingleJob(jobId: string): Promise<void> {
+  const job = await db.job.findUniqueOrThrow({ where: { id: jobId } });
   try {
     // 1. Descargar el vídeo fuente
     await setStatus(jobId, "DOWNLOADING", "Descargando el vídeo original…");
@@ -66,8 +69,10 @@ export async function processJob(jobId: string): Promise<void> {
       )
     );
 
-    // 4. Cortar cada clip en formato vertical
+    // 4. Cortar cada clip en formato vertical, a la mayor resolución que dé el vídeo fuente
     await setStatus(jobId, "CLIPPING", `Generando ${clips.length} shorts…`);
+    const sourceInfo = await probeVideo(srcPath);
+    const resolution = pickVerticalResolution(sourceInfo);
     for (const clip of clips) {
       try {
         await db.clip.update({ where: { id: clip.id }, data: { status: "RENDERING" } });
@@ -78,6 +83,7 @@ export async function processJob(jobId: string): Promise<void> {
           outPath,
           startSec: clip.startSec,
           endSec: clip.endSec,
+          resolution,
         });
         await extractThumbnail(outPath, thumbPath);
         await db.clip.update({

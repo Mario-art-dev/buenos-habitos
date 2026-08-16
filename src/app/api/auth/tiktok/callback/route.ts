@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { handleTikTokOAuthCallback } from "@/lib/social/tiktok";
 import { config } from "@/lib/config";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get("code");
   const state = req.nextUrl.searchParams.get("state");

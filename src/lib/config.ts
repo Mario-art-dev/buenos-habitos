@@ -54,6 +54,16 @@ export const config = {
     workerPollIntervalMs: Number(optional("WORKER_POLL_INTERVAL_MS", "4000")),
   },
 
+  ranking: {
+    minItems: Number(optional("RANKING_MIN_ITEMS", "5")),
+    maxItems: Number(optional("RANKING_MAX_ITEMS", "10")),
+    minSegmentSeconds: Number(optional("RANKING_MIN_SEGMENT_SECONDS", "3")),
+  },
+
+  scheduler: {
+    pollIntervalMs: Number(optional("SCHEDULER_POLL_INTERVAL_MS", "60000")),
+  },
+
   channel: {
     name: optional("CHANNEL_NAME", "Escenas Virales"),
     niche: optional(

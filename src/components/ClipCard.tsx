@@ -3,6 +3,13 @@
 import { useState } from "react";
 import ViralityBadge from "./ViralityBadge";
 
+export interface RankingItemData {
+  id: string;
+  position: number;
+  label: string;
+  description: string;
+}
+
 export interface ClipData {
   id: string;
   rank: number;
@@ -17,6 +24,11 @@ export interface ClipData {
   status: string;
   videoUrl: string | null;
   thumbnailUrl: string | null;
+  category?: string | null;
+  musicQuery?: string | null;
+  musicSourceUrl?: string | null;
+  musicStartSec?: number | null;
+  rankingItems?: RankingItemData[];
   publications: { id: string; platform: string; status: string; remoteUrl: string | null; error: string | null }[];
 }
 
@@ -26,10 +38,83 @@ function formatTime(sec: number) {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
+function MusicPanel({ clip, onApplied }: { clip: ClipData; onApplied: () => void }) {
+  const [url, setUrl] = useState(clip.musicSourceUrl ?? "");
+  const [startSec, setStartSec] = useState(clip.musicStartSec ?? 0);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+
+  async function apply() {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/clips/${clip.id}/music`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ musicSourceUrl: url, musicStartSec: startSec }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "No se pudo añadir la música");
+      onApplied();
+      setOpen(false);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="mt-3 rounded-xl border border-ink-600 bg-ink-900/60 p-3">
+      <p className="text-xs text-slate-400">
+        🎵 Música sugerida por la IA: <span className="text-slate-200">{clip.musicQuery || "(sin sugerencia)"}</span>
+      </p>
+      {!open ? (
+        <button onClick={() => setOpen(true)} className="mt-2 text-xs text-brand-400 underline">
+          {clip.musicSourceUrl ? "Cambiar música" : "Pegar link de YouTube con esta canción"}
+        </button>
+      ) : (
+        <div className="mt-2 space-y-2">
+          <input
+            type="url"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="https://www.youtube.com/watch?v=..."
+            className="w-full rounded-lg border border-ink-600 bg-ink-900 px-3 py-2 text-xs outline-none focus:border-brand-500"
+          />
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-slate-500">Empezar en (segundos):</label>
+            <input
+              type="number"
+              min={0}
+              value={startSec}
+              onChange={(e) => setStartSec(Number(e.target.value))}
+              className="w-20 rounded-lg border border-ink-600 bg-ink-900 px-2 py-1 text-xs outline-none focus:border-brand-500"
+            />
+            <button
+              disabled={loading || !url}
+              onClick={apply}
+              className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
+            >
+              {loading ? "Aplicando…" : "Usar esta música"}
+            </button>
+          </div>
+          <p className="text-xs text-slate-600">
+            Aviso: usar una canción con derechos de autor puede generar un aviso de copyright en la plataforma.
+          </p>
+          {error && <p className="text-xs text-red-400">{error}</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ClipCard({ clip }: { clip: ClipData }) {
   const [publications, setPublications] = useState(clip.publications);
   const [publishing, setPublishing] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [videoVersion, setVideoVersion] = useState(0);
 
   const statusFor = (platform: string) =>
     publications.find((p) => p.platform === platform && p.status !== "FAILED");
@@ -56,13 +141,15 @@ export default function ClipCard({ clip }: { clip: ClipData }) {
 
   const yt = statusFor("YOUTUBE");
   const tt = statusFor("TIKTOK");
+  const isRanking = !!clip.category;
+  const videoSrc = clip.videoUrl ? `${clip.videoUrl}?v=${videoVersion}` : null;
 
   return (
     <div className="overflow-hidden rounded-2xl border border-ink-700 bg-ink-800">
       <div className="flex flex-col sm:flex-row">
         <div className="flex aspect-[9/16] w-full items-center justify-center bg-black sm:w-48 shrink-0">
-          {clip.status === "READY" && clip.videoUrl ? (
-            <video src={clip.videoUrl} poster={clip.thumbnailUrl ?? undefined} controls className="h-full w-full object-cover" />
+          {clip.status === "READY" && videoSrc ? (
+            <video src={videoSrc} poster={clip.thumbnailUrl ?? undefined} controls className="h-full w-full object-cover" />
           ) : clip.status === "FAILED" ? (
             <p className="p-3 text-center text-xs text-red-400">Error generando el clip</p>
           ) : (
@@ -73,14 +160,32 @@ export default function ClipCard({ clip }: { clip: ClipData }) {
         <div className="flex-1 p-4">
           <div className="flex flex-wrap items-center gap-2">
             <ViralityBadge score={clip.viralityScore} />
-            <span className="text-xs text-slate-500">
-              {formatTime(clip.startSec)} – {formatTime(clip.endSec)}
-            </span>
+            {isRanking ? (
+              <span className="rounded-full bg-brand-500/15 px-2 py-0.5 text-xs text-brand-400">
+                Ranking · {clip.category}
+              </span>
+            ) : (
+              <span className="text-xs text-slate-500">
+                {formatTime(clip.startSec)} – {formatTime(clip.endSec)}
+              </span>
+            )}
           </div>
 
           <h3 className="mt-2 text-base font-semibold text-slate-50">{clip.title}</h3>
           <p className="mt-1 text-sm text-slate-400">{clip.description}</p>
           <p className="mt-1 text-xs italic text-slate-500">Por qué puede ser viral: {clip.viralityReason}</p>
+
+          {isRanking && clip.rankingItems && clip.rankingItems.length > 0 && (
+            <ol className="mt-3 space-y-1 rounded-xl border border-ink-600 bg-ink-900/40 p-3 text-xs text-slate-300">
+              {[...clip.rankingItems]
+                .sort((a, b) => b.position - a.position)
+                .map((item) => (
+                  <li key={item.id}>
+                    <span className="font-semibold text-brand-400">#{item.position}</span> {item.label}
+                  </li>
+                ))}
+            </ol>
+          )}
 
           <div className="mt-3 flex flex-wrap gap-1.5">
             {clip.hashtags.map((tag) => (
@@ -89,6 +194,10 @@ export default function ClipCard({ clip }: { clip: ClipData }) {
               </span>
             ))}
           </div>
+
+          {isRanking && clip.status === "READY" && (
+            <MusicPanel clip={clip} onApplied={() => setVideoVersion((v) => v + 1)} />
+          )}
 
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <button
@@ -105,6 +214,14 @@ export default function ClipCard({ clip }: { clip: ClipData }) {
             >
               {tt?.status === "DRAFT" ? "✓ Borrador en TikTok" : publishing === "TIKTOK" ? "Subiendo…" : "Enviar a TikTok"}
             </button>
+            {clip.status === "READY" && (
+              <a
+                href={`/api/clips/${clip.id}/download`}
+                className="rounded-lg border border-ink-600 px-3 py-2 text-xs font-semibold text-slate-200 hover:border-brand-500"
+              >
+                ⬇ Descargar
+              </a>
+            )}
             {yt?.remoteUrl && (
               <a href={yt.remoteUrl} target="_blank" rel="noreferrer" className="text-xs text-brand-400 underline">
                 Ver en YouTube

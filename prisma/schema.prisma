@@ -9,13 +9,17 @@ datasource db {
 
 // SQLite no soporta enums nativos en Prisma: los estados se validan como
 // strings a nivel de aplicación (ver src/lib/types.ts).
+// Job.mode: SINGLE | RANKING
 // JobStatus: PENDING | DOWNLOADING | TRANSCRIBING | ANALYZING | CLIPPING | DONE | FAILED
 // ClipStatus: PENDING | RENDERING | READY | FAILED
 // Platform: YOUTUBE | TIKTOK
 // PublicationStatus: PENDING | UPLOADING | PUBLISHED | DRAFT | FAILED
+// AutoPublishSettings.mode: OFF | INTERVAL | WINDOW
+// AutoPublishTask.status: PENDING | DONE | FAILED
 
 model Job {
   id                String   @id @default(cuid())
+  mode              String   @default("SINGLE")
   sourceUrl         String
   sourceTitle       String?
   sourceDurationSec Float?
@@ -46,8 +50,29 @@ model Clip {
   filePath       String?
   thumbnailPath  String?
   error          String?
-  createdAt      DateTime      @default(now())
-  publications   Publication[]
+
+  // Solo para clips generados en modo RANKING
+  category       String?
+  musicQuery     String?
+  musicSourceUrl String?
+  musicStartSec  Float?
+
+  autoPublishedAt DateTime?
+  createdAt       DateTime      @default(now())
+  publications    Publication[]
+  rankingItems    RankingItem[]
+}
+
+// Sub-clips que componen un vídeo de ranking (cuenta atrás), en orden.
+model RankingItem {
+  id          String @id @default(cuid())
+  clipId      String
+  clip        Clip   @relation(fields: [clipId], references: [id], onDelete: Cascade)
+  position    Int // 1 = el mejor puesto (se muestra el último, efecto cuenta atrás)
+  startSec    Float
+  endSec      Float
+  label       String
+  description String
 }
 
 model Publication {
@@ -74,4 +99,36 @@ model SocialAccount {
   scope        String?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+}
+
+// Fila única de configuración global de publicación automática.
+model AutoPublishSettings {
+  id                 Int      @id @default(1)
+  enabled            Boolean  @default(false)
+  mode               String   @default("INTERVAL")
+  intervalHours      Float    @default(3)
+  platforms          String   @default("[\"YOUTUBE\",\"TIKTOK\"]")
+  spreadWithinWindow Boolean  @default(true)
+  nextRunAt          DateTime?
+  lastWindowKey      String?
+  updatedAt          DateTime @updatedAt
+}
+
+model ScheduleWindow {
+  id          String @id @default(cuid())
+  dayOfWeek   Int // 0 = domingo ... 6 = sábado
+  startHour   Int
+  startMinute Int
+  endHour     Int
+  endMinute   Int
+}
+
+model AutoPublishTask {
+  id          String   @id @default(cuid())
+  clipId      String
+  platform    String
+  scheduledAt DateTime
+  status      String   @default("PENDING")
+  error       String?
+  createdAt   DateTime @default(now())
 }

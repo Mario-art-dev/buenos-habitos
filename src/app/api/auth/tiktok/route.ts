@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getTikTokAuthUrl } from "@/lib/social/tiktok";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   const { url, state } = getTikTokAuthUrl();
   const res = NextResponse.redirect(url);

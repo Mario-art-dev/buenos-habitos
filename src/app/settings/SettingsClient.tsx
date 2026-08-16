@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import ScheduleSettings from "@/components/ScheduleSettings";
 
 interface Account {
   platform: "YOUTUBE" | "TIKTOK";
@@ -90,6 +91,8 @@ export default function SettingsClient() {
           )}
         </div>
       </div>
+
+      <ScheduleSettings />
     </div>
   );
 }

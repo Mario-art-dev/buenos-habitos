@@ -3,6 +3,8 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { removeAccount } from "@/lib/social/accounts";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   const accounts = await db.socialAccount.findMany({
     select: { platform: true, accountName: true, accountId: true, updatedAt: true },

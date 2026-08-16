@@ -9,12 +9,20 @@ export class AnthropicProvider implements AIProvider {
     this.client = new Anthropic({ apiKey: config.ai.anthropicApiKey });
   }
 
-  async chatJson({ system, prompt, maxTokens = 4096 }: AIChatOptions): Promise<string> {
+  async chatJson({ system, prompt, images = [], maxTokens = 4096 }: AIChatOptions): Promise<string> {
+    const content: Anthropic.MessageParam["content"] = [
+      ...images.map((img) => ({
+        type: "image" as const,
+        source: { type: "base64" as const, media_type: img.mediaType, data: img.base64 },
+      })),
+      { type: "text" as const, text: prompt },
+    ];
+
     const response = await this.client.messages.create({
       model: config.ai.anthropicModel,
       max_tokens: maxTokens,
       system,
-      messages: [{ role: "user", content: prompt }],
+      messages: [{ role: "user", content }],
     });
 
     const textBlock = response.content.find((block) => block.type === "text");

@@ -26,6 +26,12 @@ export default function NavBar() {
           <Link href="/" className="text-slate-300 hover:text-white">
             Inicio
           </Link>
+          <Link href="/rankings" className="text-slate-300 hover:text-white">
+            Rankings
+          </Link>
+          <Link href="/gallery" className="text-slate-300 hover:text-white">
+            Galería
+          </Link>
           <Link href="/settings" className="text-slate-300 hover:text-white">
             Ajustes
           </Link>

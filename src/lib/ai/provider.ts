@@ -1,11 +1,17 @@
+export interface AIImage {
+  base64: string;
+  mediaType: "image/jpeg" | "image/png";
+}
+
 export interface AIChatOptions {
   system?: string;
   prompt: string;
+  images?: AIImage[];
   maxTokens?: number;
 }
 
 export interface AIProvider {
-  /** Envía un prompt de texto y devuelve la respuesta completa como string. */
+  /** Envía un prompt (con imágenes opcionales) y devuelve la respuesta completa como string (JSON). */
   chatJson(options: AIChatOptions): Promise<string>;
 }
 

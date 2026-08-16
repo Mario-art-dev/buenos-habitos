@@ -2,15 +2,17 @@ import { db } from "@/lib/db";
 import { config } from "@/lib/config";
 import { claimNextPendingJob } from "@/lib/queue";
 import { processJob } from "@/lib/pipeline/runPipeline";
+import { schedulerTick } from "@/lib/schedule/scheduler";
 
-let running = false;
+let processingJob = false;
+let runningScheduler = false;
 
-async function tick() {
-  if (running) return;
+async function jobTick() {
+  if (processingJob) return;
   const job = await claimNextPendingJob();
   if (!job) return;
 
-  running = true;
+  processingJob = true;
   console.log(`[worker] procesando job ${job.id}`);
   try {
     await processJob(job.id);
@@ -18,7 +20,19 @@ async function tick() {
   } catch (err) {
     console.error(`[worker] job ${job.id} falló:`, (err as Error).message);
   } finally {
-    running = false;
+    processingJob = false;
+  }
+}
+
+async function schedulerTickSafe() {
+  if (runningScheduler) return;
+  runningScheduler = true;
+  try {
+    await schedulerTick();
+  } catch (err) {
+    console.error("[worker] error en el planificador automático:", (err as Error).message);
+  } finally {
+    runningScheduler = false;
   }
 }
 
@@ -30,8 +44,10 @@ async function main() {
     data: { status: "PENDING", statusMessage: "Reintentando tras reinicio del worker…" },
   });
 
-  setInterval(tick, config.pipeline.workerPollIntervalMs);
-  tick();
+  setInterval(jobTick, config.pipeline.workerPollIntervalMs);
+  setInterval(schedulerTickSafe, config.scheduler.pollIntervalMs);
+  jobTick();
+  schedulerTickSafe();
 }
 
 main().catch((err) => {
