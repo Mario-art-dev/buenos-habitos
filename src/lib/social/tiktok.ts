@@ -13,16 +13,30 @@ const INBOX_UPLOAD_INIT_URL = "https://open.tiktokapis.com/v2/post/publish/inbox
 
 const SCOPES = ["user.info.basic", "video.upload", "video.publish"];
 
-export function getTikTokAuthUrl(): { url: string; state: string } {
+function base64url(input: Buffer): string {
+  return input.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+/** TikTok exige PKCE (RFC 7636) en el login: sin code_challenge da "Something went wrong". */
+function generatePkcePair(): { codeVerifier: string; codeChallenge: string } {
+  const codeVerifier = base64url(crypto.randomBytes(32));
+  const codeChallenge = base64url(crypto.createHash("sha256").update(codeVerifier).digest());
+  return { codeVerifier, codeChallenge };
+}
+
+export function getTikTokAuthUrl(): { url: string; state: string; codeVerifier: string } {
   const state = crypto.randomBytes(16).toString("hex");
+  const { codeVerifier, codeChallenge } = generatePkcePair();
   const params = new URLSearchParams({
     client_key: config.tiktok.clientKey,
     scope: SCOPES.join(","),
     response_type: "code",
     redirect_uri: config.tiktok.redirectUri,
     state,
+    code_challenge: codeChallenge,
+    code_challenge_method: "S256",
   });
-  return { url: `${AUTH_URL}?${params.toString()}`, state };
+  return { url: `${AUTH_URL}?${params.toString()}`, state, codeVerifier };
 }
 
 interface TikTokTokenResponse {
@@ -35,7 +49,7 @@ interface TikTokTokenResponse {
   error_description?: string;
 }
 
-export async function handleTikTokOAuthCallback(code: string): Promise<void> {
+export async function handleTikTokOAuthCallback(code: string, codeVerifier: string): Promise<void> {
   const res = await fetch(TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -45,6 +59,7 @@ export async function handleTikTokOAuthCallback(code: string): Promise<void> {
       code,
       grant_type: "authorization_code",
       redirect_uri: config.tiktok.redirectUri,
+      code_verifier: codeVerifier,
     }),
   });
   const data = (await res.json()) as TikTokTokenResponse;

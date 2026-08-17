@@ -36,8 +36,19 @@ export default function SettingsClient() {
 
   const yt = accounts.find((a) => a.platform === "YOUTUBE");
   const tt = accounts.find((a) => a.platform === "TIKTOK");
-  const error = params.get("error");
+  const errorCode = params.get("error");
   const connected = params.get("connected");
+
+  const ERROR_MESSAGES: Record<string, string> = {
+    youtube_sin_credenciales:
+      "Falta configurar GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET en el .env (mira el README, sección YouTube) antes de poder conectar la cuenta.",
+    tiktok_sesion_expirada:
+      "El enlace de TikTok caducó antes de terminar (pasaron más de 10 min). Vuelve a darle a \"Conectar TikTok\".",
+    tiktok_estado_invalido:
+      "No se pudo verificar la conexión con TikTok (posible enlace caducado o abierto dos veces). Vuelve a intentarlo.",
+    tiktok_no_code: "TikTok no envió el código de acceso. Vuelve a intentarlo.",
+  };
+  const error = errorCode ? ERROR_MESSAGES[errorCode] ?? errorCode : null;
 
   return (
     <div className="space-y-6">
