@@ -65,10 +65,16 @@ export class RateLimitedProvider implements AIProvider {
   ) {}
 
   async chatJson(options: AIChatOptions): Promise<string> {
-    const estimated = estimateTokens(
-      `${options.system ?? ""}${options.prompt}`,
-      options.images?.length ?? 0,
-      options.maxTokens ?? 4_096
+    // Colchón de seguridad: el recuento real de tokens del proveedor va por delante de esta
+    // estimación aproximada (~chars/4) en la práctica un 3-5%, lo bastante para que peticiones
+    // que aquí salían "justo por debajo" del límite lleguen "justo por encima" en el servidor
+    // real y reciban un 413 (visto con Groq: estimado ~7750, "Requested" real 8094-8300).
+    const estimated = Math.ceil(
+      estimateTokens(
+        `${options.system ?? ""}${options.prompt}`,
+        options.images?.length ?? 0,
+        options.maxTokens ?? 4_096
+      ) * 1.15
     );
 
     let lastError: Error | null = null;

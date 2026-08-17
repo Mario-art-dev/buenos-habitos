@@ -12,11 +12,15 @@ function optional(name: string, fallback = ""): string {
 
 const aiProvider = optional("AI_PROVIDER", "anthropic") as "anthropic" | "openai" | "gemini" | "groq";
 
-// La capa gratuita de Groq limita a 8.000 tokens por minuto, muy por debajo de lo que ocupa la
-// transcripción de un vídeo largo. Con estos valores por defecto el análisis se trocea y se
-// espacia solo para no superar el límite; los proveedores de pago no necesitan freno.
+// La capa gratuita de Groq limita a 8.000 tokens por PETICIÓN (no solo por minuto), muy por
+// debajo de lo que ocupa la transcripción de un vídeo largo. Además, el modelo por defecto
+// (qwen3.6, "de razonamiento") gasta una parte de esos tokens pensando por dentro antes de
+// responder, aunque esa parte se oculte del resultado — así que cuanto más grande el trozo de
+// transcripción que se manda, menos margen le queda para el razonamiento + la respuesta, y el
+// JSON sale cortado a medias. Por eso aquí se trocea en trozos pequeños (menos texto de entrada)
+// y se deja mucho margen de salida (maxTokens) para el razonamiento + la respuesta real.
 const FREE_TIER_DEFAULTS = {
-  groq: { tokensPerMinute: "8000", transcriptChars: "9000", visionBatch: "2" },
+  groq: { tokensPerMinute: "8000", transcriptChars: "4000", visionBatch: "1" },
   gemini: { tokensPerMinute: "0", transcriptChars: "40000", visionBatch: "6" },
   anthropic: { tokensPerMinute: "0", transcriptChars: "60000", visionBatch: "6" },
   openai: { tokensPerMinute: "0", transcriptChars: "60000", visionBatch: "6" },

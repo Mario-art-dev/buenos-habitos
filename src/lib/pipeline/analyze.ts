@@ -142,8 +142,11 @@ export async function analyzeTranscriptForClips(
   // a que la IA corte el JSON a medias, así que nunca se piden más de 12 en la misma llamada.
   const clipsPerChunk = Math.max(2, Math.min(12, Math.ceil((maxClips * 1.5) / Math.max(chunks.length, 1))));
   // El presupuesto de tokens de salida crece con cuántos clips se piden en la petición, para que
-  // la respuesta quepa entera y no se corte a medias (rompiendo la validación de JSON).
-  const chunkMaxTokens = Math.max(3_500, 1_200 + clipsPerChunk * 300);
+  // la respuesta quepa entera y no se corte a medias (rompiendo la validación de JSON). El suelo
+  // es alto (5500) a propósito: el modelo de razonamiento gasta parte de este presupuesto
+  // "pensando" por dentro antes de escribir el JSON aunque esa parte se oculte del resultado, y
+  // si no le sobra sitio para eso Y la respuesta, la corta a medias.
+  const chunkMaxTokens = Math.max(5_500, 1_200 + clipsPerChunk * 300);
 
   const all: MomentCandidate[] = [];
   const errors: string[] = [];

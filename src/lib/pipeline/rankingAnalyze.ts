@@ -125,8 +125,9 @@ export async function classifyCandidates(candidates: CandidateMoment[]): Promise
         prompt: buildBatchPrompt(batch),
         images,
         // Margen extra: los modelos con razonamiento (p.ej. Qwen3 en Groq) gastan parte del
-        // presupuesto de tokens en su razonamiento interno aunque se oculte del resultado final.
-        maxTokens: 2800,
+        // presupuesto de tokens en su razonamiento interno aunque se oculte del resultado final,
+        // y aquí cada imagen ya cuesta ~1600 tokens de por sí.
+        maxTokens: 4000,
       });
       const cleaned = raw.trim().replace(/^```json\s*/i, "").replace(/```\s*$/i, "");
       const parsed = JSON.parse(cleaned) as {
