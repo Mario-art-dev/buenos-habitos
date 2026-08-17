@@ -75,13 +75,16 @@ Transcripción con marcas de tiempo en segundos [inicio-fin]:
 ${formatTranscript(segments)}
 """
 
-Tarea: identifica hasta ${maxClips} de los MEJORES momentos de este fragmento para convertir en shorts virales
-(los más divertidos, sorprendentes, polémicos, emotivos o con mayor "gancho" en los primeros 2 segundos).
+Tarea: identifica ${maxClips} momentos de este fragmento para convertir en shorts virales (los más divertidos,
+sorprendentes, polémicos, emotivos o con mayor "gancho" en los primeros 2 segundos). El canal necesita cantidad
+Y calidad: intenta encontrar los ${maxClips}, aunque no todos sean igual de espectaculares — prefiere elegir el
+mejor momento disponible en vez de forzar un corte a media frase. Solo devuelve menos si el fragmento es
+literalmente silencio, transición o publicidad sin ni un solo momento aprovechable.
 Escribe TODO el texto que generes (título, descripción, gancho, razón de viralidad, hashtags) en
 ${contentLanguageName()}, sea cual sea el idioma del vídeo fuente: el audio original del clip nunca se
 traduce ni se dobla, se usa tal cual; solo el texto que tú escribes va en ${contentLanguageName()}.
 Cada clip debe durar entre ${minLen} y ${maxLen} segundos, empezar y acabar en un punto natural (no cortar una frase a la mitad),
-y no solaparse con otros clips elegidos. Si en este fragmento no hay nada realmente bueno, devuelve menos clips (o ninguno).
+y no solaparse con otros clips elegidos.
 
 Para cada clip, evalúa su probabilidad de hacerse viral (0-100) considerando: fuerza del gancho inicial,
 sorpresa/emoción, ritmo, si funciona sin contexto previo, y si genera comentarios o ganas de compartir.
@@ -133,13 +136,16 @@ export async function analyzeTranscriptForClips(
   onProgress?: (partIndex: number, partCount: number) => Promise<void> | void
 ): Promise<MomentCandidate[]> {
   const provider = getAIProvider();
-  const maxClips = config.pipeline.maxClipsPerJob;
+  // Cuántos clips se buscan depende de la duración del vídeo (aprox. 1 cada 2 minutos), no de un
+  // número fijo: un vídeo de 50 min apunta a ~25, uno de 10 min a ~5. MAX_CLIPS_PER_JOB actúa como
+  // techo (para no disparar el número de peticiones/render en vídeos muy largos).
+  const maxClips = Math.max(3, Math.min(config.pipeline.maxClipsPerJob, Math.round(durationSec / 120)));
   const chunks = chunkSegments(segments, config.ai.maxTranscriptChars);
 
   // Con muchas partes se piden menos clips por parte, para no acabar con cientos de candidatos.
   // Se limita también a un máximo por petición (aunque haya una sola parte): pedir de golpe los
-  // ${maxClips} clips que el usuario quiera en total (hasta 30) en una única respuesta arriesga
-  // a que la IA corte el JSON a medias, así que nunca se piden más de 12 en la misma llamada.
+  // ${maxClips} clips que el usuario quiera en total en una única respuesta arriesga a que la IA
+  // corte el JSON a medias, así que nunca se piden más de 12 en la misma llamada.
   const clipsPerChunk = Math.max(2, Math.min(12, Math.ceil((maxClips * 1.5) / Math.max(chunks.length, 1))));
   // El presupuesto de tokens de salida crece con cuántos clips se piden en la petición, para que
   // la respuesta quepa entera y no se corte a medias (rompiendo la validación de JSON). El suelo

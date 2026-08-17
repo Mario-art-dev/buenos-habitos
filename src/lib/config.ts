@@ -124,7 +124,7 @@ export const config = {
   ytdlpPotProviderBaseUrl: optional("BGUTIL_POT_BASE_URL", "http://127.0.0.1:4416"),
 
   pipeline: {
-    maxClipsPerJob: Number(optional("MAX_CLIPS_PER_JOB", "30")),
+    maxClipsPerJob: Number(optional("MAX_CLIPS_PER_JOB", "40")),
     clipMinSeconds: Number(optional("CLIP_MIN_SECONDS", "60")),
     clipMaxSeconds: Number(optional("CLIP_MAX_SECONDS", "180")),
     workerPollIntervalMs: Number(optional("WORKER_POLL_INTERVAL_MS", "4000")),
