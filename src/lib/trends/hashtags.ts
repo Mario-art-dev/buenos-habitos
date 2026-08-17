@@ -62,9 +62,10 @@ de cada hashtag.
 
 Formato de respuesta JSON exacto:
 {"hashtags": ["tag1", "tag2", ...]}`,
-    // Margen extra: los modelos con razonamiento (p.ej. Qwen3 en Groq) gastan parte del
-    // presupuesto de tokens en su razonamiento interno aunque se oculte del resultado final.
-    maxTokens: 800,
+    // Los modelos con razonamiento (p.ej. Qwen3 en Groq) gastan una parte fija y considerable
+    // del presupuesto de tokens "pensando" por dentro aunque la respuesta real sea diminuta, así
+    // que el suelo tiene que ser generoso o el JSON sale cortado a medias.
+    maxTokens: 5_500,
   });
 
   try {

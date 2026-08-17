@@ -63,9 +63,16 @@ export async function generateProductScript(params: {
   assets: ProductAssetInput[];
 }): Promise<ProductScript> {
   const provider = getAIProvider();
+  // Con presupuesto de tokens limitado (capas gratuitas como Groq) cada foto ya cuesta ~1600
+  // tokens de por sí, así que mandar todas las fotos de un producto con muchas revienta el
+  // límite por petición antes incluso de dejar sitio para la respuesta. Se limitan a las 2
+  // primeras en ese caso (el vídeo final sigue usando TODAS las fotos; solo cambia cuántas ve
+  // la IA para escribir el guion, y las que no ve se quedan con una frase genérica de relleno).
+  const assetsForAI =
+    config.ai.tokensPerMinute > 0 ? params.assets.slice(0, 2) : params.assets;
   const images: AIImage[] = [];
-  for (let i = 0; i < params.assets.length; i++) {
-    const img = await assetToImage(params.jobId, params.assets[i], i);
+  for (let i = 0; i < assetsForAI.length; i++) {
+    const img = await assetToImage(params.jobId, assetsForAI[i], i);
     if (img) images.push(img);
   }
 
@@ -78,11 +85,15 @@ ${
     ? `Te inspiras SOLO en la estructura/ritmo de este anuncio existente (no copies frases literales): ${params.referenceAdUrl}`
     : ""
 }
-Tienes ${params.assets.length} fotos/clips del producto adjuntas, EN ORDEN de aparición en el vídeo.
+Tienes ${images.length} fotos/clips del producto adjuntas, EN ORDEN de aparición en el vídeo${
+      images.length < params.assets.length
+        ? ` (el vídeo final usará ${params.assets.length} en total, pero solo hace falta que narres estas)`
+        : ""
+    }.
 
 Escribe el guion completo de un vídeo publicitario corto (estilo TikTok/Shorts) de este producto:
 - "hook": 1 frase inicial (máx 12 palabras) que enganche en el primer segundo.
-- "segmentScripts": array de ${params.assets.length} frases, UNA por cada foto/clip EN EL MISMO ORDEN, narrando
+- "segmentScripts": array de ${images.length} frases, UNA por cada foto/clip EN EL MISMO ORDEN, narrando
   qué se ve y por qué mola/sirve, con tu voz personal (nada de listar características técnicas, cuéntalo natural).
 - "cta": 1 frase final de llamada a la acción mencionando que el enlace está en la descripción/bio para comprarlo.
 - "title": título corto para el vídeo (máx 70 caracteres).
@@ -97,10 +108,11 @@ Devuelve SOLO este JSON:
 {"hook":"...","segmentScripts":["...","..."],"cta":"...","title":"...","description":"...","hashtags":["..."],
 "viralityScore":number,"viralityReason":"..."}`,
     images: images.length ? images : undefined,
-    // Margen extra: los modelos con razonamiento (p.ej. Qwen3 en Groq) gastan parte del
-    // presupuesto de tokens en su razonamiento interno aunque se oculte del resultado final,
-    // y aquí la salida ya crece con el número de fotos/clips del producto.
-    maxTokens: 2500,
+    // Los modelos con razonamiento (p.ej. Qwen3 en Groq) gastan una parte fija y considerable
+    // del presupuesto de tokens "pensando" por dentro aunque se oculte del resultado final. Aquí
+    // el margen no puede ser tan grande como en otras llamadas porque cada foto adjunta ya cuesta
+    // ~1600 tokens de por sí (de ahí el límite de fotos de arriba).
+    maxTokens: 3_000,
   });
 
   const parsed = JSON.parse(cleanJson(raw)) as Partial<ProductScript>;

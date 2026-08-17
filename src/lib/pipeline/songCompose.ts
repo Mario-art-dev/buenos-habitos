@@ -42,9 +42,10 @@ Genera los metadatos de este vídeo:
 
 Devuelve SOLO este JSON:
 {"title": "...", "description": "...", "hashtags": ["..."], "viralityScore": number, "viralityReason": "..."}`,
-    // Margen extra: los modelos con razonamiento (p.ej. Qwen3 en Groq) gastan parte del
-    // presupuesto de tokens en su razonamiento interno aunque se oculte del resultado final.
-    maxTokens: 1000,
+    // Los modelos con razonamiento (p.ej. Qwen3 en Groq) gastan una parte fija y considerable
+    // del presupuesto de tokens "pensando" por dentro aunque la respuesta real sea diminuta, así
+    // que el suelo tiene que ser generoso o el JSON sale cortado a medias.
+    maxTokens: 5_500,
   });
 
   const parsed = JSON.parse(cleanJson(raw)) as Partial<SongComposition>;
