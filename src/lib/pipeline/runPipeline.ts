@@ -70,7 +70,20 @@ async function processSingleJob(jobId: string): Promise<void> {
 
     // 3. Analizar con IA: elegir mejores momentos + títulos + descripciones + score + hashtags
     await setStatus(jobId, "ANALYZING", "La IA está buscando los mejores momentos…");
-    const candidates = await analyzeTranscriptForClips(transcript.segments, title, durationSec);
+    const candidates = await analyzeTranscriptForClips(
+      transcript.segments,
+      title,
+      durationSec,
+      async (partIndex, partCount) => {
+        if (partCount > 1) {
+          await setStatus(
+            jobId,
+            "ANALYZING",
+            `La IA está buscando los mejores momentos… (parte ${partIndex + 1} de ${partCount})`
+          );
+        }
+      }
+    );
 
     if (candidates.length === 0) {
       throw new Error("La IA no encontró momentos aprovechables en este vídeo.");

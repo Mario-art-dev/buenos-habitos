@@ -10,13 +10,27 @@ function optional(name: string, fallback = ""): string {
   return process.env[name] ?? fallback;
 }
 
+const aiProvider = optional("AI_PROVIDER", "anthropic") as "anthropic" | "openai" | "gemini" | "groq";
+
+// La capa gratuita de Groq limita a 8.000 tokens por minuto, muy por debajo de lo que ocupa la
+// transcripción de un vídeo largo. Con estos valores por defecto el análisis se trocea y se
+// espacia solo para no superar el límite; los proveedores de pago no necesitan freno.
+const FREE_TIER_DEFAULTS = {
+  groq: { tokensPerMinute: "8000", transcriptChars: "9000", visionBatch: "2" },
+  gemini: { tokensPerMinute: "0", transcriptChars: "40000", visionBatch: "6" },
+  anthropic: { tokensPerMinute: "0", transcriptChars: "60000", visionBatch: "6" },
+  openai: { tokensPerMinute: "0", transcriptChars: "60000", visionBatch: "6" },
+} as const;
+
+const aiDefaults = FREE_TIER_DEFAULTS[aiProvider] ?? FREE_TIER_DEFAULTS.anthropic;
+
 export const config = {
   appUrl: optional("APP_URL", "http://localhost:3000"),
   appPassword: optional("APP_PASSWORD"),
   sessionSecret: optional("SESSION_SECRET", "dev-secret-change-me"),
 
   ai: {
-    provider: (optional("AI_PROVIDER", "anthropic") as "anthropic" | "openai" | "gemini" | "groq"),
+    provider: aiProvider,
     anthropicApiKey: optional("ANTHROPIC_API_KEY"),
     anthropicModel: optional("ANTHROPIC_MODEL", "claude-sonnet-5"),
     openaiApiKey: optional("OPENAI_API_KEY"),
@@ -30,6 +44,14 @@ export const config = {
     // de IA). Groq no tiene esa restricción ni pide tarjeta.
     groqApiKey: optional("GROQ_API_KEY"),
     groqModel: optional("GROQ_MODEL", "qwen/qwen3.6-27b"),
+
+    // Presupuesto de tokens por minuto del proveedor (0 = sin freno). Si se supera, la API
+    // devuelve 413/429 y el trabajo falla, así que las peticiones se espacian solas.
+    tokensPerMinute: Number(optional("AI_TOKENS_PER_MINUTE", aiDefaults.tokensPerMinute)),
+    // Cuánta transcripción cabe en una sola petición: los vídeos largos se analizan por partes.
+    maxTranscriptChars: Number(optional("AI_MAX_TRANSCRIPT_CHARS", aiDefaults.transcriptChars)),
+    // Cuántos fotogramas se mandan juntos al clasificar momentos con visión (modo Rankings).
+    visionBatchSize: Number(optional("AI_VISION_BATCH_SIZE", aiDefaults.visionBatch)),
   },
 
   transcription: {

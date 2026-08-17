@@ -28,7 +28,6 @@ export interface RankingGroup {
 }
 
 const MAX_CANDIDATES = 90;
-const BATCH_SIZE = 6;
 
 function transcriptExcerptFor(segments: TranscriptSegment[], span: TimeSpan): string {
   return segments
@@ -107,9 +106,12 @@ Devuelve SOLO este JSON, con un elemento por candidato EN EL MISMO ORDEN (usa el
 export async function classifyCandidates(candidates: CandidateMoment[]): Promise<ClassifiedMoment[]> {
   const provider = getAIProvider();
   const classified: ClassifiedMoment[] = [];
+  // Cada fotograma cuesta bastantes tokens: en capas gratuitas con poco margen por minuto se
+  // mandan de dos en dos para no superar el límite (configurable con AI_VISION_BATCH_SIZE).
+  const batchSize = Math.max(1, config.ai.visionBatchSize);
 
-  for (let i = 0; i < candidates.length; i += BATCH_SIZE) {
-    const batch = candidates.slice(i, i + BATCH_SIZE);
+  for (let i = 0; i < candidates.length; i += batchSize) {
+    const batch = candidates.slice(i, i + batchSize);
     const images = batch.map((c) => ({
       base64: fs.readFileSync(c.thumbnailPath).toString("base64"),
       mediaType: "image/jpeg" as const,
