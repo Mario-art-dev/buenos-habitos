@@ -16,7 +16,7 @@ export const config = {
   sessionSecret: optional("SESSION_SECRET", "dev-secret-change-me"),
 
   ai: {
-    provider: (optional("AI_PROVIDER", "anthropic") as "anthropic" | "openai" | "gemini"),
+    provider: (optional("AI_PROVIDER", "anthropic") as "anthropic" | "openai" | "gemini" | "groq"),
     anthropicApiKey: optional("ANTHROPIC_API_KEY"),
     anthropicModel: optional("ANTHROPIC_MODEL", "claude-sonnet-5"),
     openaiApiKey: optional("OPENAI_API_KEY"),
@@ -25,6 +25,11 @@ export const config = {
     // "gemini-flash-latest" es un alias que Google mantiene apuntando siempre al último
     // Flash estable, así este valor por defecto no se queda obsoleto cuando lancen modelos nuevos.
     geminiModel: optional("GEMINI_MODEL", "gemini-flash-latest"),
+    // Groq: alternativa gratuita a Gemini para quien esté en la UE/Reino Unido/Suiza, donde la
+    // capa gratuita de Gemini no está disponible (Google exige tarjeta ahí por el RGPD/Reglamento
+    // de IA). Groq no tiene esa restricción ni pide tarjeta.
+    groqApiKey: optional("GROQ_API_KEY"),
+    groqModel: optional("GROQ_MODEL", "qwen/qwen3.6-27b"),
   },
 
   transcription: {
@@ -120,5 +125,8 @@ export function requireAiKey(): void {
   }
   if (config.ai.provider === "gemini" && !config.ai.geminiApiKey) {
     throw new Error("AI_PROVIDER=gemini pero falta GEMINI_API_KEY en .env");
+  }
+  if (config.ai.provider === "groq" && !config.ai.groqApiKey) {
+    throw new Error("AI_PROVIDER=groq pero falta GROQ_API_KEY en .env");
   }
 }

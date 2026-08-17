@@ -96,7 +96,8 @@ jobs:
           PRODUCT_LINK: ${{ inputs.productLink }}
           REFERENCE_AD_URL: ${{ inputs.referenceAdUrl }}
           PRODUCT_IMAGE_URLS: ${{ inputs.productImageUrls }}
-          AI_PROVIDER: "gemini"
+          AI_PROVIDER: "groq"
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

@@ -19,6 +19,7 @@ import { config, requireAiKey } from "@/lib/config";
 import { AnthropicProvider } from "./anthropic";
 import { OpenAIProvider } from "./openai";
 import { GeminiProvider } from "./gemini";
+import { GroqProvider } from "./groq";
 
 let cached: AIProvider | null = null;
 
@@ -31,6 +32,9 @@ export function getAIProvider(): AIProvider {
       break;
     case "gemini":
       cached = new GeminiProvider();
+      break;
+    case "groq":
+      cached = new GroqProvider();
       break;
     default:
       cached = new AnthropicProvider();

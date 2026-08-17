@@ -41,8 +41,9 @@ Y dos modos pensados para monetización con publicidad de terceros:
 - **`ffmpeg`** — recorta cada momento y lo recompone a formato vertical.
 - **Whisper** — transcribe el audio con marcas de tiempo, vía la API de OpenAI (de pago) o
   con `faster-whisper` en el propio servidor (gratis).
-- **Gemini, Claude o GPT** — analiza la transcripción y decide los mejores momentos, títulos,
-  descripciones, puntuación de viralidad y hashtags. Gemini tiene capa gratuita.
+- **Groq, Gemini, Claude o GPT** — analiza la transcripción y decide los mejores momentos,
+  títulos, descripciones, puntuación de viralidad y hashtags. Groq y Gemini tienen capa
+  gratuita (Gemini no disponible en la UE/Reino Unido/Suiza).
 - **Piper o la API de voz de OpenAI** — sintetiza el comentario/reacción narrado que envuelve
   cada vídeo, y el guion narrado de los vídeos de producto. Piper es gratis y corre en tu
   propio servidor.
@@ -152,15 +153,22 @@ con copyright puede generar una reclamación de Content ID en la plataforma de d
 La app puede funcionar sin ningún coste de API. Pon esto en tu `.env`:
 
 ```bash
-AI_PROVIDER="gemini"              # Google Gemini tiene capa gratuita
-GEMINI_API_KEY="tu-clave"         # gratis en https://aistudio.google.com/apikey
+AI_PROVIDER="groq"                # Groq tiene capa gratuita, sin tarjeta
+GROQ_API_KEY="tu-clave"           # gratis en https://console.groq.com/keys
 TRANSCRIPTION_PROVIDER="local"    # transcribe en tu propio servidor, sin API
 ```
 
-- **Gemini** analiza el vídeo, elige los mejores momentos y escribe títulos, descripciones,
-  hashtags y la puntuación de viralidad. Su capa gratuita tiene límites de peticiones por
-  minuto y por día; para un uso normal (unos pocos vídeos al día) sobra. Si te pasas del
-  límite, la app fallará ese trabajo con un error de Gemini y podrás reintentarlo más tarde.
+> ⚠️ **Si estás en la Unión Europea, Reino Unido o Suiza, usa Groq y no Gemini.** La capa
+> gratuita de Gemini no está disponible ahí — Google exige activar facturación con tarjeta por
+> las exigencias de manejo de datos del RGPD/Reglamento de IA europeo, aunque no llegues a
+> gastar nada. Groq no tiene esa restricción ni pide tarjeta en ningún país. Si no estás en esa
+> zona, `AI_PROVIDER="gemini"` con `GEMINI_API_KEY` funciona igual de bien.
+
+- **Groq** (o Gemini fuera de la UE/Reino Unido/Suiza) analiza el vídeo, elige los mejores
+  momentos y escribe títulos, descripciones, hashtags y la puntuación de viralidad. La capa
+  gratuita tiene límites de peticiones por minuto y por día; para un uso normal (unos pocos
+  vídeos al día) sobra. Si te pasas del límite, la app fallará ese trabajo con un error del
+  proveedor y podrás reintentarlo más tarde.
 - **Whisper local** (`faster-whisper`) transcribe el audio en el propio servidor: gratis, sin
   claves y sin límite de tamaño de archivo. A cambio es más lento y consume CPU —
   con `LOCAL_WHISPER_MODEL="base"` va bien; `small` transcribe mejor y tarda más.
@@ -192,9 +200,11 @@ unos minutos y te descargas el resultado.
 1. En **Settings → General** del repositorio, comprueba que es **público** (así los minutos de
    GitHub Actions son gratis e ilimitados; en repos privados el plan gratis da 2000 min/mes,
    que también suele sobrar, pero público es lo más simple para no preocuparse).
-2. Consigue una clave gratis de Gemini en <https://aistudio.google.com/apikey> (no pide tarjeta).
+2. Consigue una clave gratis de Groq en <https://console.groq.com/keys> (no pide tarjeta, sin
+   restricción por país). Si no estás en la UE/Reino Unido/Suiza también vale Gemini en
+   <https://aistudio.google.com/apikey>.
 3. En **Settings → Secrets and variables → Actions → New repository secret**, crea un secreto
-   llamado `GEMINI_API_KEY` con esa clave.
+   llamado `GROQ_API_KEY` (o `GEMINI_API_KEY` si usas Gemini) con esa clave.
 
 ### Generar un vídeo
 
@@ -229,7 +239,7 @@ el panel se queda disponible de forma casi continua, encadenando sesiones solo.
 
 ### Configurarlo (una sola vez)
 
-Además de `GEMINI_API_KEY` (ver arriba), crea estos dos secretos en
+Además de `GROQ_API_KEY` (o `GEMINI_API_KEY`, ver arriba), crea estos dos secretos en
 **Settings → Secrets and variables → Actions → Secrets**:
 
 - `APP_PASSWORD` → la contraseña con la que entrarás al panel.
@@ -293,11 +303,12 @@ npm run worker            # worker que procesa los vídeos (terminal 2)
 ### IA (obligatorio para analizar el vídeo)
 
 - **`AI_PROVIDER`**: quién elige los mejores momentos, escribe títulos/descripciones y puntúa
-  la viralidad. Tres opciones:
+  la viralidad. Cuatro opciones:
 
   | Valor | Coste | Clave |
   |---|---|---|
-  | `gemini` | **Gratis** (capa gratuita con límites) | https://aistudio.google.com/apikey |
+  | `groq` | **Gratis** (capa gratuita con límites), sin restricción por país | https://console.groq.com/keys |
+  | `gemini` | **Gratis** (capa gratuita con límites) — **NO disponible en la UE/Reino Unido/Suiza** | https://aistudio.google.com/apikey |
   | `anthropic` | De pago por uso | https://console.anthropic.com |
   | `openai` | De pago por uso | https://platform.openai.com |
 
@@ -307,7 +318,7 @@ npm run worker            # worker que procesa los vídeos (terminal 2)
     reutiliza `OPENAI_API_KEY` si ya la tienes puesta).
 
   Los dos ajustes son independientes: puedes usar Claude para el análisis y Whisper local
-  para transcribir, o Gemini gratis para todo.
+  para transcribir, o Groq/Gemini gratis para todo.
 
 ### YouTube (para publicar automáticamente)
 
@@ -385,7 +396,7 @@ src/lib/pipeline/         descarga (yt-dlp), transcripción (Whisper), análisis
 src/lib/social/           OAuth, subida a YouTube / TikTok y publicación compartida (publish.ts)
 src/lib/trends/           sugerencia de hashtags
 src/lib/schedule/         ajustes y motor del planificador de publicación automática
-src/lib/ai/               proveedor de IA intercambiable (Gemini / Anthropic / OpenAI), con visión
+src/lib/ai/               proveedor de IA intercambiable (Groq / Gemini / Anthropic / OpenAI), con visión
 src/lib/tts/              proveedor de voz intercambiable (Piper local gratis / OpenAI)
 scripts/local_whisper.py  transcripción gratuita en el propio servidor (faster-whisper)
 scripts/local_tts.py      voz narrada gratuita en el propio servidor (Piper)
