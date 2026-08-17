@@ -22,7 +22,9 @@ export const config = {
     openaiApiKey: optional("OPENAI_API_KEY"),
     openaiModel: optional("OPENAI_ANALYSIS_MODEL", "gpt-4o"),
     geminiApiKey: optional("GEMINI_API_KEY"),
-    geminiModel: optional("GEMINI_MODEL", "gemini-2.0-flash"),
+    // "gemini-flash-latest" es un alias que Google mantiene apuntando siempre al último
+    // Flash estable, así este valor por defecto no se queda obsoleto cuando lancen modelos nuevos.
+    geminiModel: optional("GEMINI_MODEL", "gemini-flash-latest"),
   },
 
   transcription: {

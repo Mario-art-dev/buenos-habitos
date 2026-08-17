@@ -128,8 +128,6 @@ export async function processSongJob(jobId: string): Promise<void> {
       const outPath = clipVideoPath(jobId, clip.id);
       await replaceAudioTrack(silentPath, songPath, outPath, 0);
 
-      const { durationSec: finalDurationSec } = await probeVideo(outPath);
-
       const composition = await composeSongEdit({ sourceTitle, songTitle, clipCount: chosen.length });
 
       const thumbPath = clipThumbnailPath(jobId, clip.id);
@@ -141,7 +139,6 @@ export async function processSongJob(jobId: string): Promise<void> {
           status: "READY",
           filePath: outPath,
           thumbnailPath: thumbPath,
-          endSec: chosen[0].startSec + finalDurationSec,
           title: composition.title,
           description: composition.description,
           hashtags: JSON.stringify(composition.hashtags),
