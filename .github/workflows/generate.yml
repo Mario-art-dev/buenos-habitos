@@ -1,0 +1,99 @@
+name: Generar short
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Modo"
+        required: true
+        type: choice
+        options:
+          - SINGLE
+          - RANKING
+          - PRODUCT
+          - SONG
+        default: SINGLE
+      sourceUrl:
+        description: "URL del vídeo (SINGLE, RANKING y SONG)"
+        required: false
+        type: string
+      songUrl:
+        description: "URL de YouTube de la canción (solo SONG)"
+        required: false
+        type: string
+      productName:
+        description: "Nombre del producto (solo PRODUCT)"
+        required: false
+        type: string
+      productLink:
+        description: "Enlace del producto/afiliado (solo PRODUCT; también se usa para sacar fotos si no das productImageUrls)"
+        required: false
+        type: string
+      referenceAdUrl:
+        description: "Anuncio existente de referencia, opcional (solo PRODUCT)"
+        required: false
+        type: string
+      productImageUrls:
+        description: "URLs de fotos/vídeos del producto, una por línea (solo PRODUCT)"
+        required: false
+        type: string
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Instalar ffmpeg, yt-dlp y dependencias de Python
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg python3 python3-pip fonts-dejavu-core
+          pip3 install --no-cache-dir --break-system-packages yt-dlp faster-whisper piper-tts librosa
+
+      - name: Instalar dependencias de Node
+        run: npm ci
+
+      - name: Preparar la base de datos local
+        run: npx prisma generate && npx prisma db push
+        env:
+          DATABASE_URL: "file:./storage/app.db"
+
+      - name: Generar el short
+        run: npx tsx scripts/run_job_cli.ts
+        env:
+          DATABASE_URL: "file:./storage/app.db"
+          JOB_MODE: ${{ inputs.mode }}
+          SOURCE_URL: ${{ inputs.sourceUrl }}
+          SONG_URL: ${{ inputs.songUrl }}
+          PRODUCT_NAME: ${{ inputs.productName }}
+          PRODUCT_LINK: ${{ inputs.productLink }}
+          REFERENCE_AD_URL: ${{ inputs.referenceAdUrl }}
+          PRODUCT_IMAGE_URLS: ${{ inputs.productImageUrls }}
+          AI_PROVIDER: "gemini"
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          TRANSCRIPTION_PROVIDER: "local"
+          PYTHON_PATH: "python3"
+          TTS_PROVIDER: "local"
+          ENABLE_COMMENTARY: "true"
+          CHANNEL_NAME: "Escenas Virales"
+          CHANNEL_NICHE: "Recopilación de las mejores escenas virales de creadores de contenido"
+          CHANNEL_LANGUAGE: "es"
+
+      - name: Subir el resultado
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: short-${{ github.run_number }}
+          path: output/
+          retention-days: 14
+          if-no-files-found: warn

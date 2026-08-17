@@ -9,6 +9,7 @@
     "start": "next start",
     "worker": "tsx watch worker/index.ts",
     "worker:build": "tsx worker/index.ts",
+    "generate": "tsx scripts/run_job_cli.ts",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "db:push": "prisma db push",

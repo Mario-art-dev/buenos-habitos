@@ -179,6 +179,43 @@ ordenador propio que puedas dejar encendido.
 > necesitando que crees tus propias credenciales OAuth (que también son gratuitas, pero
 > requieren darte de alta como desarrollador en cada plataforma — ver más abajo).
 
+## Modo sin servidor: GitHub Actions (gratis, sin tarjeta, sin ordenador)
+
+Si no puedes/quieres verificarte con una tarjeta en un proveedor cloud (Oracle, Google, AWS...),
+hay una alternativa que no pide tarjeta en ningún momento: usar **GitHub Actions** como el
+"ordenador" que genera el vídeo, en vez de tener un servidor encendido 24/7. La contrapartida:
+no hay web con panel ni publicación automática — pides un vídeo desde un formulario, esperas
+unos minutos y te descargas el resultado.
+
+### Configurarlo (una sola vez)
+
+1. En **Settings → General** del repositorio, comprueba que es **público** (así los minutos de
+   GitHub Actions son gratis e ilimitados; en repos privados el plan gratis da 2000 min/mes,
+   que también suele sobrar, pero público es lo más simple para no preocuparse).
+2. Consigue una clave gratis de Gemini en <https://aistudio.google.com/apikey> (no pide tarjeta).
+3. En **Settings → Secrets and variables → Actions → New repository secret**, crea un secreto
+   llamado `GEMINI_API_KEY` con esa clave.
+
+### Generar un vídeo
+
+1. Ve a la pestaña **Actions** del repositorio → workflow **"Generar short"** → botón
+   **Run workflow**.
+2. Elige el modo (`SINGLE`, `RANKING`, `PRODUCT` o `SONG`) y rellena los campos que le
+   correspondan:
+   - `SINGLE`/`RANKING`: `sourceUrl` (el enlace del vídeo).
+   - `SONG`: `sourceUrl` (la recopilación) + `songUrl` (la canción).
+   - `PRODUCT`: `productName` y, o bien `productLink` (para que la IA saque fotos de esa
+     página), o bien `productImageUrls` con una URL de foto/vídeo por línea (no se pueden
+     subir archivos directamente desde el formulario de GitHub, así que las fotos tienen que
+     estar ya alojadas en algún sitio con enlace directo).
+3. Pulsa **Run workflow** y espera — tarda entre 5 y 20 minutos según el vídeo.
+4. Cuando termine (círculo verde ✓), entra en esa ejecución y descarga el archivo que aparece
+   en **Artifacts**: dentro hay el vídeo (`.mp4`), la miniatura (`.jpg`) y un `.txt` por cada
+   clip con el título, la descripción, los hashtags y la puntuación de viralidad que ha
+   generado la IA, listos para copiar al subir el vídeo a mano en TikTok/YouTube.
+
+Todo esto se puede hacer desde el navegador del móvil sin instalar nada.
+
 ## Puesta en marcha (Docker, recomendado)
 
 ```bash
