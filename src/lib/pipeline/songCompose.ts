@@ -1,5 +1,6 @@
 import { getAIProvider } from "@/lib/ai/provider";
 import { config } from "@/lib/config";
+import { contentLanguageName } from "@/lib/lang";
 
 export interface SongComposition {
   title: string;
@@ -31,7 +32,7 @@ export async function composeSongEdit(params: {
 "${params.songTitle}" (estilo hype edit / montaje musical).
 
 Genera los metadatos de este vídeo:
-- "title": título corto y estratégico (máx 70 caracteres), en español, con gancho, sin comillas.
+- "title": título corto y estratégico (máx 70 caracteres), en ${contentLanguageName()}, con gancho, sin comillas.
 - "description": descripción corta (1-2 frases), adaptada al canal ${config.channel.name}, mencionando el
   ritmo/la música.
 - "hashtags": 8 a 12 hashtags sin el símbolo #, relevantes para TikTok/YouTube Shorts, incluyendo alguno de

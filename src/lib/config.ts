@@ -24,6 +24,20 @@ const FREE_TIER_DEFAULTS = {
 
 const aiDefaults = FREE_TIER_DEFAULTS[aiProvider] ?? FREE_TIER_DEFAULTS.anthropic;
 
+// El inglés suele dar más ingresos publicitarios (CPM más alto) que el español, así que es el
+// idioma por defecto de todo el contenido generado (títulos, descripciones, hashtags, comentario
+// en off...). Esto NO afecta al audio original de los vídeos fuente, que nunca se traduce ni se
+// dobla: se recorta y se usa tal cual venga (si un vídeo fuente ya está en inglés, se queda igual).
+const channelLanguage = optional("CHANNEL_LANGUAGE") || "en";
+
+// Voz de Piper que mejor encaja con el idioma configurado, para que el comentario en off (TTS)
+// no quede en un idioma distinto al de los títulos/descripciones. Se puede forzar otra con
+// LOCAL_TTS_VOICE si el idioma configurado no es ninguno de estos.
+const DEFAULT_TTS_VOICE_BY_LANGUAGE: Record<string, string> = {
+  en: "en_US-lessac-medium",
+  es: "es_ES-davefx-medium",
+};
+
 export const config = {
   appUrl: optional("APP_URL", "http://localhost:3000"),
   appPassword: optional("APP_PASSWORD"),
@@ -75,7 +89,7 @@ export const config = {
   tts: {
     // "local" = Piper (gratis, corre en el propio servidor) | "openai" = API de voz de OpenAI (de pago)
     provider: (optional("TTS_PROVIDER", "local") as "local" | "openai"),
-    localVoice: optional("LOCAL_TTS_VOICE", "es_ES-davefx-medium"),
+    localVoice: optional("LOCAL_TTS_VOICE") || DEFAULT_TTS_VOICE_BY_LANGUAGE[channelLanguage] || "en_US-lessac-medium",
     openaiApiKey: optional("OPENAI_API_KEY_TTS") || optional("OPENAI_API_KEY"),
     openaiVoice: optional("OPENAI_TTS_VOICE", "alloy"),
     openaiModel: optional("OPENAI_TTS_MODEL", "tts-1"),
@@ -132,7 +146,7 @@ export const config = {
       "CHANNEL_NICHE",
       "Recopilación de las mejores escenas virales de creadores de contenido"
     ),
-    language: optional("CHANNEL_LANGUAGE", "es"),
+    language: channelLanguage,
   },
 
   storageDir: optional("STORAGE_DIR", "storage"),

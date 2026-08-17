@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import { getAIProvider, type AIImage } from "@/lib/ai/provider";
 import { config } from "@/lib/config";
+import { contentLanguageName } from "@/lib/lang";
 import { extractFrameAt } from "./clip";
 import { tmpDir } from "@/lib/storagePaths";
 
@@ -27,7 +28,8 @@ especializado en vídeos cortos de recomendación/publicidad de producto para Ti
 con enlace de afiliado. Escribes SIEMPRE con tu propia voz, dando tu opinión y experiencia sobre el producto —
 nunca copias frases de otro anuncio, como mucho te inspiras en su estructura/ritmo si se te indica. No inventes
 afirmaciones médicas o legales falsas, y deja claro que es contenido publicitario/patrocinado (transparencia
-legal). Respondes EXCLUSIVAMENTE con JSON válido, sin markdown.`;
+legal). Escribe TODO el guion (gancho, frases por segmento, CTA, título, descripción, hashtags) en
+${contentLanguageName()}. Respondes EXCLUSIVAMENTE con JSON válido, sin markdown.`;
 
 function mediaTypeFor(filePath: string): AIImage["mediaType"] {
   return filePath.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg";

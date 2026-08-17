@@ -1,5 +1,6 @@
 import { getAIProvider } from "@/lib/ai/provider";
 import { config } from "@/lib/config";
+import { contentLanguageName } from "@/lib/lang";
 import type { TranscriptSegment } from "./transcribe";
 
 export interface MomentCandidate {
@@ -76,6 +77,9 @@ ${formatTranscript(segments)}
 
 Tarea: identifica hasta ${maxClips} de los MEJORES momentos de este fragmento para convertir en shorts virales
 (los más divertidos, sorprendentes, polémicos, emotivos o con mayor "gancho" en los primeros 2 segundos).
+Escribe TODO el texto que generes (título, descripción, gancho, razón de viralidad, hashtags) en
+${contentLanguageName()}, sea cual sea el idioma del vídeo fuente: el audio original del clip nunca se
+traduce ni se dobla, se usa tal cual; solo el texto que tú escribes va en ${contentLanguageName()}.
 Cada clip debe durar entre ${minLen} y ${maxLen} segundos, empezar y acabar en un punto natural (no cortar una frase a la mitad),
 y no solaparse con otros clips elegidos. Si en este fragmento no hay nada realmente bueno, devuelve menos clips (o ninguno).
 
@@ -88,7 +92,7 @@ Devuelve SOLO este JSON (sin texto extra):
     {
       "startSec": number,
       "endSec": number,
-      "title": "título corto y estratégico (máx 60 caracteres, con gancho, en español, pensado para YouTube Shorts/TikTok, sin comillas ni emojis excesivos)",
+      "title": "título corto y estratégico (máx 60 caracteres, con gancho, en ${contentLanguageName()}, pensado para YouTube Shorts/TikTok, sin comillas ni emojis excesivos)",
       "description": "descripción corta (1-2 frases) de qué pasa en el clip, adaptada al canal ${config.channel.name}",
       "hook": "la frase o momento exacto que engancha en el segundo 0-2",
       "viralityScore": number entre 0 y 100,

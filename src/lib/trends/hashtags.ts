@@ -1,5 +1,6 @@
 import { getAIProvider } from "@/lib/ai/provider";
 import { config } from "@/lib/config";
+import { contentLanguageName } from "@/lib/lang";
 
 export type Platform = "YOUTUBE" | "TIKTOK";
 
@@ -55,7 +56,9 @@ Devuelve el mejor set de 8 a 12 hashtags para maximizar alcance AHORA, combinand
 - hashtags amplios y muy usados en la plataforma para el tipo de contenido (alto volumen),
 - hashtags de nicho específicos del clip (competencia media, más conversión),
 - 1-2 hashtags de marca/canal.
-No repitas, no uses el símbolo #, en minúsculas, sin espacios dentro de cada hashtag.
+Los hashtags deben estar en ${contentLanguageName()} salvo los que ya sean universales en cualquier idioma
+(nombres propios, "fyi", "viral", etc.). No repitas, no uses el símbolo #, en minúsculas, sin espacios dentro
+de cada hashtag.
 
 Formato de respuesta JSON exacto:
 {"hashtags": ["tag1", "tag2", ...]}`,

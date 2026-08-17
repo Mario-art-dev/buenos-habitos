@@ -1,6 +1,7 @@
 import fs from "fs";
 import { getAIProvider } from "@/lib/ai/provider";
 import { config } from "@/lib/config";
+import { contentLanguageName } from "@/lib/lang";
 import type { TranscriptSegment } from "./transcribe";
 import type { TimeSpan } from "./silence";
 import { extractFrameAt } from "./clip";
@@ -91,12 +92,13 @@ ${items}
 Para cada candidato decide:
 - "include": true solo si es un momento claro y usable (algo ocurre: una caída, una acrobacia, un susto, algo
   gracioso o impactante). false si es un tramo de transición, introducción, publicidad, o no pasa nada relevante.
-- "category": categoría temática breve en español para agrupar candidatos similares en un mismo vídeo de ranking
-  (ejemplos orientativos: "fails de coches", "fails de acrobacias", "fails de animales", "fails en el trabajo",
-  "fails de bicicleta", "resbalones", "fails de nieve/agua"... usa la que mejor describa el contenido, sé consistente
-  para que candidatos del mismo tipo caigan en la MISMA categoría exacta).
-- "label": texto muy corto (máx 6 palabras) para mostrar en pantalla como título de ese puesto del ranking.
-- "description": 1 frase describiendo qué pasa.
+- "category": categoría temática breve en ${contentLanguageName()} para agrupar candidatos similares en un mismo
+  vídeo de ranking (ejemplos orientativos: "fails de coches", "fails de acrobacias", "fails de animales", "fails en
+  el trabajo", "fails de bicicleta", "resbalones", "fails de nieve/agua"... usa la que mejor describa el contenido,
+  sé consistente para que candidatos del mismo tipo caigan en la MISMA categoría exacta).
+- "label": texto muy corto (máx 6 palabras) en ${contentLanguageName()} para mostrar en pantalla como título de ese
+  puesto del ranking.
+- "description": 1 frase en ${contentLanguageName()} describiendo qué pasa.
 - "score": 0-100, qué tan gracioso/impactante/viral es este momento comparado con el resto.
 
 Devuelve SOLO este JSON, con un elemento por candidato EN EL MISMO ORDEN (usa el "index" real indicado arriba):

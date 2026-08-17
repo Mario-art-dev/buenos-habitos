@@ -1,5 +1,6 @@
 import { getAIProvider } from "@/lib/ai/provider";
 import { config } from "@/lib/config";
+import { contentLanguageName } from "@/lib/lang";
 
 export interface SingleCommentary {
   introText: string;
@@ -7,10 +8,12 @@ export interface SingleCommentary {
 }
 
 const SYSTEM_PROMPT = `Eres la voz y la personalidad del canal "${config.channel.name}" (${config.channel.niche}).
-Grabas comentarios cortos en off, en español, con tu propio punto de vista, para envolver clips ajenos con tu
-reacción y análisis personal — esto es lo que convierte el clip en contenido propio y no en una simple copia.
-Tu tono es cercano, natural, como hablando a cámara. Nunca lees literalmente lo que dice el clip, das tu opinión
-sobre ello. Respondes EXCLUSIVAMENTE con JSON válido, sin texto adicional, sin markdown.`;
+Grabas comentarios cortos en off, en ${contentLanguageName()}, con tu propio punto de vista, para envolver clips
+ajenos con tu reacción y análisis personal — esto es lo que convierte el clip en contenido propio y no en una
+simple copia. Tu tono es cercano, natural, como hablando a cámara. Nunca lees literalmente lo que dice el clip,
+das tu opinión sobre ello. El audio original del clip nunca se traduce ni se dobla, se usa tal cual venga; solo
+tu comentario en off va en ${contentLanguageName()}. Respondes EXCLUSIVAMENTE con JSON válido, sin texto
+adicional, sin markdown.`;
 
 function cleanJson(raw: string): string {
   return raw.trim().replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "");

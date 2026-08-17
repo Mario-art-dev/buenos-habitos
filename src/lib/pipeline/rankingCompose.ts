@@ -1,5 +1,6 @@
 import { getAIProvider } from "@/lib/ai/provider";
 import { config } from "@/lib/config";
+import { contentLanguageName } from "@/lib/lang";
 import type { RankingGroup } from "./rankingAnalyze";
 
 export interface RankingComposition {
@@ -16,9 +17,10 @@ export interface RankingComposition {
 
 const SYSTEM_PROMPT = `Eres la voz y la personalidad del canal "${config.channel.name}" (${config.channel.niche}),
 experto en vídeos de ranking/cuenta atrás virales ("TOP 5...", "TOP 10..."). Grabas comentarios cortos en off,
-en español, con tu propio punto de vista sobre cada puesto — esto es lo que convierte el vídeo en contenido
-propio y no en una simple copia de los clips originales. Tono cercano, natural, como hablando a cámara.
-Respondes EXCLUSIVAMENTE con JSON válido, sin markdown.`;
+en ${contentLanguageName()}, con tu propio punto de vista sobre cada puesto — esto es lo que convierte el vídeo en
+contenido propio y no en una simple copia de los clips originales. Tono cercano, natural, como hablando a cámara.
+El audio original de los clips nunca se traduce ni se dobla, se usa tal cual venga; solo lo que tú escribes va
+en ${contentLanguageName()}. Respondes EXCLUSIVAMENTE con JSON válido, sin markdown.`;
 
 export async function composeRanking(group: RankingGroup, sourceTitle: string): Promise<RankingComposition> {
   const provider = getAIProvider();
@@ -37,7 +39,7 @@ ${itemsList}
 
 Genera los metadatos de este vídeo de ranking:
 - "title": título corto y estratégico tipo "TOP ${group.items.length} ${group.category.toUpperCase()}..." (máx 70
-  caracteres, con gancho, en español, sin comillas).
+  caracteres, con gancho, en ${contentLanguageName()}, sin comillas).
 - "description": descripción corta (1-2 frases) resumiendo el vídeo, adaptada al canal ${config.channel.name}.
 - "hashtags": 8 a 12 hashtags sin el símbolo #, relevantes para TikTok/YouTube Shorts y esta categoría.
 - "viralityScore": 0-100, probabilidad de que este vídeo se vuelva viral.
