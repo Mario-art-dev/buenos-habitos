@@ -1,5 +1,6 @@
 import { config } from "@/lib/config";
 import { run } from "./exec";
+import { probeVideo } from "./probe";
 
 export interface DownloadResult {
   title: string;
@@ -82,4 +83,23 @@ export async function downloadAudioOnly(url: string, outputPath: string): Promis
     title: title || "Canción sin título",
     durationSec: Number(durationRaw) || 0,
   };
+}
+
+/**
+ * Resuelve el vídeo fuente de un job: si ya se subió un archivo directamente (sin pasar por
+ * YouTube), simplemente lo usa tal cual; si no, lo descarga con yt-dlp desde `sourceUrl`.
+ * Útil como alternativa cuando yt-dlp no puede descargar (p.ej. bloqueo de IP de datacenter).
+ */
+export async function resolveSourceVideo(
+  job: { sourceUrl: string | null; sourceFilePath: string | null; sourceTitle: string | null },
+  outputPath: string
+): Promise<DownloadResult> {
+  if (job.sourceFilePath) {
+    const info = await probeVideo(job.sourceFilePath);
+    return { title: job.sourceTitle ?? "Vídeo subido", durationSec: info.durationSec };
+  }
+  if (!job.sourceUrl) {
+    throw new Error("Este trabajo no tiene ni URL ni archivo de vídeo fuente.");
+  }
+  return downloadSourceVideo(job.sourceUrl, outputPath);
 }

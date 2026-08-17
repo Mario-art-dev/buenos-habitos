@@ -1,7 +1,7 @@
 import fs from "fs";
 import { db } from "@/lib/db";
 import { sourceVideoPath, audioPath, tmpDir } from "@/lib/storagePaths";
-import { downloadSourceVideo } from "./download";
+import { resolveSourceVideo } from "./download";
 import { extractAudio, transcribeAudio } from "./transcribe";
 import { probeVideo, pickVerticalResolution } from "./probe";
 import { detectContentSegments } from "./silence";
@@ -13,12 +13,18 @@ import { config } from "@/lib/config";
 
 export async function processRankingJob(jobId: string): Promise<void> {
   const job = await db.job.findUniqueOrThrow({ where: { id: jobId } });
-  if (!job.sourceUrl) throw new Error("Este trabajo no tiene una URL de vídeo fuente.");
+  if (!job.sourceUrl && !job.sourceFilePath) {
+    throw new Error("Este trabajo no tiene ni URL ni archivo de vídeo fuente.");
+  }
 
   try {
-    await setStatus(jobId, "DOWNLOADING", "Descargando el vídeo original…");
+    await setStatus(
+      jobId,
+      "DOWNLOADING",
+      job.sourceFilePath ? "Preparando el vídeo subido…" : "Descargando el vídeo original…"
+    );
     const srcPath = sourceVideoPath(jobId);
-    const { title, durationSec } = await downloadSourceVideo(job.sourceUrl, srcPath);
+    const { title, durationSec } = await resolveSourceVideo(job, srcPath);
     await db.job.update({
       where: { id: jobId },
       data: { sourceTitle: title, sourceDurationSec: durationSec, sourceFilePath: srcPath },

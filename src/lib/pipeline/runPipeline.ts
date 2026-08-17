@@ -7,7 +7,7 @@ import {
   clipThumbnailPath,
   clipBodyPath,
 } from "@/lib/storagePaths";
-import { downloadSourceVideo } from "./download";
+import { resolveSourceVideo } from "./download";
 import { extractAudio, transcribeAudio, type TranscriptSegment } from "./transcribe";
 import { analyzeTranscriptForClips } from "./analyze";
 import { cutVerticalClip, concatClips, extractThumbnail } from "./clip";
@@ -44,12 +44,18 @@ export async function processJob(jobId: string): Promise<void> {
 
 async function processSingleJob(jobId: string): Promise<void> {
   const job = await db.job.findUniqueOrThrow({ where: { id: jobId } });
-  if (!job.sourceUrl) throw new Error("Este trabajo no tiene una URL de vídeo fuente.");
+  if (!job.sourceUrl && !job.sourceFilePath) {
+    throw new Error("Este trabajo no tiene ni URL ni archivo de vídeo fuente.");
+  }
   try {
-    // 1. Descargar el vídeo fuente
-    await setStatus(jobId, "DOWNLOADING", "Descargando el vídeo original…");
+    // 1. Descargar el vídeo fuente (o reutilizar el archivo ya subido)
+    await setStatus(
+      jobId,
+      "DOWNLOADING",
+      job.sourceFilePath ? "Preparando el vídeo subido…" : "Descargando el vídeo original…"
+    );
     const srcPath = sourceVideoPath(jobId);
-    const { title, durationSec } = await downloadSourceVideo(job.sourceUrl, srcPath);
+    const { title, durationSec } = await resolveSourceVideo(job, srcPath);
     await db.job.update({
       where: { id: jobId },
       data: { sourceTitle: title, sourceDurationSec: durationSec, sourceFilePath: srcPath },
