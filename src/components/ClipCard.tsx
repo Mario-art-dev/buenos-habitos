@@ -22,6 +22,7 @@ export interface ClipData {
   viralityReason: string;
   hashtags: string[];
   status: string;
+  error?: string | null;
   videoUrl: string | null;
   thumbnailUrl: string | null;
   category?: string | null;
@@ -155,7 +156,9 @@ export default function ClipCard({ clip }: { clip: ClipData }) {
           {clip.status === "READY" && videoSrc ? (
             <video src={videoSrc} poster={clip.thumbnailUrl ?? undefined} controls className="h-full w-full object-cover" />
           ) : clip.status === "FAILED" ? (
-            <p className="p-3 text-center text-xs text-red-400">Error generando el clip</p>
+            <p className="p-3 text-center text-xs text-red-400">
+              Error generando el clip{clip.error ? `: ${clip.error}` : ""}
+            </p>
           ) : (
             <p className="p-3 text-center text-xs text-slate-500">Generando…</p>
           )}

@@ -137,7 +137,13 @@ export async function analyzeTranscriptForClips(
   const chunks = chunkSegments(segments, config.ai.maxTranscriptChars);
 
   // Con muchas partes se piden menos clips por parte, para no acabar con cientos de candidatos.
-  const clipsPerChunk = chunks.length > 1 ? Math.max(2, Math.ceil((maxClips * 1.5) / chunks.length)) : maxClips;
+  // Se limita también a un máximo por petición (aunque haya una sola parte): pedir de golpe los
+  // ${maxClips} clips que el usuario quiera en total (hasta 30) en una única respuesta arriesga
+  // a que la IA corte el JSON a medias, así que nunca se piden más de 12 en la misma llamada.
+  const clipsPerChunk = Math.max(2, Math.min(12, Math.ceil((maxClips * 1.5) / Math.max(chunks.length, 1))));
+  // El presupuesto de tokens de salida crece con cuántos clips se piden en la petición, para que
+  // la respuesta quepa entera y no se corte a medias (rompiendo la validación de JSON).
+  const chunkMaxTokens = Math.max(3_500, 1_200 + clipsPerChunk * 300);
 
   const all: MomentCandidate[] = [];
   const errors: string[] = [];
@@ -155,10 +161,7 @@ export async function analyzeTranscriptForClips(
           partIndex: i,
           partCount: chunks.length,
         }),
-        // Margen extra: los modelos con razonamiento (p.ej. Qwen3 en Groq) gastan parte del
-        // presupuesto de tokens en su razonamiento interno aunque se oculte del resultado final,
-        // así que 2000 se quedaba corto y cortaba el JSON a medias.
-        maxTokens: 3_500,
+        maxTokens: chunkMaxTokens,
       });
       all.push(...parseClips(raw));
     } catch (err) {

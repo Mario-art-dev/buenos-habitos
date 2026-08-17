@@ -6,6 +6,9 @@ import {
   clipVideoPath,
   clipThumbnailPath,
   clipBodyPath,
+  narrationAudioPath,
+  candidateCardPath,
+  tmpDir,
 } from "@/lib/storagePaths";
 import { resolveSourceVideo } from "./download";
 import { extractAudio, transcribeAudio, type TranscriptSegment } from "./transcribe";
@@ -114,11 +117,15 @@ async function processSingleJob(jobId: string): Promise<void> {
     const sourceInfo = await probeVideo(srcPath);
     const resolution = pickVerticalResolution(sourceInfo);
     for (const clip of clips) {
+      const bodyPath = clipBodyPath(jobId, clip.id);
+      const introNarrationPath = narrationAudioPath(jobId, clip.id, "intro");
+      const outroNarrationPath = narrationAudioPath(jobId, clip.id, "outro");
+      const introCardPath = candidateCardPath(jobId, clip.id, "intro");
+      const outroCardPath = candidateCardPath(jobId, clip.id, "outro");
       try {
         await db.clip.update({ where: { id: clip.id }, data: { status: "RENDERING" } });
         const outPath = clipVideoPath(jobId, clip.id);
         const thumbPath = clipThumbnailPath(jobId, clip.id);
-        const bodyPath = clipBodyPath(jobId, clip.id);
 
         await cutVerticalClip({
           sourcePath: srcPath,
@@ -177,6 +184,17 @@ async function processSingleJob(jobId: string): Promise<void> {
           where: { id: clip.id },
           data: { status: "FAILED", error: (err as Error).message },
         });
+      } finally {
+        // Los archivos intermedios (corte sin envolver, narración, tarjetas) ya no hacen falta
+        // una vez terminado este clip (listo o fallido): si no se borran aquí, se van acumulando
+        // durante todo el trabajo y pueden agotar el disco antes de terminar los últimos clips.
+        for (const tmp of [bodyPath, introNarrationPath, outroNarrationPath, introCardPath, outroCardPath]) {
+          try {
+            fs.rmSync(tmp, { force: true });
+          } catch {
+            // ignorar
+          }
+        }
       }
     }
 
@@ -186,9 +204,11 @@ async function processSingleJob(jobId: string): Promise<void> {
     await db.job.update({ where: { id: jobId }, data: { status: "FAILED", error: message } });
     throw err;
   } finally {
-    // liberar espacio: el audio intermedio ya no hace falta
+    // liberar espacio: el audio intermedio y cualquier resto de tmp/ ya no hacen falta
+    // (el bucle de arriba ya limpia por clip, esto es red de seguridad para lo que quede)
     try {
       fs.rmSync(audioPath(jobId), { force: true });
+      fs.rmSync(tmpDir(jobId), { recursive: true, force: true });
     } catch {
       // ignorar
     }
