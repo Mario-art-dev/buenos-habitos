@@ -216,6 +216,52 @@ unos minutos y te descargas el resultado.
 
 Todo esto se puede hacer desde el navegador del móvil sin instalar nada.
 
+## Modo panel completo sin servidor propio: "Servidor temporal" en GitHub Actions
+
+Si además del modo anterior quieres el panel web de verdad (galería, botones, generar desde un
+formulario cómodo) sin pagar ni verificarte con tarjeta en ningún sitio, hay un segundo workflow
+que enciende la web y el worker **dentro de una Action** y la publica en una URL pública temporal
+con un túnel de Cloudflare (no necesita cuenta ni dominio).
+
+Cada sesión dura como máximo **6 horas** (límite fijo de GitHub, no configurable) — pero antes de
+que se acabe, la propia Action lanza automáticamente la siguiente sesión, así que en la práctica
+el panel se queda disponible de forma casi continua, encadenando sesiones solo.
+
+### Configurarlo (una sola vez)
+
+Además de `GEMINI_API_KEY` (ver arriba), crea estos dos secretos en
+**Settings → Secrets and variables → Actions → Secrets**:
+
+- `APP_PASSWORD` → la contraseña con la que entrarás al panel.
+- `SESSION_SECRET` → cualquier cadena larga aleatoria.
+
+### Encenderlo
+
+1. Pestaña **Actions** → workflow **"Servidor temporal"** → **Run workflow**.
+2. Espera 1-2 minutos a que compile. Al final de esa ejecución, en el resumen de la página
+   (arriba del todo, no hace falta bajar por los logs) aparece la URL pública, algo como
+   `https://palabras-random.trycloudflare.com`.
+3. Abre esa URL, entra con tu `APP_PASSWORD` y ya tienes el panel completo: generar shorts,
+   ver la galería, descargar vídeos... igual que en la web normal.
+
+### Cuando rote la URL
+
+Unos 15 minutos antes de cumplirse las 6 horas, esa sesión lanza sola la siguiente y termina.
+Vuelve a la pestaña **Actions**, entra en la ejecución más reciente de "Servidor temporal" y
+coge la URL nueva del resumen. La galería de vídeos se mantiene entre sesiones (se guarda en la
+caché de GitHub), así que no pierdes el historial al rotar — solo cambia el enlace.
+
+### Apagarlo
+
+Ve a **Settings → Secrets and variables → Actions → Variables → New repository variable**, crea
+una llamada `SERVER_ENABLED` con el valor `false`. La sesión en curso se apaga en su siguiente
+ciclo y no se vuelve a relanzar sola. Para volver a encenderlo: borra esa variable (o ponla en
+`true`) y lanza el workflow otra vez a mano.
+
+> Nota: como la URL cambia en cada rotación, conectar YouTube/TikTok con OAuth para publicar
+> con un clic no es práctico en este modo — sigues subiendo cada vídeo a mano desde el panel,
+> copiando el título/descripción/hashtags que te genera la IA.
+
 ## Puesta en marcha (Docker, recomendado)
 
 ```bash

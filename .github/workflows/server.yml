@@ -1,0 +1,125 @@
+name: Servidor temporal
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: escenas-server
+  cancel-in-progress: false
+
+jobs:
+  server:
+    if: ${{ vars.SERVER_ENABLED != 'false' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      - name: Restaurar la galería de la sesión anterior
+        uses: actions/cache@v4
+        with:
+          path: storage
+          key: escenas-storage-${{ github.run_id }}
+          restore-keys: |
+            escenas-storage-
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Instalar ffmpeg, yt-dlp y dependencias de Python
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg python3 python3-pip fonts-dejavu-core
+          pip3 install --no-cache-dir --break-system-packages yt-dlp faster-whisper piper-tts librosa
+
+      - name: Instalar dependencias de Node
+        run: npm ci
+
+      - name: Preparar la base de datos (reutilizando la de la caché si existe)
+        run: npx prisma generate && npx prisma db push
+        env:
+          DATABASE_URL: "file:./storage/app.db"
+
+      - name: Compilar la web
+        run: npm run build
+        env:
+          DATABASE_URL: "file:./storage/app.db"
+          APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
+          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
+
+      - name: Arrancar la web y el worker en segundo plano
+        run: |
+          nohup npm run start > web.log 2>&1 &
+          nohup npx tsx worker/index.ts > worker.log 2>&1 &
+        env:
+          DATABASE_URL: "file:./storage/app.db"
+          APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
+          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
+          AI_PROVIDER: "gemini"
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          TRANSCRIPTION_PROVIDER: "local"
+          PYTHON_PATH: "python3"
+          TTS_PROVIDER: "local"
+          ENABLE_COMMENTARY: "true"
+          CHANNEL_NAME: "Escenas Virales"
+          CHANNEL_NICHE: "Recopilación de las mejores escenas virales de creadores de contenido"
+          CHANNEL_LANGUAGE: "es"
+
+      - name: Esperar a que la web responda
+        run: |
+          for i in $(seq 1 30); do
+            if curl -s -o /dev/null http://localhost:3000; then
+              echo "Web lista."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "La web no arrancó a tiempo, revisa web.log"
+          cat web.log
+          exit 1
+
+      - name: Abrir el túnel público (Cloudflare, sin cuenta)
+        run: |
+          curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o cloudflared
+          chmod +x cloudflared
+          nohup ./cloudflared tunnel --url http://localhost:3000 > cloudflared.log 2>&1 &
+
+          URL=""
+          for i in $(seq 1 20); do
+            URL=$(grep -o 'https://[a-zA-Z0-9.-]*\.trycloudflare\.com' cloudflared.log | head -1 || true)
+            if [ -n "$URL" ]; then break; fi
+            sleep 2
+          done
+
+          if [ -z "$URL" ]; then
+            echo "No se pudo abrir el túnel."
+            cat cloudflared.log
+            exit 1
+          fi
+
+          echo "## 🔗 Tu panel está listo" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**$URL**" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Entra con la contraseña que pusiste en el secreto \`APP_PASSWORD\`." >> "$GITHUB_STEP_SUMMARY"
+          echo "Esta URL cambiará dentro de ~5h30min, cuando esta sesión pase el testigo a la siguiente." >> "$GITHUB_STEP_SUMMARY"
+          echo "[cloudflared] URL pública: $URL"
+
+      - name: Mantener la sesión activa (~5h30min)
+        run: sleep 19800
+
+      - name: Pasar el testigo a la siguiente sesión
+        if: ${{ vars.SERVER_ENABLED != 'false' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run server.yml --ref ${{ github.ref_name }}
