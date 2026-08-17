@@ -63,11 +63,22 @@ jobs:
 
       - name: Iniciar el proveedor de tokens de YouTube (evita el bloqueo por IP de datacenter)
         run: |
+          docker pull brainicism/bgutil-ytdlp-pot-provider
           docker run -d --init -p 4416:4416 --name bgutil-provider brainicism/bgutil-ytdlp-pot-provider
-          for i in $(seq 1 15); do
-            if curl -s -o /dev/null http://127.0.0.1:4416; then echo "Listo."; break; fi
-            sleep 1
+          ready=""
+          for i in $(seq 1 30); do
+            if curl -s -o /dev/null http://127.0.0.1:4416; then
+              ready=1
+              echo "Proveedor de tokens listo."
+              break
+            fi
+            sleep 2
           done
+          if [ -z "$ready" ]; then
+            echo "El proveedor de tokens no respondió a tiempo. Logs del contenedor:"
+            docker logs bgutil-provider || true
+            exit 1
+          fi
 
       - name: Preparar la base de datos local
         run: npx prisma generate && npx prisma db push
