@@ -8,9 +8,18 @@ export interface DownloadResult {
 
 // El cliente "web" por defecto de YouTube exige ahora resolver un reto en JavaScript y es el
 // que más sufre el bloqueo "Sign in to confirm you're not a bot" en IPs de datacenter (como las
-// de GitHub Actions/Oracle). El cliente "android" no necesita ese reto y suele esquivar ambos
-// problemas; se deja "web" como segundo intento por si un vídeo concreto no está en "android".
-const YT_EXTRACTOR_ARGS = "youtube:player_client=android,web";
+// de GitHub Actions/Oracle). El cliente "android" no necesita ese reto.
+// Aun así, YouTube puede seguir bloqueando por reputación de la IP en sí (no del cliente), así
+// que además se pasa el proveedor de tokens de origen bgutil-ytdlp-pot-provider (servicio local,
+// sin cuenta ni cookies) para que la petición parezca legítima aunque la IP esté marcada.
+function ytExtractorArgs(): string[] {
+  return [
+    "--extractor-args",
+    "youtube:player_client=android,web",
+    "--extractor-args",
+    `youtubepot-bgutilhttp:base_url=${config.ytdlpPotProviderBaseUrl}`,
+  ];
+}
 
 /**
  * Descarga el vídeo fuente (YouTube o cualquier URL soportada por yt-dlp) a
@@ -21,8 +30,7 @@ export async function downloadSourceVideo(url: string, outputPath: string): Prom
     url,
     "-f",
     "bv*[height<=1080][ext=mp4]+ba[ext=m4a]/b[ext=mp4]/b",
-    "--extractor-args",
-    YT_EXTRACTOR_ARGS,
+    ...ytExtractorArgs(),
     "--merge-output-format",
     "mp4",
     "--no-playlist",
@@ -32,8 +40,7 @@ export async function downloadSourceVideo(url: string, outputPath: string): Prom
 
   const { stdout } = await run(config.ytdlpPath, [
     url,
-    "--extractor-args",
-    YT_EXTRACTOR_ARGS,
+    ...ytExtractorArgs(),
     "--no-playlist",
     "--print",
     "%(title)s|||%(duration)s",
@@ -55,8 +62,7 @@ export async function downloadAudioOnly(url: string, outputPath: string): Promis
     "-x",
     "--audio-format",
     "mp3",
-    "--extractor-args",
-    YT_EXTRACTOR_ARGS,
+    ...ytExtractorArgs(),
     "--no-playlist",
     "-o",
     `${outNoExt}.%(ext)s`,
@@ -64,8 +70,7 @@ export async function downloadAudioOnly(url: string, outputPath: string): Promis
 
   const { stdout } = await run(config.ytdlpPath, [
     url,
-    "--extractor-args",
-    YT_EXTRACTOR_ARGS,
+    ...ytExtractorArgs(),
     "--no-playlist",
     "--print",
     "%(title)s|||%(duration)s",

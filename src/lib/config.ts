@@ -72,6 +72,11 @@ export const config = {
 
   ytdlpPath: optional("YTDLP_PATH", "yt-dlp"),
   ffmpegPath: optional("FFMPEG_PATH", "ffmpeg"),
+  // Servicio bgutil-ytdlp-pot-provider: genera un token de origen para que YouTube no bloquee
+  // las descargas desde IPs de datacenter (Docker/GitHub Actions) con "Sign in to confirm
+  // you're not a bot". Por defecto asume que corre en la misma máquina (caso GitHub Actions);
+  // en docker-compose se sobreescribe a la URL del servicio "bgutil-provider".
+  ytdlpPotProviderBaseUrl: optional("BGUTIL_POT_BASE_URL", "http://127.0.0.1:4416"),
 
   pipeline: {
     maxClipsPerJob: Number(optional("MAX_CLIPS_PER_JOB", "8")),

@@ -1,4 +1,10 @@
 services:
+  # Genera tokens de origen para que yt-dlp no sea bloqueado por YouTube al descargar desde la
+  # IP del servidor (bloqueo "Sign in to confirm you're not a bot" típico de IPs de datacenter).
+  bgutil-provider:
+    image: brainicism/bgutil-ytdlp-pot-provider
+    restart: unless-stopped
+
   web:
     build:
       context: .
@@ -11,6 +17,7 @@ services:
     restart: unless-stopped
     depends_on:
       - migrate
+      - bgutil-provider
 
   worker:
     build:
@@ -22,6 +29,7 @@ services:
     restart: unless-stopped
     depends_on:
       - migrate
+      - bgutil-provider
 
   migrate:
     build:

@@ -43,6 +43,14 @@ jobs:
       - name: Instalar dependencias de Node
         run: npm ci
 
+      - name: Iniciar el proveedor de tokens de YouTube (evita el bloqueo por IP de datacenter)
+        run: |
+          docker run -d --init -p 4416:4416 --name bgutil-provider brainicism/bgutil-ytdlp-pot-provider
+          for i in $(seq 1 15); do
+            if curl -s -o /dev/null http://127.0.0.1:4416; then echo "Listo."; break; fi
+            sleep 1
+          done
+
       - name: Preparar la base de datos (reutilizando la de la caché si existe)
         run: npx prisma generate && npx prisma db push
         env:
