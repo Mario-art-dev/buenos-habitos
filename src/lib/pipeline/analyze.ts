@@ -151,7 +151,10 @@ export async function analyzeTranscriptForClips(
           partIndex: i,
           partCount: chunks.length,
         }),
-        maxTokens: 2_000,
+        // Margen extra: los modelos con razonamiento (p.ej. Qwen3 en Groq) gastan parte del
+        // presupuesto de tokens en su razonamiento interno aunque se oculte del resultado final,
+        // así que 2000 se quedaba corto y cortaba el JSON a medias.
+        maxTokens: 3_500,
       });
       all.push(...parseClips(raw));
     } catch (err) {

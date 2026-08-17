@@ -56,7 +56,10 @@ Genera los metadatos de este vídeo de ranking:
 Devuelve SOLO este JSON:
 {"title": "...", "description": "...", "hashtags": ["..."], "viralityScore": number, "viralityReason": "...",
 "musicQuery": "...", "commentaryIntro": "...", "commentaryOutro": "...", "itemCommentary": ["...", "..."]}`,
-    maxTokens: 1500,
+    // Margen extra: los modelos con razonamiento (p.ej. Qwen3 en Groq) gastan parte del
+    // presupuesto de tokens en su razonamiento interno aunque se oculte del resultado final,
+    // y aquí la salida ya crece con el número de puestos del ranking (hasta RANKING_MAX_ITEMS).
+    maxTokens: 2500,
   });
 
   const cleaned = raw.trim().replace(/^```json\s*/i, "").replace(/```\s*$/i, "");

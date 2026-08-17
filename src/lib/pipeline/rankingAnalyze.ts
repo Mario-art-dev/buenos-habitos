@@ -122,7 +122,9 @@ export async function classifyCandidates(candidates: CandidateMoment[]): Promise
         system: SYSTEM_PROMPT,
         prompt: buildBatchPrompt(batch),
         images,
-        maxTokens: 2000,
+        // Margen extra: los modelos con razonamiento (p.ej. Qwen3 en Groq) gastan parte del
+        // presupuesto de tokens en su razonamiento interno aunque se oculte del resultado final.
+        maxTokens: 2800,
       });
       const cleaned = raw.trim().replace(/^```json\s*/i, "").replace(/```\s*$/i, "");
       const parsed = JSON.parse(cleaned) as {

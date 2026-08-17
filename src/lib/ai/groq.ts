@@ -30,15 +30,41 @@ export class GroqProvider implements AIProvider {
       })),
     ];
 
-    const response = await this.client.chat.completions.create({
+    const params = {
       model: config.ai.groqModel,
       max_tokens: maxTokens,
-      response_format: { type: "json_object" },
+      response_format: { type: "json_object" as const },
+      // Modelos con razonamiento (como Qwen3) anteponen un bloque <think>...</think> a la
+      // respuesta si no se oculta explícitamente, lo que rompe la validación de "json_object"
+      // de Groq en TODAS las peticiones (error "Failed to validate JSON"). Groq solo admite
+      // "hidden" o "parsed" combinado con json_object; "hidden" descarta el razonamiento y deja
+      // solo el JSON final en el contenido.
+      reasoning_format: "hidden" as const,
+      stream: false as const,
       messages: [
         ...(system ? [{ role: "system" as const, content: system }] : []),
         { role: "user" as const, content },
       ],
-    });
+    };
+
+    let response: OpenAI.Chat.ChatCompletion;
+    try {
+      response = await this.client.chat.completions.create(
+        params as unknown as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming
+      );
+    } catch (err) {
+      // Si Groq rechaza la salida por no ser JSON válido, el cuerpo del error trae el texto
+      // real generado en "failed_generation". Lo incluimos en el mensaje para poder
+      // diagnosticar de un vistazo si vuelve a pasar, en vez de solo ver "Failed to validate JSON".
+      const apiErr = err as { error?: { failed_generation?: string; error?: { failed_generation?: string } } };
+      const failedGeneration =
+        apiErr?.error?.failed_generation ?? apiErr?.error?.error?.failed_generation;
+      if (failedGeneration) {
+        const preview = failedGeneration.slice(0, 300);
+        throw new Error(`${(err as Error).message} — generado: "${preview}"`);
+      }
+      throw err;
+    }
 
     const text = response.choices[0]?.message?.content;
     if (!text) {

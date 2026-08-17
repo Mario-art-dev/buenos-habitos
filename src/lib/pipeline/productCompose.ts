@@ -95,7 +95,10 @@ Devuelve SOLO este JSON:
 {"hook":"...","segmentScripts":["...","..."],"cta":"...","title":"...","description":"...","hashtags":["..."],
 "viralityScore":number,"viralityReason":"..."}`,
     images: images.length ? images : undefined,
-    maxTokens: 1500,
+    // Margen extra: los modelos con razonamiento (p.ej. Qwen3 en Groq) gastan parte del
+    // presupuesto de tokens en su razonamiento interno aunque se oculte del resultado final,
+    // y aquí la salida ya crece con el número de fotos/clips del producto.
+    maxTokens: 2500,
   });
 
   const parsed = JSON.parse(cleanJson(raw)) as Partial<ProductScript>;

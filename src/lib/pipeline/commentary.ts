@@ -39,7 +39,9 @@ Escribe:
   valoración personal de lo que acaba de pasar.
 
 Devuelve SOLO este JSON: {"introText": "...", "outroText": "..."}`,
-    maxTokens: 500,
+    // Margen extra: los modelos con razonamiento (p.ej. Qwen3 en Groq) gastan parte del
+    // presupuesto de tokens en su razonamiento interno aunque se oculte del resultado final.
+    maxTokens: 800,
   });
 
   const parsed = JSON.parse(cleanJson(raw)) as SingleCommentary;

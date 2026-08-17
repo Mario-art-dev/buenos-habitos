@@ -59,7 +59,9 @@ No repitas, no uses el símbolo #, en minúsculas, sin espacios dentro de cada h
 
 Formato de respuesta JSON exacto:
 {"hashtags": ["tag1", "tag2", ...]}`,
-    maxTokens: 500,
+    // Margen extra: los modelos con razonamiento (p.ej. Qwen3 en Groq) gastan parte del
+    // presupuesto de tokens en su razonamiento interno aunque se oculte del resultado final.
+    maxTokens: 800,
   });
 
   try {
