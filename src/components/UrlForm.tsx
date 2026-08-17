@@ -10,6 +10,40 @@ interface UrlFormProps {
   helpText?: string;
 }
 
+const CHUNK_SIZE = 20 * 1024 * 1024; // 20MB por trozo, con margen de sobra bajo el límite del túnel
+
+async function uploadInChunks(
+  file: File,
+  mode: string,
+  onProgress: (pct: number) => void
+): Promise<{ id: string }> {
+  const uploadId = crypto.randomUUID();
+  const totalChunks = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
+
+  for (let i = 0; i < totalChunks; i++) {
+    const start = i * CHUNK_SIZE;
+    const chunk = file.slice(start, start + CHUNK_SIZE);
+    const res = await fetch(`/api/jobs/upload/chunk?uploadId=${uploadId}&index=${i}`, {
+      method: "POST",
+      body: chunk,
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error ?? `Fallo subiendo el vídeo (trozo ${i + 1}/${totalChunks})`);
+    }
+    onProgress(Math.round(((i + 1) / totalChunks) * 100));
+  }
+
+  const finalizeRes = await fetch("/api/jobs/upload", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ uploadId, mode, filename: file.name }),
+  });
+  const data = await finalizeRes.json();
+  if (!finalizeRes.ok) throw new Error(data.error ?? "No se pudo crear el trabajo");
+  return data.job;
+}
+
 export default function UrlForm({
   mode = "SINGLE",
   label = "Pega el enlace del vídeo (YouTube o cualquier vídeo compatible)",
@@ -20,6 +54,7 @@ export default function UrlForm({
   const [url, setUrl] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
@@ -27,26 +62,25 @@ export default function UrlForm({
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setProgress(0);
     try {
-      let res: Response;
+      let job: { id: string };
       if (tab === "url") {
-        res = await fetch("/api/jobs", {
+        const res = await fetch("/api/jobs", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ url, mode }),
         });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "No se pudo crear el trabajo");
+        job = data.job;
       } else {
         if (!file) throw new Error("Elige un archivo de vídeo");
-        const form = new FormData();
-        form.set("mode", mode);
-        form.set("file", file);
-        res = await fetch("/api/jobs/upload", { method: "POST", body: form });
+        job = await uploadInChunks(file, mode, setProgress);
       }
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "No se pudo crear el trabajo");
       setUrl("");
       setFile(null);
-      router.push(`/jobs/${data.job.id}`);
+      router.push(`/jobs/${job.id}`);
       router.refresh();
     } catch (err) {
       setError((err as Error).message);
@@ -117,12 +151,21 @@ export default function UrlForm({
               disabled={loading}
               className="rounded-xl bg-gradient-to-r from-brand-500 to-brand-700 px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
             >
-              {loading ? "Subiendo…" : buttonLabel}
+              {loading ? `Subiendo… ${progress}%` : buttonLabel}
             </button>
           </div>
-          <p className="mt-2 text-xs text-amber-400">
-            Máximo ~95MB por el límite del túnel gratuito. Si el vídeo pesa más, baja la calidad o recórtalo antes de
-            subirlo.
+          {loading && (
+            <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-ink-700">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-brand-500 to-brand-700 transition-all"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          )}
+          <p className="mt-2 text-xs text-slate-500">
+            Se sube en trozos, así que no hay límite práctico de tamaño — vale para vídeos largos (una recopilación
+            de una hora, por ejemplo). Con datos móviles puede tardar unos minutos; mejor con wifi si el archivo es
+            grande.
           </p>
         </>
       )}

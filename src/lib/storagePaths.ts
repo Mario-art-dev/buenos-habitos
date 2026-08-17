@@ -100,6 +100,21 @@ export function srtPath(jobId: string, clipId: string, position: number): string
   return path.join(tmpDir(jobId), `${clipId}_item_${position}.srt`);
 }
 
+/**
+ * Subidas troceadas: el túnel gratuito (Cloudflare) corta cada petición individual sobre los
+ * ~100MB, así que los vídeos grandes (p.ej. una recopilación de una hora) se suben en trozos
+ * pequeños que se van concatenando aquí antes de convertirse en el vídeo fuente de un job.
+ */
+export function uploadsDir(): string {
+  const dir = path.join(ROOT, "uploads");
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+export function uploadPartPath(uploadId: string): string {
+  return path.join(uploadsDir(), `${uploadId}.part`);
+}
+
 /** Convierte una ruta absoluta de storage en una ruta relativa servible por /api/media/... */
 export function toMediaUrl(absolutePath: string | null | undefined): string | null {
   if (!absolutePath) return null;

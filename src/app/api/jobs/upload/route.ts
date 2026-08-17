@@ -1,50 +1,59 @@
 import fs from "fs";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { sourceVideoPath } from "@/lib/storagePaths";
+import { sourceVideoPath, uploadPartPath } from "@/lib/storagePaths";
 
 export const dynamic = "force-dynamic";
 
-// El túnel gratuito (Cloudflare, sin cuenta) corta las subidas en torno a 100MB.
-const MAX_FILE_BYTES = 95 * 1024 * 1024;
+const UPLOAD_ID_RE = /^[a-zA-Z0-9-]{8,64}$/;
+// Generoso: de sobra para una recopilación larga a calidad razonable, subida en trozos.
+const MAX_FILE_BYTES = 2 * 1024 * 1024 * 1024;
 
 /**
- * Crea un job SINGLE o RANKING a partir de un vídeo subido directamente desde el dispositivo,
- * sin pasar por yt-dlp — alternativa cuando YouTube bloquea las descargas desde la IP del
- * servidor ("Sign in to confirm you're not a bot").
+ * Junta los trozos ya recibidos en /api/jobs/upload/chunk y crea el job SINGLE o RANKING
+ * correspondiente — alternativa a pegar un enlace cuando YouTube bloquea la descarga desde la
+ * IP del servidor. Al trocear la subida se esquiva el límite de ~100MB por petición del túnel
+ * gratuito, así que sí caben vídeos largos (p.ej. una recopilación de una hora).
  */
 export async function POST(req: NextRequest) {
-  const form = await req.formData().catch(() => null);
-  if (!form) {
+  const body = await req.json().catch(() => null);
+  if (!body) {
     return NextResponse.json({ error: "Formulario inválido" }, { status: 400 });
   }
 
-  const mode = String(form.get("mode") ?? "SINGLE");
+  const { uploadId, mode, filename } = body as { uploadId?: string; mode?: string; filename?: string };
+
+  if (!uploadId || !UPLOAD_ID_RE.test(uploadId)) {
+    return NextResponse.json({ error: "uploadId inválido" }, { status: 400 });
+  }
   if (mode !== "SINGLE" && mode !== "RANKING") {
     return NextResponse.json({ error: "Modo no válido" }, { status: 400 });
   }
 
-  const file = form.get("file");
-  if (!(file instanceof File) || file.size === 0) {
-    return NextResponse.json({ error: "Sube un archivo de vídeo" }, { status: 400 });
+  const partPath = uploadPartPath(uploadId);
+  if (!fs.existsSync(partPath)) {
+    return NextResponse.json({ error: "No se recibió ningún trozo de vídeo para esta subida" }, { status: 400 });
   }
-  if (file.size > MAX_FILE_BYTES) {
+
+  const { size } = fs.statSync(partPath);
+  if (size === 0) {
+    fs.rmSync(partPath, { force: true });
+    return NextResponse.json({ error: "El vídeo subido está vacío" }, { status: 400 });
+  }
+  if (size > MAX_FILE_BYTES) {
+    fs.rmSync(partPath, { force: true });
     return NextResponse.json(
-      { error: `El vídeo supera el tamaño máximo (~${Math.floor(MAX_FILE_BYTES / 1024 / 1024)}MB)` },
+      { error: `El vídeo supera el tamaño máximo (~${Math.floor(MAX_FILE_BYTES / 1024 / 1024 / 1024)}GB)` },
       { status: 400 }
     );
   }
-  if (!file.type.startsWith("video/")) {
-    return NextResponse.json({ error: "El archivo no es un vídeo" }, { status: 400 });
-  }
 
   const job = await db.job.create({
-    data: { mode, sourceTitle: file.name, status: "PENDING" },
+    data: { mode, sourceTitle: filename || "Vídeo subido", status: "PENDING" },
   });
 
   const outPath = sourceVideoPath(job.id);
-  const buffer = Buffer.from(await file.arrayBuffer());
-  fs.writeFileSync(outPath, buffer);
+  fs.renameSync(partPath, outPath);
 
   const updated = await db.job.update({ where: { id: job.id }, data: { sourceFilePath: outPath } });
 
