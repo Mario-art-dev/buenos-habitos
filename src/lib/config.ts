@@ -61,7 +61,15 @@ export const config = {
     // capa gratuita de Gemini no está disponible (Google exige tarjeta ahí por el RGPD/Reglamento
     // de IA). Groq no tiene esa restricción ni pide tarjeta.
     groqApiKey: optional("GROQ_API_KEY"),
-    groqModel: optional("GROQ_MODEL", "qwen/qwen3.6-27b"),
+    // gpt-oss-20b (no qwen3.6) para texto: es más pequeño/rápido y, sobre todo, Groq SÍ deja
+    // controlarle el razonamiento con "reasoning_effort" (a "low" gasta muchos menos tokens
+    // pensando de verdad, no solo lo esconde del resultado como pasaba con qwen3.6). Con la
+    // capa gratuita limitada a 200.000 tokens AL DÍA (no solo por minuto), ese ahorro real es
+    // necesario: analizar un solo vídeo de 50 min con qwen3.6 se comía casi todo el día entero.
+    groqModel: optional("GROQ_MODEL", "openai/gpt-oss-20b"),
+    // gpt-oss-20b no tiene visión: para clasificar fotogramas (modo Rankings/Canción) hace falta
+    // un modelo que sí vea imágenes, así que ese caso sigue usando qwen3.6 aparte.
+    groqVisionModel: optional("GROQ_VISION_MODEL", "qwen/qwen3.6-27b"),
 
     // Presupuesto de tokens por minuto del proveedor (0 = sin freno). Si se supera, la API
     // devuelve 413/429 y el trabajo falla, así que las peticiones se espacian solas.

@@ -30,16 +30,25 @@ export class GroqProvider implements AIProvider {
       })),
     ];
 
+    // gpt-oss-20b (texto) no ve imágenes: las peticiones con fotogramas adjuntos (clasificación
+    // de momentos en modo Rankings/Canción) usan aparte un modelo que sí sea multimodal.
+    const usingVisionModel = images.length > 0;
+    const model = usingVisionModel ? config.ai.groqVisionModel : config.ai.groqModel;
+
     const params = {
-      model: config.ai.groqModel,
+      model,
       max_tokens: maxTokens,
       response_format: { type: "json_object" as const },
-      // Modelos con razonamiento (como Qwen3) anteponen un bloque <think>...</think> a la
-      // respuesta si no se oculta explícitamente, lo que rompe la validación de "json_object"
-      // de Groq en TODAS las peticiones (error "Failed to validate JSON"). Groq solo admite
-      // "hidden" o "parsed" combinado con json_object; "hidden" descarta el razonamiento y deja
-      // solo el JSON final en el contenido.
+      // Modelos con razonamiento anteponen un bloque de "pensamiento" a la respuesta si no se
+      // oculta explícitamente, lo que rompe la validación de "json_object" de Groq en TODAS las
+      // peticiones (error "Failed to validate JSON"). Groq solo admite "hidden" o "parsed"
+      // combinado con json_object; "hidden" descarta el razonamiento y deja solo el JSON final.
       reasoning_format: "hidden" as const,
+      // Solo gpt-oss admite bajar el esfuerzo de razonamiento de verdad (no solo esconderlo del
+      // resultado): con la capa gratuita de Groq limitada a 200.000 tokens AL DÍA, ese ahorro
+      // real de tokens es necesario, no solo cosmético. qwen3.6 (el modelo de visión) rechaza
+      // este parámetro, así que solo se manda cuando NO se usa el modelo de visión.
+      ...(usingVisionModel ? {} : { reasoning_effort: "low" as const }),
       stream: false as const,
       messages: [
         ...(system ? [{ role: "system" as const, content: system }] : []),
