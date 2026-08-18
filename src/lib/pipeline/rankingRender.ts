@@ -78,13 +78,14 @@ export async function assembleRankingVideo(params: {
       fs.writeFileSync(subtitlesFile, srtContent);
     }
 
+    // El número de puesto ya se ve en la tarjeta "#N" que precede a este segmento (arriba);
+    // repetirlo en grande sobre el propio vídeo quedaba fuera de lugar y no aportaba nada.
     await cutVerticalClip({
       sourcePath,
       outPath: subPath,
       startSec: item.startSec,
       endSec: item.endSec,
       resolution,
-      label: `#${item.position}`,
       subtitlesPath: subtitlesFile,
     });
     segmentPaths.push(subPath);

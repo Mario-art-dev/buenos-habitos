@@ -37,7 +37,7 @@ export function wrapText(text: string, maxCharsPerLine: number): string {
 
 export function buildVerticalFilter(
   res: VerticalResolution,
-  opts: { label?: string; subtitlesPath?: string } = {}
+  opts: { subtitlesPath?: string } = {}
 ): string {
   const { width, height } = res;
   let filter =
@@ -45,26 +45,17 @@ export function buildVerticalFilter(
     `[0:v]scale=${width}:${height}:force_original_aspect_ratio=decrease[fg];` +
     `[bg][fg]overlay=(W-w)/2:(H-h)/2:format=auto,format=yuv420p[base]`;
 
-  let lastLabel = "base";
-
   if (opts.subtitlesPath) {
+    // Estilo de subtítulo normal (como los de cualquier vídeo con subtítulos), no el típico
+    // "caption" gigante de TikTok: letra moderada, contorno fino, pegado abajo sin taparse
+    // con la interfaz de la plataforma (like/comentarios/descripción).
     filter += `;[base]subtitles=${escapeSubtitlesPath(opts.subtitlesPath)}:force_style='FontName=Arial,FontSize=${Math.round(
-      height / 27
-    )},PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=3,Alignment=2,MarginV=${Math.round(
+      height / 38
+    )},PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Alignment=2,MarginV=${Math.round(
       height * 0.12
-    )}'[subbed]`;
-    lastLabel = "subbed";
-  }
-
-  if (opts.label) {
-    const fontSize = Math.round(width / 6);
-    filter += `;[${lastLabel}]drawtext=text='${escapeDrawtext(opts.label)}':fontcolor=white:fontsize=${fontSize}:fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:borderw=6:bordercolor=black@0.8:x=(w-text_w)/2:y=${Math.round(
-      height * 0.08
-    )}[v]`;
-    lastLabel = "v";
+    )}'[v]`;
   } else {
-    filter += `;[${lastLabel}]null[v]`;
-    lastLabel = "v";
+    filter += `;[base]null[v]`;
   }
 
   return filter;
@@ -76,7 +67,6 @@ export interface CutClipOptions {
   startSec: number;
   endSec: number;
   resolution?: VerticalResolution;
-  label?: string;
   subtitlesPath?: string;
   muted?: boolean;
 }
@@ -84,12 +74,12 @@ export interface CutClipOptions {
 /**
  * Corta el segmento y lo recompone a formato vertical estilo short:
  * fondo desenfocado ampliado + vídeo original centrado sin recortar el encuadre.
- * Opcionalmente quema un texto de puesto (label) y/o subtítulos.
+ * Opcionalmente quema subtítulos.
  */
 export async function cutVerticalClip(opts: CutClipOptions): Promise<void> {
   const { sourcePath, outPath, startSec, endSec, resolution = DEFAULT_RES, muted } = opts;
   const duration = Math.max(0.5, endSec - startSec);
-  const filter = buildVerticalFilter(resolution, { label: opts.label, subtitlesPath: opts.subtitlesPath });
+  const filter = buildVerticalFilter(resolution, { subtitlesPath: opts.subtitlesPath });
 
   const args = [
     "-y",
