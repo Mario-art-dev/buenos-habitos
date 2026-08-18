@@ -6,7 +6,7 @@ import { probeVideo, type VerticalResolution } from "./probe";
 
 const DEFAULT_RES: VerticalResolution = { width: 1080, height: 1920 };
 
-function escapeDrawtext(text: string): string {
+export function escapeDrawtext(text: string): string {
   return text.replace(/\\/g, "\\\\").replace(/:/g, "\\:").replace(/'/g, "\\'").replace(/%/g, "\\%");
 }
 
@@ -291,6 +291,26 @@ export async function extractFrameAt(sourcePath: string, atSec: number, outPath:
     "4",
     "-vf",
     "scale=480:-1",
+    outPath,
+  ]);
+}
+
+/**
+ * Extrae un fotograma JPEG a la resolución nativa del vídeo (sin reescalar a 480px como
+ * `extractFrameAt`, que es para clasificación barata por IA) — para usarlo como portada/miniatura
+ * del short, donde sí importa la máxima calidad posible.
+ */
+export async function extractCoverFrameAt(sourcePath: string, atSec: number, outPath: string): Promise<void> {
+  await run(config.ffmpegPath, [
+    "-y",
+    "-ss",
+    String(Math.max(0, atSec)),
+    "-i",
+    sourcePath,
+    "-frames:v",
+    "1",
+    "-q:v",
+    "2",
     outPath,
   ]);
 }

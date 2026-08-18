@@ -36,6 +36,20 @@ export async function probeVideo(filePath: string): Promise<MediaInfo> {
   };
 }
 
+/** Duración de un archivo de solo audio (probeVideo pide un stream de vídeo, que aquí no hay). */
+export async function probeAudioDurationSec(filePath: string): Promise<number> {
+  const { stdout } = await run(ffprobePath(), [
+    "-v",
+    "error",
+    "-show_entries",
+    "format=duration",
+    "-of",
+    "csv=p=0",
+    filePath,
+  ]);
+  return Number(stdout.trim()) || 0;
+}
+
 export interface VerticalResolution {
   width: number;
   height: number;

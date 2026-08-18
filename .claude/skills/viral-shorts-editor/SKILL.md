@@ -1,6 +1,6 @@
 ---
 name: viral-shorts-editor
-description: Editorial and technical standards for Escenas Virales Studio's short-form video pipeline in this repo — clip selection, burned subtitles, dynamic zoom/camera pacing, and hashtag strategy. Use this skill whenever working on src/lib/pipeline/analyze.ts, clip.ts, subtitles.ts, transcribe.ts, or src/lib/trends/hashtags.ts, or whenever asked to make shorts more professional/entertaining, fix clip selection quality, adjust subtitle style, add camera movement/zoom effects, or improve hashtags for this channel — even if the user describes it in plain terms ("que los clips sean mejores", "que los subtítulos se vean bien", "que sea más viral") instead of naming these files directly. Also consult it before changing feature-flag defaults in src/lib/config.ts or the GitHub Actions workflows, since this project has a recurring bug pattern of the workflows silently overriding config defaults.
+description: Editorial and technical standards for Escenas Virales Studio's short-form video pipeline in this repo — clip selection, burned subtitles, dynamic zoom/camera pacing, brand sting/cover card, and hashtag strategy. Use this skill whenever working on src/lib/pipeline/analyze.ts, clip.ts, subtitles.ts, bigCaptions.ts, coverCard.ts, transcribe.ts, or src/lib/trends/hashtags.ts, or whenever asked to make shorts more professional/entertaining, fix clip selection quality, adjust subtitle style, add camera movement/zoom effects, change the brand sound/intro-outro cover, or improve hashtags for this channel — even if the user describes it in plain terms ("que los clips sean mejores", "que los subtítulos se vean bien", "que sea más viral", "el sonido de marca") instead of naming these files directly. Also consult it before changing feature-flag defaults in src/lib/config.ts or the GitHub Actions workflows/Dockerfiles, since this project has a recurring bug pattern of those silently overriding or missing config defaults.
 ---
 
 # Editor de shorts virales — Escenas Virales Studio
@@ -118,6 +118,27 @@ metas sin verificar antes el coste real con números, como se hizo allí.
 Codificación: `-preset fast -crf 18` (subido desde `veryfast`/`crf 20`) a petición expresa de "la
 mejor calidad posible" — no lo subas más (p.ej. `medium`/`slow`) sin comprobar antes cuánto alarga
 el tiempo de render por clip, el runner de GitHub Actions es compartido con el resto del trabajo.
+
+## Portada de marca / sonido de marca (`src/lib/pipeline/coverCard.ts`, `assets/audio/brand_sting.wav`)
+
+Cada short abre y cierra con la MISMA portada (`ENABLE_COVER_CARD`, activado por defecto): un
+fotograma del propio vídeo a máxima calidad (`extractCoverFrameAt` en `clip.ts` — NO uses
+`extractFrameAt`, esa es la versión pequeña de 480px para clasificación barata por IA, no sirve
+para una portada) tomado en el mismo `hookStartSec` ya verificado por `hookFrame.ts`, con el título
+del clip quemado encima estilo miniatura de creador real (negrita, contorno, franja oscura detrás
+para que se lea), congelado mientras suena `assets/audio/brand_sting.wav`. Se renderiza UNA sola
+vez por clip y se reutiliza el mismo archivo dos veces al montar el vídeo final (`concatClips([cover,
+core, cover], outPath)`) — no lo regeneres dos veces, es coste de render duplicado sin necesidad.
+
+El sonido de `assets/audio/brand_sting.wav` es 100% sintetizado desde cero (ondas generadas por
+código, sin muestras de terceros) precisamente para evitar cualquier reclamación de copyright en
+un canal que publica en automático — si algún día se cambia el sonido, que el nuevo también sea
+original o de licencia libre verificada, nunca una canción/efecto con copyright real, dado el
+volumen de publicación automática de este proyecto.
+
+`probeAudioDurationSec` (en `probe.ts`) existe aparte de `probeVideo` porque este último pide
+`-select_streams v:0` y falla con un archivo de solo audio como el sting — no reutilices
+`probeVideo` para archivos de audio.
 
 **No hay ffmpeg disponible en el entorno de desarrollo** para probar filtros nuevos en vivo — solo
 se despliega y se comprueba en el servidor real de GitHub Actions. Antes de escribir un filtro

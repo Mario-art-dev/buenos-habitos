@@ -90,6 +90,21 @@ el plano ancho original con las barras — para que la mayoría del short se sie
 verdad y el plano ancho quede como un respiro ocasional, no al revés. Desactívalo con
 `ENABLE_DYNAMIC_ZOOM="false"` si prefieres el encuadre ancho fijo de siempre.
 
+### Portada de marca (sonido + carátula) al principio y al final
+
+`ENABLE_COVER_CARD="true"` (activado por defecto): cada short abre y cierra con la MISMA portada —
+un fotograma del propio vídeo a máxima calidad (donde ya se comprobó que se ve a una persona, ver
+"Gancho inicial" más abajo), con el título quemado encima estilo miniatura de creador de contenido
+(letra grande, en negrita, con contorno, sobre una franja oscura para que se lea bien), congelado
+mientras suena el sonido de marca (`assets/audio/brand_sting.wav`, un efecto de guitarra + golpe +
+cuerdas cálidas creado específicamente para este canal — sin copyright, no es una canción de
+terceros). Después de la portada del principio entra directo el vídeo; al terminar, vuelve a sonar
+el mismo sonido con la misma portada. Desactívalo con `ENABLE_COVER_CARD="false"` si prefieres el
+short sin portadas (entra y sale directo del vídeo).
+
+Para cambiar el sonido de marca, sustituye `assets/audio/brand_sting.wav` por otro archivo de audio
+corto (la duración de la portada se ajusta sola a la duración real de ese archivo).
+
 ### Gancho inicial con persona en pantalla
 
 `ENABLE_HOOK_FRAME_CHECK="true"` (activado por defecto): antes de cortar cada short, se comprueba

@@ -11,6 +11,8 @@ import {
   bottomCaptionsPath,
   bigCaptionsPath,
   hookFramePath,
+  clipCommentedPath,
+  coverCardPath,
   tmpDir,
 } from "@/lib/storagePaths";
 import { resolveSourceVideo } from "./download";
@@ -27,6 +29,7 @@ import { processSongJob } from "./songPipeline";
 import { setStatus } from "./status";
 import { generateSingleCommentary } from "./commentary";
 import { renderCommentaryCard } from "./commentaryCards";
+import { renderCoverCard } from "./coverCard";
 import { config } from "@/lib/config";
 
 function transcriptExcerptFor(segments: TranscriptSegment[], startSec: number, endSec: number): string {
@@ -130,6 +133,8 @@ async function processSingleJob(jobId: string): Promise<void> {
       const outroCardPath = candidateCardPath(jobId, clip.id, "outro");
       const subtitlesFilePath = bottomCaptionsPath(jobId, clip.id);
       const bigCaptionsFilePath = bigCaptionsPath(jobId, clip.id);
+      const commentedPath = clipCommentedPath(jobId, clip.id);
+      const coverPath = coverCardPath(jobId, clip.id);
       try {
         await db.clip.update({ where: { id: clip.id }, data: { status: "RENDERING" } });
         const outPath = clipVideoPath(jobId, clip.id);
@@ -166,20 +171,22 @@ async function processSingleJob(jobId: string): Promise<void> {
         let commentaryIntro: string | null = null;
         let commentaryOutro: string | null = null;
 
-        if (config.commentary.enabled) {
-          // Con comentario activado, los subtítulos se queman en el cuerpo del clip (las
-          // tarjetas de intro/cierre son solo texto de reacción, sin diálogo que subtitular).
-          await cutVerticalClip({
-            sourcePath: srcPath,
-            outPath: bodyPath,
-            startSec: hookStartSec,
-            endSec: clip.endSec,
-            resolution,
-            subtitlesPath,
-            bigCaptionsPath: bigCaptionsFile,
-            dynamicZoom: config.dynamicZoom.enabled,
-          });
+        // El cuerpo se corta siempre primero a bodyPath (con o sin comentario), para poder
+        // envolverlo después con la portada de marca sin tener que cortar dos veces.
+        await cutVerticalClip({
+          sourcePath: srcPath,
+          outPath: bodyPath,
+          startSec: hookStartSec,
+          endSec: clip.endSec,
+          resolution,
+          subtitlesPath,
+          bigCaptionsPath: bigCaptionsFile,
+          dynamicZoom: config.dynamicZoom.enabled,
+        });
 
+        let core = bodyPath;
+
+        if (config.commentary.enabled) {
           const excerpt = transcriptExcerptFor(transcript.segments, hookStartSec, clip.endSec);
           const commentary = await generateSingleCommentary({
             title: clip.title,
@@ -204,20 +211,24 @@ async function processSingleJob(jobId: string): Promise<void> {
             text: commentary.outroText,
             resolution,
           });
-          await concatClips([introCard, bodyPath, outroCard], outPath);
-        } else {
-          // Sin comentario (por defecto): el short entra directo a la acción, se corta ya
-          // directamente al archivo final, sin pantalla negra ni pasos de más.
-          await cutVerticalClip({
+          await concatClips([introCard, bodyPath, outroCard], commentedPath);
+          core = commentedPath;
+        }
+
+        // Portada de marca (fotograma del propio short + título + sonido de marca) al principio
+        // Y al final, la misma en los dos sitios — pedido explícito: "la pantalla en pausa con
+        // la portada mientras suena el sonido, y directo al vídeo después".
+        if (config.coverCard.enabled) {
+          await renderCoverCard({
             sourcePath: srcPath,
-            outPath,
-            startSec: hookStartSec,
-            endSec: clip.endSec,
+            frameAtSec: hookStartSec,
+            title: clip.title,
+            outPath: coverPath,
             resolution,
-            subtitlesPath,
-            bigCaptionsPath: bigCaptionsFile,
-            dynamicZoom: config.dynamicZoom.enabled,
           });
+          await concatClips([coverPath, core, coverPath], outPath);
+        } else if (core !== outPath) {
+          fs.copyFileSync(core, outPath);
         }
 
         await extractThumbnail(outPath, thumbPath);
@@ -240,7 +251,17 @@ async function processSingleJob(jobId: string): Promise<void> {
         // Los archivos intermedios (corte sin envolver, narración, tarjetas, subtítulos) ya no
         // hacen falta una vez terminado este clip (listo o fallido): si no se borran aquí, se
         // van acumulando durante todo el trabajo y pueden agotar el disco antes de terminar.
-        for (const tmp of [bodyPath, introNarrationPath, outroNarrationPath, introCardPath, outroCardPath, subtitlesFilePath, bigCaptionsFilePath]) {
+        for (const tmp of [
+          bodyPath,
+          commentedPath,
+          coverPath,
+          introNarrationPath,
+          outroNarrationPath,
+          introCardPath,
+          outroCardPath,
+          subtitlesFilePath,
+          bigCaptionsFilePath,
+        ]) {
           try {
             fs.rmSync(tmp, { force: true });
           } catch {

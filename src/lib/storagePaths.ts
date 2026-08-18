@@ -60,6 +60,16 @@ export function clipBodyPath(jobId: string, clipId: string): string {
   return path.join(tmpDir(jobId), `${clipId}_body.mp4`);
 }
 
+/** Clip ya envuelto con las tarjetas de comentario narrado, antes de envolverlo con la portada. */
+export function clipCommentedPath(jobId: string, clipId: string): string {
+  return path.join(tmpDir(jobId), `${clipId}_commented.mp4`);
+}
+
+/** Portada de marca (fotograma + título + sonido) que abre y cierra el short. */
+export function coverCardPath(jobId: string, clipId: string): string {
+  return path.join(tmpDir(jobId), `${clipId}_cover.mp4`);
+}
+
 export function narrationAudioPath(jobId: string, clipId: string, key: string): string {
   return path.join(tmpDir(jobId), `${clipId}_narration_${key}.wav`);
 }

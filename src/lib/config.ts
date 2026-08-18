@@ -133,6 +133,15 @@ export const config = {
     enabled: optional("ENABLE_HOOK_FRAME_CHECK", "true") === "true",
   },
 
+  coverCard: {
+    // Portada de marca al principio y al final de cada short: un fotograma del propio vídeo (a
+    // máxima calidad) con el título quemado encima estilo miniatura de creador de contenido,
+    // congelado mientras suena el sonido de marca (assets/audio/brand_sting.wav). Pedido
+    // explícito del usuario: la pantalla en pausa con la portada mientras suena el sonido, y
+    // directo al vídeo después — la MISMA portada se repite igual al final.
+    enabled: optional("ENABLE_COVER_CARD", "true") === "true",
+  },
+
   tts: {
     // "local" = Piper (gratis, corre en el propio servidor) | "openai" = API de voz de OpenAI (de pago)
     provider: (optional("TTS_PROVIDER", "local") as "local" | "openai"),
