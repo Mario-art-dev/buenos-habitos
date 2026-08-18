@@ -8,12 +8,12 @@ const SCOPES = [
   "https://www.googleapis.com/auth/youtube.readonly",
 ];
 
-function newOAuthClient() {
-  return new google.auth.OAuth2(config.google.clientId, config.google.clientSecret, config.google.redirectUri);
+function newOAuthClient(redirectUri?: string) {
+  return new google.auth.OAuth2(config.google.clientId, config.google.clientSecret, redirectUri);
 }
 
-export function getYouTubeAuthUrl(): string {
-  const client = newOAuthClient();
+export function getYouTubeAuthUrl(redirectUri: string): string {
+  const client = newOAuthClient(redirectUri);
   return client.generateAuthUrl({
     access_type: "offline",
     prompt: "consent",
@@ -21,8 +21,8 @@ export function getYouTubeAuthUrl(): string {
   });
 }
 
-export async function handleYouTubeOAuthCallback(code: string): Promise<void> {
-  const client = newOAuthClient();
+export async function handleYouTubeOAuthCallback(code: string, redirectUri: string): Promise<void> {
+  const client = newOAuthClient(redirectUri);
   const { tokens } = await client.getToken(code);
   client.setCredentials(tokens);
 

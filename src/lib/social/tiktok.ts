@@ -24,14 +24,14 @@ function generatePkcePair(): { codeVerifier: string; codeChallenge: string } {
   return { codeVerifier, codeChallenge };
 }
 
-export function getTikTokAuthUrl(): { url: string; state: string; codeVerifier: string } {
+export function getTikTokAuthUrl(redirectUri: string): { url: string; state: string; codeVerifier: string } {
   const state = crypto.randomBytes(16).toString("hex");
   const { codeVerifier, codeChallenge } = generatePkcePair();
   const params = new URLSearchParams({
     client_key: config.tiktok.clientKey,
     scope: SCOPES.join(","),
     response_type: "code",
-    redirect_uri: config.tiktok.redirectUri,
+    redirect_uri: redirectUri,
     state,
     code_challenge: codeChallenge,
     code_challenge_method: "S256",
@@ -49,7 +49,7 @@ interface TikTokTokenResponse {
   error_description?: string;
 }
 
-export async function handleTikTokOAuthCallback(code: string, codeVerifier: string): Promise<void> {
+export async function handleTikTokOAuthCallback(code: string, codeVerifier: string, redirectUri: string): Promise<void> {
   const res = await fetch(TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -58,7 +58,7 @@ export async function handleTikTokOAuthCallback(code: string, codeVerifier: stri
       client_secret: config.tiktok.clientSecret,
       code,
       grant_type: "authorization_code",
-      redirect_uri: config.tiktok.redirectUri,
+      redirect_uri: redirectUri,
       code_verifier: codeVerifier,
     }),
   });

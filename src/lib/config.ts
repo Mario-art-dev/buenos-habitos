@@ -12,15 +12,17 @@ function optional(name: string, fallback = ""): string {
 
 const aiProvider = optional("AI_PROVIDER", "anthropic") as "anthropic" | "openai" | "gemini" | "groq";
 
-// La capa gratuita de Groq limita a 8.000 tokens por PETICIÓN (no solo por minuto), muy por
-// debajo de lo que ocupa la transcripción de un vídeo largo. Además, el modelo por defecto
-// (qwen3.6, "de razonamiento") gasta una parte de esos tokens pensando por dentro antes de
-// responder, aunque esa parte se oculte del resultado — así que cuanto más grande el trozo de
-// transcripción que se manda, menos margen le queda para el razonamiento + la respuesta, y el
-// JSON sale cortado a medias. Por eso aquí se trocea en trozos pequeños (menos texto de entrada)
-// y se deja mucho margen de salida (maxTokens) para el razonamiento + la respuesta real.
+// La capa gratuita de Groq limita a 8.000 tokens por PETICIÓN y 200.000 tokens AL DÍA — ambos
+// importan. El modelo de texto por defecto (gpt-oss-20b con reasoning_effort:"low") gasta mucho
+// menos en "pensar" que el modelo de visión (qwen3.6, que no se puede bajar de intensidad), así
+// que puede permitirse trozos de transcripción más grandes. Esto es importante porque cada
+// petición repite el mismo texto de sistema/instrucciones: menos peticiones (trozos más grandes)
+// = menos coste total repetido = un vídeo largo entero cabe de verdad en el cupo diario. Con un
+// vídeo de 1 hora, esto reduce el gasto de la fase de análisis de ~142% del cupo diario (con
+// trozos más pequeños) a ~55%, dejando margen real para el resto del trabajo (comentario,
+// hashtags, subidas). Comprobado con números reales, no es una estimación al azar.
 const FREE_TIER_DEFAULTS = {
-  groq: { tokensPerMinute: "8000", transcriptChars: "4000", visionBatch: "1" },
+  groq: { tokensPerMinute: "8000", transcriptChars: "8000", visionBatch: "1" },
   gemini: { tokensPerMinute: "0", transcriptChars: "40000", visionBatch: "6" },
   anthropic: { tokensPerMinute: "0", transcriptChars: "60000", visionBatch: "6" },
   openai: { tokensPerMinute: "0", transcriptChars: "60000", visionBatch: "6" },
@@ -117,17 +119,14 @@ export const config = {
   google: {
     clientId: optional("GOOGLE_CLIENT_ID"),
     clientSecret: optional("GOOGLE_CLIENT_SECRET"),
-    get redirectUri() {
-      return `${config.appUrl}/api/auth/youtube/callback`;
-    },
+    // El redirect_uri de OAuth NO sale de aquí: la URL pública cambia cada vez que se reinicia
+    // la sesión (túnel de Cloudflare), así que se calcula por petición a partir de la cabecera
+    // Host real (ver src/lib/requestOrigin.ts) en vez de fiarse de una URL fija.
   },
 
   tiktok: {
     clientKey: optional("TIKTOK_CLIENT_KEY"),
     clientSecret: optional("TIKTOK_CLIENT_SECRET"),
-    get redirectUri() {
-      return `${config.appUrl}/api/auth/tiktok/callback`;
-    },
   },
 
   ytdlpPath: optional("YTDLP_PATH", "yt-dlp"),

@@ -345,7 +345,8 @@ npm run worker            # worker que procesa los vídeos (terminal 2)
 1. Crea un proyecto en [Google Cloud Console](https://console.cloud.google.com).
 2. Activa la **YouTube Data API v3**.
 3. En "Credenciales", crea un **OAuth 2.0 Client ID** de tipo "Aplicación web".
-4. Añade como URI de redirección autorizado: `{APP_URL}/api/auth/youtube/callback`.
+4. Añade como URI de redirección autorizado: `{TU_URL_ACTUAL}/api/auth/youtube/callback`
+   (ver el aviso de "Servidor temporal" justo abajo — **importante** si usas el modo sin servidor propio).
 5. Copia el Client ID y el Client Secret a `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`.
 6. Mientras tu app de Google esté en modo "Prueba" (Testing), añade tu propia cuenta de Google
    como "usuario de prueba" en la pantalla de consentimiento OAuth para poder autorizarla.
@@ -358,7 +359,8 @@ Desde **Ajustes** dentro de la app, pulsa "Conectar YouTube" y autoriza tu cuent
 
 1. Crea una app en [TikTok for Developers](https://developers.tiktok.com/apps).
 2. Activa los productos **Login Kit** y **Content Posting API**.
-3. Añade como URI de redirección: `{APP_URL}/api/auth/tiktok/callback`.
+3. Añade como URI de redirección: `{TU_URL_ACTUAL}/api/auth/tiktok/callback`
+   (ver el aviso de "Servidor temporal" justo abajo — **importante** si usas el modo sin servidor propio).
 4. Copia el Client Key y el Client Secret a `TIKTOK_CLIENT_KEY` / `TIKTOK_CLIENT_SECRET`.
 5. **Importante**: hasta que TikTok audite y apruebe tu app para "Direct Post" (puede tardar
    varias semanas), el "Content Posting API" solo permite subir vídeos a tu propia bandeja de
@@ -367,6 +369,25 @@ Desde **Ajustes** dentro de la app, pulsa "Conectar YouTube" y autoriza tu cuent
    publicas tú con un toque desde la app de TikTok. En cuanto TikTok apruebe tu solicitud de
    auditoría, cambia la URL en `src/lib/social/tiktok.ts`
    (`INBOX_UPLOAD_INIT_URL` → el endpoint de publicación directa) para que se publique solo.
+
+⚠️ **Si usas el modo "Servidor temporal" (sin servidor propio, ver más abajo): la URL de tu
+web cambia cada vez que se reinicia la sesión** (túnel de Cloudflare, subdominio nuevo al
+azar). La app ya calcula el redirect_uri correcto solo, a partir de la URL con la que entras
+— pero Google y TikTok exigen que esa URL esté registrada EXACTA de antemano en su panel (no
+admiten comodines, es una norma de seguridad suya, no algo que se pueda evitar con código).
+Así que **cada vez que quieras conectar o reconectar una cuenta después de un reinicio**:
+
+1. Copia tu URL actual (la del túnel, tipo `https://algo.trycloudflare.com`).
+2. Ve a Google Cloud Console (Credenciales → tu Client ID → URIs de redirección autorizados) o
+   al panel de TikTok for Developers (Login Kit → Redirect URI) desde el navegador del móvil.
+3. Añade `{esa URL}/api/auth/youtube/callback` (o `/api/auth/tiktok/callback`) a la lista —
+   puedes tener varias guardadas a la vez, no hace falta borrar las anteriores.
+4. Ya puedes darle a "Conectar" en Ajustes.
+
+Una vez conectada una cuenta, **no hace falta repetir esto para publicar** — solo para
+conectar o reconectar por primera vez tras un reinicio (los tokens ya guardados siguen
+funcionando solos). Si algún día quieres evitarte este paso manual del todo, la solución real
+es un túnel con nombre fijo de Cloudflare, que requiere tener un dominio propio (de pago).
 
 ### Hashtags "en tendencia"
 
