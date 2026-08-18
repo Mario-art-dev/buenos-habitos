@@ -60,8 +60,9 @@ Y dos modos pensados para monetización con publicidad de terceros:
 `ENABLE_SUBTITLES="true"` (activado por defecto): cada short quema sobre el vídeo los subtítulos
 de su propia transcripción — ayuda mucho a la retención (se entiende sin sonido, que es como se
 ve la mayoría de los shorts) y refuerza el gancho inicial. Desactívalo con `ENABLE_SUBTITLES="false"`.
-El tamaño es el de un subtítulo normal (no el "caption" gigante típico de TikTok), pegado abajo, en
-blanco con un contorno negro fino. Van palabra por palabra (no por frase entera) cuando el motor de
+El tamaño es algo mayor que un subtítulo normal (no el "caption" gigante típico de TikTok), pegado
+abajo, con un contorno negro grueso y un ligero brillo (menos intenso que el caption grande del
+centro). Van palabra por palabra (no por frase entera) cuando el motor de
 transcripción da marcas de tiempo por palabra — tanto `faster-whisper` local como la API de Whisper
 las dan; si algún proveedor no las diera, cae automáticamente a subtítulos por frase. **Cada palabra
 cambia de color** (verde/blanco/amarillo/naranja, rotando) según se va leyendo, para que sea más
