@@ -115,6 +115,16 @@ export const config = {
     enabled: optional("ENABLE_DYNAMIC_ZOOM", "true") === "true",
   },
 
+  hookFrameCheck: {
+    // Comprueba con IA (un único fotograma, una única llamada por clip) si al principio del
+    // short se ve a una persona en pantalla — el gancho engancha mucho más con una cara desde el
+    // segundo 0 que con un plano vacío o de transición. Si no se ve, adelanta el inicio un poco
+    // (ajuste local, sin coste de IA) como mejor intento. Cuesta un fotograma+llamada de más por
+    // clip (modelo de visión, ~1 imagen ~1600 tokens + margen de razonamiento oculto), así que en
+    // vídeos con muchos clips resta presupuesto diario real: se puede desactivar si hace falta.
+    enabled: optional("ENABLE_HOOK_FRAME_CHECK", "true") === "true",
+  },
+
   tts: {
     // "local" = Piper (gratis, corre en el propio servidor) | "openai" = API de voz de OpenAI (de pago)
     provider: (optional("TTS_PROVIDER", "local") as "local" | "openai"),

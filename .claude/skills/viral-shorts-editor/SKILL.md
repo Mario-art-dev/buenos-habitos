@@ -28,6 +28,19 @@ Otros criterios que ya están en el prompt de `analyze.ts` y que hay que mantene
   llegar al número pedido.
 - Títulos y descripciones escritos como los escribiría una persona real enganchada al vídeo
   (gancho, intriga, humor, tensión), nunca un resumen robótico ni relleno genérico.
+- El arranque (`startSec`) tiene que sentirse tan profesional e impactante como el de un canal
+  grande: entra ya en la acción o en la frase con más gancho, nunca en una respiración, silencio,
+  transición o frase a medias.
+- `src/lib/pipeline/hookFrame.ts` (`pickHookStartSec`, usado en modo SINGLE) comprueba con un único
+  fotograma + una única llamada de visión si al principio se ve a una persona en pantalla — un
+  gancho engancha mucho más con una cara desde el segundo 0 que con un plano vacío. Si no se ve,
+  adelanta el inicio un poco (ajuste local, sin IA) como mejor intento; nunca bloquea ni hace
+  fallar el clip (cualquier fallo se ignora y se usa el `startSec` original). Deliberadamente
+  limitado a UNA llamada por clip (no una búsqueda iterativa) para no disparar el gasto del cupo
+  diario gratuito en vídeos con muchos clips — configurable con `ENABLE_HOOK_FRAME_CHECK`. No está
+  aplicado (todavía) al modo Ranking, que ya hace su propio análisis de visión por candidato
+  (`rankingAnalyze.ts`, hasta 90 llamadas); antes de replicarlo ahí, calcula primero el coste
+  combinado con números reales, no lo des por hecho.
 - La duración del clip (`CLIP_MIN_SECONDS`/`CLIP_MAX_SECONDS`, por defecto 60-180s) se fuerza en
   **código** (`parseClips` en `analyze.ts`), no solo se pide en el prompt — un clip corto no cuenta
   como visualización monetizable en TikTok/YouTube, y confiar solo en que la IA respete la duración

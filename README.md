@@ -73,6 +73,15 @@ el plano con más zoom, ocupando el vertical entero sin las barras de fondo dese
 de cámara habitual en edición viral para que el vídeo no se sienta estático durante 60-180s
 seguidos. Desactívalo con `ENABLE_DYNAMIC_ZOOM="false"` si prefieres el encuadre fijo.
 
+### Gancho inicial con persona en pantalla
+
+`ENABLE_HOOK_FRAME_CHECK="true"` (activado por defecto): antes de cortar cada short, se comprueba
+con IA (un único fotograma, una única llamada — para no disparar el gasto de tokens en vídeos con
+muchos clips) si al principio se ve a una persona en pantalla; si no, se adelanta un poco el inicio
+como mejor intento. Cuesta un fotograma + llamada de más por clip (modelo de visión), así que en
+vídeos con muchos clips resta presupuesto diario real de la capa gratuita de IA — si notas que se
+te agota el cupo antes de tiempo, puedes desactivarlo con `ENABLE_HOOK_FRAME_CHECK="false"`.
+
 ### Comentario/reacción narrado con IA
 
 Con `ENABLE_COMMENTARY="true"` (DESACTIVADO por defecto — un short profesional entra directo a

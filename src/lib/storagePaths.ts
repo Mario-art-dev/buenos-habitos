@@ -100,6 +100,11 @@ export function srtPath(jobId: string, clipId: string, position: number): string
   return path.join(tmpDir(jobId), `${clipId}_item_${position}.srt`);
 }
 
+/** Fotograma temporal para comprobar si el gancho inicial del clip muestra a una persona. */
+export function hookFramePath(jobId: string, clipId: string): string {
+  return path.join(tmpDir(jobId), `${clipId}_hook.jpg`);
+}
+
 /**
  * Subidas troceadas: el túnel gratuito (Cloudflare) corta cada petición individual sobre los
  * ~100MB, así que los vídeos grandes (p.ej. una recopilación de una hora) se suben en trozos

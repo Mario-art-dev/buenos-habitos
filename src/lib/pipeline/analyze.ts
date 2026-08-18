@@ -97,6 +97,10 @@ frase a la mitad. No solapes clips entre sí.
 
 Para cada clip, evalúa su probabilidad de hacerse viral (0-100) considerando: fuerza del gancho inicial,
 sorpresa/emoción, ritmo, si funciona sin contexto previo, y si genera comentarios o ganas de compartir.
+El fotograma/frase de arranque (startSec) tiene que sentirse tan profesional e impactante como el arranque
+de un vídeo de un canal grande (tipo MrBeast): entra YA en la acción o en la frase con más gancho — nunca en
+una respiración, un silencio, una transición o una frase a medias — para que en el primer vistazo (antes de
+que el espectador decida seguir viendo o pasar al siguiente) ya esté claro que algo interesante está pasando.
 
 Devuelve SOLO este JSON (sin texto extra):
 {

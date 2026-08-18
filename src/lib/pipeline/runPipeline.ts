@@ -9,6 +9,7 @@ import {
   narrationAudioPath,
   candidateCardPath,
   srtPath,
+  hookFramePath,
   tmpDir,
 } from "@/lib/storagePaths";
 import { resolveSourceVideo } from "./download";
@@ -16,6 +17,7 @@ import { extractAudio, transcribeAudio, type TranscriptSegment } from "./transcr
 import { analyzeTranscriptForClips } from "./analyze";
 import { cutVerticalClip, concatClips, extractThumbnail } from "./clip";
 import { buildSrt } from "./subtitles";
+import { pickHookStartSec } from "./hookFrame";
 import { probeVideo, pickVerticalResolution } from "./probe";
 import { processRankingJob } from "./rankingPipeline";
 import { processProductJob } from "./productPipeline";
@@ -130,9 +132,19 @@ async function processSingleJob(jobId: string): Promise<void> {
         const outPath = clipVideoPath(jobId, clip.id);
         const thumbPath = clipThumbnailPath(jobId, clip.id);
 
+        // El gancho engancha mucho más con una persona en pantalla desde el segundo 0 que con un
+        // plano vacío o de transición — si el fotograma inicial no muestra a nadie, se adelanta
+        // un poco el inicio (ver hookFrame.ts; nunca bloquea ni hace fallar el clip).
+        const hookStartSec = await pickHookStartSec({
+          sourcePath: srcPath,
+          startSec: clip.startSec,
+          endSec: clip.endSec,
+          framePath: hookFramePath(jobId, clip.id),
+        });
+
         let subtitlesPath: string | undefined;
         if (config.subtitles.enabled) {
-          const srt = buildSrt(transcript.segments, clip.startSec, clip.endSec);
+          const srt = buildSrt(transcript.segments, hookStartSec, clip.endSec);
           if (srt) {
             fs.writeFileSync(subtitlesFilePath, srt, "utf-8");
             subtitlesPath = subtitlesFilePath;
@@ -148,14 +160,14 @@ async function processSingleJob(jobId: string): Promise<void> {
           await cutVerticalClip({
             sourcePath: srcPath,
             outPath: bodyPath,
-            startSec: clip.startSec,
+            startSec: hookStartSec,
             endSec: clip.endSec,
             resolution,
             subtitlesPath,
             dynamicZoom: config.dynamicZoom.enabled,
           });
 
-          const excerpt = transcriptExcerptFor(transcript.segments, clip.startSec, clip.endSec);
+          const excerpt = transcriptExcerptFor(transcript.segments, hookStartSec, clip.endSec);
           const commentary = await generateSingleCommentary({
             title: clip.title,
             description: clip.description,
@@ -186,7 +198,7 @@ async function processSingleJob(jobId: string): Promise<void> {
           await cutVerticalClip({
             sourcePath: srcPath,
             outPath,
-            startSec: clip.startSec,
+            startSec: hookStartSec,
             endSec: clip.endSec,
             resolution,
             subtitlesPath,
