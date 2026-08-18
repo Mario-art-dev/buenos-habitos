@@ -71,6 +71,16 @@ conversación tras ver un ejemplo real — no es un despiste, es el estado actua
    `Alignment=5` (centro) libass no siempre respeta `MarginV` para desplazar verticalmente, así
    que `\pos()` es la única forma fiable de moverlo hacia abajo del centro exacto.
 
+**Tarjeta de título en modo Ranking**: `rankingRender.ts` (`assembleRankingVideo`) SOLO añade la
+tarjeta de título general (fondo negro, texto centrado vía `renderTitleCard`) cuando
+`config.commentary.enabled` es `true` — igual que en modo SINGLE. Antes se añadía siempre, sin
+condición: si el título general que generaba la IA salía corto (una sola palabra, en minúsculas),
+se veía como una palabra enorme sobre fondo negro al principio del vídeo, y el usuario lo confundió
+con un "subtítulo grande" nuestro (razonablemente, visualmente lo parecía) y pidió quitarlo. Las
+tarjetas POR PUESTO ("#N\n{label}", una antes de cada clip del ranking) siguen añadiéndose siempre
+sin condición — esas SÍ son necesarias para que un vídeo de ranking tenga sentido (si no, no se
+sabe qué puesto es cada clip); no las quites sin que se pida específicamente eso.
+
 **Ojo con la contradicción histórica**: antes de esto, el usuario pidió explícitamente quitar TODO
 texto grande sobre el vídeo (incluido un overlay del número de puesto en modo Ranking, que sigue
 sin existir — eso no ha vuelto). El texto grande que SÍ existe ahora es únicamente esta segunda

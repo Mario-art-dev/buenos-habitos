@@ -47,16 +47,22 @@ export async function assembleRankingVideo(params: {
 
   const segmentPaths: string[] = [];
 
-  // Tarjeta de título, narrada con el comentario de intro si el comentario está activado.
-  const introPath = candidateCardPath(jobId, clipId, "intro");
-  if (params.overallIntroCommentary) {
-    const introAudioPath = narrationAudioPath(jobId, clipId, "intro");
-    await getTTSProvider().synthesize(params.overallIntroCommentary, introAudioPath);
-    await renderTitleCard(introPath, overallTitle, 2, resolution, introAudioPath);
-  } else {
-    await renderTitleCard(introPath, overallTitle, 2, resolution);
+  // Tarjeta de título con fondo negro: igual que en modo SINGLE, solo se añade si el comentario
+  // está activado (ENABLE_COMMENTARY) — un ranking profesional entra directo al primer puesto,
+  // sin pantalla negra con el título antes. Antes esto se añadía siempre, sin condición; si el
+  // título general que genera la IA salía corto/en minúsculas, se veía como una única palabra
+  // enorme sobre negro al principio del vídeo — justo lo que se pidió quitar.
+  if (config.commentary.enabled) {
+    const introPath = candidateCardPath(jobId, clipId, "intro");
+    if (params.overallIntroCommentary) {
+      const introAudioPath = narrationAudioPath(jobId, clipId, "intro");
+      await getTTSProvider().synthesize(params.overallIntroCommentary, introAudioPath);
+      await renderTitleCard(introPath, overallTitle, 2, resolution, introAudioPath);
+    } else {
+      await renderTitleCard(introPath, overallTitle, 2, resolution);
+    }
+    segmentPaths.push(introPath);
   }
-  segmentPaths.push(introPath);
 
   for (const item of playOrder) {
     const cardPath = candidateCardPath(jobId, clipId, `pos${item.position}`);
