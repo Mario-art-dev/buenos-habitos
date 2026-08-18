@@ -94,7 +94,12 @@ jobs:
           ENABLE_SUBTITLES: "true"
           CHANNEL_NAME: "Escenas Virales"
           CHANNEL_NICHE: "Recopilación de las mejores escenas virales de creadores de contenido"
-          CHANNEL_LANGUAGE: "es"
+          # Sin fijar CHANNEL_LANGUAGE aquí: se usa el valor por defecto de la app (inglés,
+          # más ingresos publicitarios). Antes esto estaba fijado a "es" y anulaba en silencio
+          # ese valor por defecto en todo momento.
+          # La programación automática (franjas horarias) necesita saber la zona horaria real
+          # para que "12:00-14:00" signifique la hora de España y no UTC.
+          TZ: "Europe/Madrid"
 
       - name: Esperar a que la web responda
         run: |
