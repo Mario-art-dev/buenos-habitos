@@ -96,8 +96,9 @@ export function songSilentAssemblyPath(jobId: string, clipId: string): string {
   return path.join(tmpDir(jobId), `${clipId}_song_silent.mp4`);
 }
 
-export function srtPath(jobId: string, clipId: string, position: number): string {
-  return path.join(tmpDir(jobId), `${clipId}_item_${position}.srt`);
+/** Archivo .ass del subtítulo normal de abajo (palabra a palabra, blanco con contorno negro). */
+export function bottomCaptionsPath(jobId: string, clipId: string, position = 0): string {
+  return path.join(tmpDir(jobId), `${clipId}_item_${position}.ass`);
 }
 
 /** Archivo .ass de la capa de "caption" grande y de colores del centro de la pantalla. */

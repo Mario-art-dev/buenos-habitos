@@ -65,15 +65,11 @@ export function buildVerticalFilter(
   }
 
   if (opts.subtitlesPath) {
-    // Subtítulo normal pegado abajo, en una "burbuja" semitransparente (BorderStyle=3 + fondo)
-    // en vez de un simple contorno — como el subtítulo pequeño de abajo del ejemplo de
-    // referencia. libass no hace esquinas redondeadas de verdad, esto es la aproximación
-    // rectangular más cercana sin escribir un renderizador de subtítulos propio.
-    filter += `;[${lastLabel}]subtitles=${escapeSubtitlesPath(opts.subtitlesPath)}:force_style='FontName=Arial,FontSize=${Math.round(
-      height / 38
-    )},PrimaryColour=&H00FFFFFF,BackColour=&H80000000,BorderStyle=3,Outline=6,Shadow=0,Alignment=2,MarginV=${Math.round(
-      height * 0.12
-    )}'[subbed]`;
+    // Subtítulo normal pegado abajo: blanco con contorno negro fino, cambiando de color palabra
+    // a palabra (mismo motor/paleta que el caption grande, ver subtitles.ts) para que la lectura
+    // sea interactiva. Va en .ass con el estilo ya definido dentro del propio archivo, así que
+    // aquí no hace falta force_style (igual que el caption grande de abajo).
+    filter += `;[${lastLabel}]subtitles=${escapeSubtitlesPath(opts.subtitlesPath)}[subbed]`;
     lastLabel = "subbed";
   }
 

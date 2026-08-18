@@ -1,32 +1,31 @@
 import type { TranscriptSegment } from "./transcribe";
-
-function srtTime(sec: number): string {
-  const ms = Math.round(sec * 1000);
-  const h = Math.floor(ms / 3_600_000);
-  const m = Math.floor((ms % 3_600_000) / 60_000);
-  const s = Math.floor((ms % 60_000) / 1000);
-  const rem = ms % 1000;
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")},${String(rem).padStart(3, "0")}`;
-}
+import { buildColoredCaptionsAss } from "./bigCaptions";
 
 /**
- * Genera el contenido de un .srt para el tramo [start, end] de un vídeo, con tiempos relativos a
- * ese tramo. Usa las marcas de tiempo palabra a palabra si el proveedor de transcripción las dio
- * (un subtítulo por palabra, más dinámico y fácil de leer sin sonido); si no las hay, cae a un
- * subtítulo por frase/segmento entero.
+ * Subtítulo normal de abajo: una palabra a la vez, tamaño pequeño/normal, con un contorno negro
+ * fino (sin desenfoque/brillo — eso se deja para el caption grande del centro). Cada palabra sale
+ * en un color distinto de la misma paleta que el caption grande, para que la lectura sea
+ * interactiva y llame la atención según se va leyendo, en vez de un bloque de texto blanco fijo —
+ * pedido explícito del usuario. Usa el mismo motor que bigCaptions.ts, solo cambia el tamaño, la
+ * posición (pegado abajo) y que agrupa de una en una palabra en vez de en golpes de varias.
  */
-export function buildSrt(segments: TranscriptSegment[], start: number, end: number): string | null {
-  const words = segments.flatMap((s) => s.words ?? []);
-  const source = words.length > 0 ? words : segments;
-
-  const overlapping = source
-    .filter((s) => s.end > start && s.start < end)
-    .map((s) => ({ start: Math.max(0, s.start - start), end: Math.min(end - start, s.end - start), text: s.text.trim() }))
-    .filter((s) => s.text && s.end > s.start);
-
-  if (overlapping.length === 0) return null;
-
-  return overlapping
-    .map((s, i) => `${i + 1}\n${srtTime(s.start)} --> ${srtTime(s.end)}\n${s.text}\n`)
-    .join("\n");
+export function buildBottomCaptionsAss(
+  segments: TranscriptSegment[],
+  start: number,
+  end: number,
+  resolution: { width: number; height: number }
+): string | null {
+  const { width, height } = resolution;
+  const fontSize = Math.round(height / 38);
+  return buildColoredCaptionsAss(segments, start, end, resolution, {
+    fontName: "Liberation Sans",
+    fontSize,
+    outline: Math.max(1, Math.round(fontSize / 20)),
+    outlineColorHex: "000000",
+    blur: 0,
+    posX: Math.round(width / 2),
+    posY: Math.round(height * 0.88),
+    maxWordsPerGroup: 1,
+    uppercase: false,
+  });
 }

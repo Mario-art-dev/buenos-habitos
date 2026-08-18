@@ -8,7 +8,7 @@ import {
   clipBodyPath,
   narrationAudioPath,
   candidateCardPath,
-  srtPath,
+  bottomCaptionsPath,
   bigCaptionsPath,
   hookFramePath,
   tmpDir,
@@ -17,7 +17,7 @@ import { resolveSourceVideo } from "./download";
 import { extractAudio, transcribeAudio, type TranscriptSegment } from "./transcribe";
 import { analyzeTranscriptForClips } from "./analyze";
 import { cutVerticalClip, concatClips, extractThumbnail } from "./clip";
-import { buildSrt } from "./subtitles";
+import { buildBottomCaptionsAss } from "./subtitles";
 import { buildBigCaptionsAss } from "./bigCaptions";
 import { pickHookStartSec } from "./hookFrame";
 import { probeVideo, pickVerticalResolution } from "./probe";
@@ -128,7 +128,7 @@ async function processSingleJob(jobId: string): Promise<void> {
       const outroNarrationPath = narrationAudioPath(jobId, clip.id, "outro");
       const introCardPath = candidateCardPath(jobId, clip.id, "intro");
       const outroCardPath = candidateCardPath(jobId, clip.id, "outro");
-      const subtitlesFilePath = srtPath(jobId, clip.id, 0);
+      const subtitlesFilePath = bottomCaptionsPath(jobId, clip.id);
       const bigCaptionsFilePath = bigCaptionsPath(jobId, clip.id);
       try {
         await db.clip.update({ where: { id: clip.id }, data: { status: "RENDERING" } });
@@ -147,9 +147,9 @@ async function processSingleJob(jobId: string): Promise<void> {
 
         let subtitlesPath: string | undefined;
         if (config.subtitles.enabled) {
-          const srt = buildSrt(transcript.segments, hookStartSec, clip.endSec);
-          if (srt) {
-            fs.writeFileSync(subtitlesFilePath, srt, "utf-8");
+          const ass = buildBottomCaptionsAss(transcript.segments, hookStartSec, clip.endSec, resolution);
+          if (ass) {
+            fs.writeFileSync(subtitlesFilePath, ass, "utf-8");
             subtitlesPath = subtitlesFilePath;
           }
         }

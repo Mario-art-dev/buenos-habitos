@@ -3,7 +3,7 @@ import type { TranscriptSegment } from "./transcribe";
 import { probeVideo, type VerticalResolution } from "./probe";
 import { cutVerticalClip, renderTitleCard, concatClips, mixBackgroundMusic, extractThumbnail, extractAudioSegment } from "./clip";
 import { renderCommentaryCard } from "./commentaryCards";
-import { buildSrt } from "./subtitles";
+import { buildBottomCaptionsAss } from "./subtitles";
 import { getTTSProvider } from "@/lib/tts/provider";
 import {
   candidateSubClipPath,
@@ -11,7 +11,7 @@ import {
   clipAssembledPath,
   clipVideoPath,
   clipThumbnailPath,
-  srtPath,
+  bottomCaptionsPath,
   musicSegmentPath,
   narrationAudioPath,
 } from "@/lib/storagePaths";
@@ -77,11 +77,11 @@ export async function assembleRankingVideo(params: {
     segmentPaths.push(cardPath);
 
     const subPath = candidateSubClipPath(jobId, clipId, item.position);
-    const srtContent = buildSrt(transcriptSegments, item.startSec, item.endSec);
+    const assContent = buildBottomCaptionsAss(transcriptSegments, item.startSec, item.endSec, resolution);
     let subtitlesFile: string | undefined;
-    if (srtContent) {
-      subtitlesFile = srtPath(jobId, clipId, item.position);
-      fs.writeFileSync(subtitlesFile, srtContent);
+    if (assContent) {
+      subtitlesFile = bottomCaptionsPath(jobId, clipId, item.position);
+      fs.writeFileSync(subtitlesFile, assContent);
     }
 
     // El número de puesto ya se ve en la tarjeta "#N" que precede a este segmento (arriba);

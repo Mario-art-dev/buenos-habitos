@@ -46,30 +46,34 @@ Otros criterios que ya están en el prompt de `analyze.ts` y que hay que mantene
   como visualización monetizable en TikTok/YouTube, y confiar solo en que la IA respete la duración
   pedida ya falló en la práctica.
 
-## Subtítulos (`src/lib/pipeline/subtitles.ts`, `transcribe.ts`)
+## Subtítulos (`src/lib/pipeline/bigCaptions.ts`, `subtitles.ts`, `transcribe.ts`)
 
-Hay DOS capas de subtítulo quemadas a la vez (esto cambió de opinión el usuario a mitad de
-conversación tras ver un ejemplo real — no es un despiste, es el estado actual querido):
+Hay DOS capas de subtítulo quemadas a la vez, y las dos comparten el mismo motor:
+`buildColoredCaptionsAss` en `bigCaptions.ts` (agrupa palabras en golpes, cicla colores de la
+paleta, genera el `.ass`) — cada capa solo le pasa un `style` distinto (tamaño, posición, cuántas
+palabras por golpe, si hay desenfoque/glow). Si tocas el motor, ambas capas cambian a la vez; si
+solo quieres tocar una, cambia el `style` de su wrapper, no el motor.
 
-1. **Abajo, normal** (`subtitles.ts` + `buildSrt`, filtro `subtitles=` con `.srt`): palabra por
-   palabra cuando el proveedor de transcripción da marcas de tiempo por palabra — tanto
-   `faster-whisper` local (`word_timestamps=True` en `scripts/local_whisper.py`) como la API de
-   Whisper (`timestamp_granularities: ["segment","word"]`) las dan; si un proveedor no las diera,
-   cae automáticamente a un cue por frase entera. Tamaño de letra normal, en una burbuja
-   semitransparente, `ENABLE_SUBTITLES`.
+1. **Abajo, normal** (`subtitles.ts` + `buildBottomCaptionsAss`, `ENABLE_SUBTITLES`): UNA palabra
+   por golpe (`maxWordsPerGroup: 1`), tamaño normal (fuente `Liberation Sans`), contorno negro
+   fino SIN desenfoque (`blur: 0`) — nada de "burbuja"/caja de fondo, se quitó a petición expresa
+   ("blancos y con el borde negro"). Cada palabra cicla de color con la MISMA paleta que la capa
+   grande (verde/blanco/amarillo/naranja) para que la lectura sea interactiva — pedido explícito
+   del usuario, no lo dejes en blanco fijo si tocas esto.
 2. **Algo por debajo del centro, grande y de colores** (`bigCaptions.ts` + `buildBigCaptionsAss`,
-   SEGUNDA llamada al filtro `subtitles=` pero con un `.ass`, no `.srt`): 2-4 palabras por golpe
-   (corta por pausa real al hablar, no por conteo fijo), color distinto cada vez (verde/blanco/
-   amarillo/naranja), fuente `Comic Neue` (redondeada, a petición expresa — no uses una geométrica/
-   angulosa sin que se pida), tamaño la mitad de lo que empezó siendo (ajustado a petición expresa
-   más de una vez, no lo agrandes por tu cuenta), con contorno+desenfoque tipo "brillo/neón" —
-   estilo MrBeastClips, pedido explícitamente a partir de capturas reales de referencia.
-   `ENABLE_BIG_CAPTIONS`. Usa `.ass` en vez de `.srt` porque un `.srt` plano no soporta color por
-   línea; el color/posición van con tags `{\an5\pos(x,y)\c...\3c...\bord...\blur...}` dentro del
-   propio texto de cada `Dialogue`, no con `force_style` (eso solo aplica un único estilo fijo para
-   todo el archivo) — y la posición va con `\pos()` explícito, NO con `MarginV` del Style: con
-   `Alignment=5` (centro) libass no siempre respeta `MarginV` para desplazar verticalmente, así
-   que `\pos()` es la única forma fiable de moverlo hacia abajo del centro exacto.
+   `ENABLE_BIG_CAPTIONS`): 2-4 palabras por golpe (corta por pausa real al hablar, no por conteo
+   fijo), fuente `Comic Neue` (redondeada, a petición expresa — no uses una geométrica/angulosa sin
+   que se pida), tamaño la mitad de lo que empezó siendo (ajustado a petición expresa más de una
+   vez, no lo agrandes por tu cuenta), con contorno+desenfoque tipo "brillo/neón" — estilo
+   MrBeastClips, pedido explícitamente a partir de capturas reales de referencia.
+
+Las dos van en `.ass` (no `.srt`) porque un `.srt` plano no soporta color por línea; el
+color/contorno/posición van con tags `{\an5\pos(x,y)\c...\3c...\bord...\blur...}` dentro del propio
+texto de cada `Dialogue` (ver `buildColoredCaptionsAss`), no con `force_style` (eso solo aplica un
+único estilo fijo para todo el archivo) — y la posición va con `\pos()` explícito, NO con `MarginV`
+del Style: con `Alignment=5` (centro) libass no siempre respeta `MarginV` para desplazar
+verticalmente, así que `\pos()` es la única forma fiable de posicionar con precisión en cualquiera
+de las dos capas.
 
 **Tarjeta de título en modo Ranking**: `rankingRender.ts` (`assembleRankingVideo`) SOLO añade la
 tarjeta de título general (fondo negro, texto centrado vía `renderTitleCard`) cuando
