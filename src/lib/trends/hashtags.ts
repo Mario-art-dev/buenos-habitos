@@ -43,22 +43,30 @@ export async function suggestHashtags(params: {
 
   const provider = getAIProvider();
   const raw = await provider.chatJson({
-    system: `Eres un experto en crecimiento orgánico y SEO de ${platform === "TIKTOK" ? "TikTok" : "YouTube Shorts"}.
-Respondes solo con JSON válido.`,
+    system: `Eres un experto en crecimiento orgánico y SEO de ${platform === "TIKTOK" ? "TikTok" : "YouTube Shorts"},
+especializado en canales de comedia y entretenimiento — sabes exactamente qué hashtags sigue y busca ESE
+público concreto (no un público genérico) para descubrir contenido nuevo. Respondes solo con JSON válido.`,
     prompt: `Canal: "${config.channel.name}" — nicho: ${config.channel.niche}.
 Plataforma: ${platform}.
+Público objetivo: la audiencia de comedia/entretenimiento de la plataforma (la que sigue cuentas de humor,
+momentos virales, fails, reacciones) — los hashtags deben hablarle a ESE público concreto, no a cualquiera.
 Título del short: "${title}"
 Descripción: "${description}"
 ${existing.length ? `Hashtags ya sugeridos previamente: ${existing.join(", ")}` : ""}
 ${external.length ? `Hashtags detectados como populares ahora mismo por una fuente externa: ${external.join(", ")}` : ""}
 
-Devuelve el mejor set de 8 a 12 hashtags para maximizar alcance AHORA, combinando:
-- hashtags amplios y muy usados en la plataforma para el tipo de contenido (alto volumen),
-- hashtags de nicho específicos del clip (competencia media, más conversión),
-- 1-2 hashtags de marca/canal.
-Los hashtags deben estar en ${contentLanguageName()} salvo los que ya sean universales en cualquier idioma
-(nombres propios, "fyi", "viral", etc.). No repitas, no uses el símbolo #, en minúsculas, sin espacios dentro
-de cada hashtag.
+Elige el set de 8 a 12 hashtags con más probabilidad real de hacer viral ESTE clip concreto — nada de
+hashtags random ni genéricos que le sirvan a cualquier vídeo. Piensa como un estratega, no rellenes:
+1. 2-3 hashtags de ALTO volumen que seguidores de comedia/entretenimiento usan para descubrir contenido
+   nuevo en ${platform === "TIKTOK" ? "TikTok" : "YouTube Shorts"} (ej. equivalentes locales de "funny",
+   "comedy", "entertainment", "fyp"/"viral" según la plataforma) — para entrar en el radar de ESE público.
+2. 4-6 hashtags de NICHO, específicos de lo que pasa en ESTE clip en concreto (el tema, la situación, la
+   emoción que provoca, el tipo de momento) — para que a quien le guste justo esto, se lo encuentre.
+3. 1-2 hashtags de marca/canal.
+Cada hashtag debe justificar su hueco: si no ayuda a que ESTE clip llegue al público de comedia/
+entretenimiento, no va. Los hashtags deben estar en ${contentLanguageName()} salvo los que ya sean
+universales en cualquier idioma (nombres propios, "fyp", "viral", etc.). No repitas, no uses el símbolo #,
+en minúsculas, sin espacios dentro de cada hashtag.
 
 Formato de respuesta JSON exacto:
 {"hashtags": ["tag1", "tag2", ...]}`,

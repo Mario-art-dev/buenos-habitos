@@ -87,6 +87,7 @@ export async function assembleRankingVideo(params: {
       endSec: item.endSec,
       resolution,
       subtitlesPath: subtitlesFile,
+      dynamicZoom: config.dynamicZoom.enabled,
     });
     segmentPaths.push(subPath);
   }

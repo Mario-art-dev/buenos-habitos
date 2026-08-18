@@ -92,8 +92,9 @@ jobs:
           TTS_PROVIDER: "local"
           ENABLE_COMMENTARY: "false"
           ENABLE_SUBTITLES: "true"
+          ENABLE_DYNAMIC_ZOOM: "true"
           CHANNEL_NAME: "Escenas Virales"
-          CHANNEL_NICHE: "Recopilación de las mejores escenas virales de creadores de contenido"
+          CHANNEL_NICHE: "Recopilación de los momentos más divertidos, graciosos y de entretenimiento de creadores de contenido — humor, giros inesperados y reacciones, pensado para el público de comedia/entretenimiento de shorts"
           # Sin fijar CHANNEL_LANGUAGE aquí: se usa el valor por defecto de la app (inglés,
           # más ingresos publicitarios). Antes esto estaba fijado a "es" y anulaba en silencio
           # ese valor por defecto en todo momento.

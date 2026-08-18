@@ -37,25 +37,44 @@ export function wrapText(text: string, maxCharsPerLine: number): string {
 
 export function buildVerticalFilter(
   res: VerticalResolution,
-  opts: { subtitlesPath?: string } = {}
+  opts: { subtitlesPath?: string; dynamicZoomPhase?: number } = {}
 ): string {
   const { width, height } = res;
   let filter =
     `[0:v]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},gblur=sigma=20[bg];` +
     `[0:v]scale=${width}:${height}:force_original_aspect_ratio=decrease[fg];` +
-    `[bg][fg]overlay=(W-w)/2:(H-h)/2:format=auto,format=yuv420p[base]`;
+    `[bg][fg]overlay=(W-w)/2:(H-h)/2:format=auto,format=yuv420p[wide]`;
+
+  let lastLabel = "wide";
+
+  if (opts.dynamicZoomPhase !== undefined) {
+    // "Punch-in" periódico: unos segundos de cada ciclo se recorta en el centro con más zoom,
+    // ocupando el vertical entero (sin las barras de fondo desenfocado) — corte de cámara
+    // habitual en edición de shorts virales para que el plano no se sienta estático 60-180s
+    // seguidos. El desfase varía por clip (según su startSec) para que no todos los clips del
+    // mismo vídeo "salten" exactamente a la vez.
+    const period = 9;
+    const punchDurationSec = 2.2;
+    const zoomFactor = 1.35;
+    const zoomW = Math.round(width * zoomFactor);
+    const zoomH = Math.round(height * zoomFactor);
+    const phase = Math.round(opts.dynamicZoomPhase) % period;
+    filter += `;[0:v]scale=${zoomW}:${zoomH}:force_original_aspect_ratio=increase,crop=${width}:${height}[zoom]`;
+    filter += `;[wide][zoom]overlay=0:0:enable='lt(mod(t+${phase},${period}),${punchDurationSec})':format=auto,format=yuv420p[base]`;
+    lastLabel = "base";
+  }
 
   if (opts.subtitlesPath) {
     // Estilo de subtítulo normal (como los de cualquier vídeo con subtítulos), no el típico
     // "caption" gigante de TikTok: letra moderada, contorno fino, pegado abajo sin taparse
     // con la interfaz de la plataforma (like/comentarios/descripción).
-    filter += `;[base]subtitles=${escapeSubtitlesPath(opts.subtitlesPath)}:force_style='FontName=Arial,FontSize=${Math.round(
+    filter += `;[${lastLabel}]subtitles=${escapeSubtitlesPath(opts.subtitlesPath)}:force_style='FontName=Arial,FontSize=${Math.round(
       height / 38
     )},PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Alignment=2,MarginV=${Math.round(
       height * 0.12
     )}'[v]`;
   } else {
-    filter += `;[base]null[v]`;
+    filter += `;[${lastLabel}]null[v]`;
   }
 
   return filter;
@@ -69,17 +88,21 @@ export interface CutClipOptions {
   resolution?: VerticalResolution;
   subtitlesPath?: string;
   muted?: boolean;
+  dynamicZoom?: boolean;
 }
 
 /**
  * Corta el segmento y lo recompone a formato vertical estilo short:
  * fondo desenfocado ampliado + vídeo original centrado sin recortar el encuadre.
- * Opcionalmente quema subtítulos.
+ * Opcionalmente quema subtítulos y/o mete "punch-ins" de zoom periódicos (dynamicZoom).
  */
 export async function cutVerticalClip(opts: CutClipOptions): Promise<void> {
   const { sourcePath, outPath, startSec, endSec, resolution = DEFAULT_RES, muted } = opts;
   const duration = Math.max(0.5, endSec - startSec);
-  const filter = buildVerticalFilter(resolution, { subtitlesPath: opts.subtitlesPath });
+  const filter = buildVerticalFilter(resolution, {
+    subtitlesPath: opts.subtitlesPath,
+    dynamicZoomPhase: opts.dynamicZoom ? startSec : undefined,
+  });
 
   const args = [
     "-y",

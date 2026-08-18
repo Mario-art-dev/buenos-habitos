@@ -60,6 +60,15 @@ Y dos modos pensados para monetización con publicidad de terceros:
 `ENABLE_SUBTITLES="true"` (activado por defecto): cada short quema sobre el vídeo los subtítulos
 de su propia transcripción — ayuda mucho a la retención (se entiende sin sonido, que es como se
 ve la mayoría de los shorts) y refuerza el gancho inicial. Desactívalo con `ENABLE_SUBTITLES="false"`.
+El tamaño es el de un subtítulo normal (no el "caption" gigante típico de TikTok), pegado abajo.
+
+### Zoom dinámico ("punch-in")
+
+`ENABLE_DYNAMIC_ZOOM="true"` (activado por defecto): de vez en cuando (unos ~2 segundos cada
+9 segundos, con un desfase distinto por clip para que no todos "salten" a la vez) el short recorta
+el plano con más zoom, ocupando el vertical entero sin las barras de fondo desenfocado — un corte
+de cámara habitual en edición viral para que el vídeo no se sienta estático durante 60-180s
+seguidos. Desactívalo con `ENABLE_DYNAMIC_ZOOM="false"` si prefieres el encuadre fijo.
 
 ### Comentario/reacción narrado con IA
 

@@ -152,6 +152,7 @@ async function processSingleJob(jobId: string): Promise<void> {
             endSec: clip.endSec,
             resolution,
             subtitlesPath,
+            dynamicZoom: config.dynamicZoom.enabled,
           });
 
           const excerpt = transcriptExcerptFor(transcript.segments, clip.startSec, clip.endSec);
@@ -189,6 +190,7 @@ async function processSingleJob(jobId: string): Promise<void> {
             endSec: clip.endSec,
             resolution,
             subtitlesPath,
+            dynamicZoom: config.dynamicZoom.enabled,
           });
         }
 

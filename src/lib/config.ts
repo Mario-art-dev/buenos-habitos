@@ -107,6 +107,14 @@ export const config = {
     enabled: optional("ENABLE_SUBTITLES", "true") === "true",
   },
 
+  dynamicZoom: {
+    // De vez en cuando (unos segundos cada ~9s, variando por clip) recorta el plano a más zoom
+    // ocupando el vertical entero, en vez de quedarse fijo con las barras de fondo desenfocado
+    // todo el short — corte de cámara habitual en edición viral para que el plano no se sienta
+    // estático 60-180s seguidos.
+    enabled: optional("ENABLE_DYNAMIC_ZOOM", "true") === "true",
+  },
+
   tts: {
     // "local" = Piper (gratis, corre en el propio servidor) | "openai" = API de voz de OpenAI (de pago)
     provider: (optional("TTS_PROVIDER", "local") as "local" | "openai"),
@@ -162,7 +170,7 @@ export const config = {
     name: optional("CHANNEL_NAME", "Escenas Virales"),
     niche: optional(
       "CHANNEL_NICHE",
-      "Recopilación de las mejores escenas virales de creadores de contenido"
+      "Recopilación de los momentos más divertidos, graciosos y de entretenimiento de creadores de contenido — humor, giros inesperados y reacciones, pensado para el público de comedia/entretenimiento de shorts"
     ),
     language: channelLanguage,
   },
