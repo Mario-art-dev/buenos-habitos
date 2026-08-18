@@ -37,7 +37,7 @@ export function wrapText(text: string, maxCharsPerLine: number): string {
 
 export function buildVerticalFilter(
   res: VerticalResolution,
-  opts: { subtitlesPath?: string; dynamicZoomPhase?: number } = {}
+  opts: { subtitlesPath?: string; bigCaptionsPath?: string; dynamicZoomPhase?: number } = {}
 ): string {
   const { width, height } = res;
   let filter =
@@ -65,18 +65,29 @@ export function buildVerticalFilter(
   }
 
   if (opts.subtitlesPath) {
-    // Estilo de subtítulo normal (como los de cualquier vídeo con subtítulos), no el típico
-    // "caption" gigante de TikTok: letra moderada, contorno fino, pegado abajo sin taparse
-    // con la interfaz de la plataforma (like/comentarios/descripción).
+    // Subtítulo normal pegado abajo, en una "burbuja" semitransparente (BorderStyle=3 + fondo)
+    // en vez de un simple contorno — como el subtítulo pequeño de abajo del ejemplo de
+    // referencia. libass no hace esquinas redondeadas de verdad, esto es la aproximación
+    // rectangular más cercana sin escribir un renderizador de subtítulos propio.
     filter += `;[${lastLabel}]subtitles=${escapeSubtitlesPath(opts.subtitlesPath)}:force_style='FontName=Arial,FontSize=${Math.round(
       height / 38
-    )},PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=2,Alignment=2,MarginV=${Math.round(
+    )},PrimaryColour=&H00FFFFFF,BackColour=&H80000000,BorderStyle=3,Outline=6,Shadow=0,Alignment=2,MarginV=${Math.round(
       height * 0.12
-    )}'[v]`;
-  } else {
-    filter += `;[${lastLabel}]null[v]`;
+    )}'[subbed]`;
+    lastLabel = "subbed";
   }
 
+  if (opts.bigCaptionsPath) {
+    // Segunda capa de subtítulos, aparte de la de abajo: el "caption" grande y de colores en el
+    // centro de la pantalla que pidió el usuario (estilo MrBeastClips). Va en un .ass (no .srt)
+    // porque necesita color distinto por golpe de texto, algo que un .srt plano no soporta — el
+    // color/contorno/desenfoque de cada línea ya viene definido dentro del propio archivo
+    // (bigCaptions.ts), así que aquí no hace falta force_style.
+    filter += `;[${lastLabel}]subtitles=${escapeSubtitlesPath(opts.bigCaptionsPath)}[bigcap]`;
+    lastLabel = "bigcap";
+  }
+
+  filter += `;[${lastLabel}]null[v]`;
   return filter;
 }
 
@@ -87,6 +98,7 @@ export interface CutClipOptions {
   endSec: number;
   resolution?: VerticalResolution;
   subtitlesPath?: string;
+  bigCaptionsPath?: string;
   muted?: boolean;
   dynamicZoom?: boolean;
 }
@@ -94,13 +106,15 @@ export interface CutClipOptions {
 /**
  * Corta el segmento y lo recompone a formato vertical estilo short:
  * fondo desenfocado ampliado + vídeo original centrado sin recortar el encuadre.
- * Opcionalmente quema subtítulos y/o mete "punch-ins" de zoom periódicos (dynamicZoom).
+ * Opcionalmente quema subtítulos, la capa de "caption" grande, y/o mete "punch-ins" de zoom
+ * periódicos (dynamicZoom).
  */
 export async function cutVerticalClip(opts: CutClipOptions): Promise<void> {
   const { sourcePath, outPath, startSec, endSec, resolution = DEFAULT_RES, muted } = opts;
   const duration = Math.max(0.5, endSec - startSec);
   const filter = buildVerticalFilter(resolution, {
     subtitlesPath: opts.subtitlesPath,
+    bigCaptionsPath: opts.bigCaptionsPath,
     dynamicZoomPhase: opts.dynamicZoom ? startSec : undefined,
   });
 
@@ -119,18 +133,22 @@ export async function cutVerticalClip(opts: CutClipOptions): Promise<void> {
   ];
 
   if (!muted) {
-    args.push("-map", "0:a?", "-c:a", "aac", "-b:a", "128k");
+    args.push("-map", "0:a?", "-c:a", "aac", "-b:a", "192k");
   } else {
     args.push("-an");
   }
 
+  // "fast" (antes "veryfast") + CRF 18 (antes 20): más calidad de imagen a cambio de algo más de
+  // tiempo de renderizado por clip — pedido explícitamente ("la mejor calidad posible"). No se
+  // sube más el preset (p.ej. "medium"/"slow") porque el coste en tiempo de CPU por clip crece
+  // deprisa y el runner de GitHub Actions es compartido con el resto del trabajo del vídeo.
   args.push(
     "-c:v",
     "libx264",
     "-preset",
-    "veryfast",
+    "fast",
     "-crf",
-    "20",
+    "18",
     "-pix_fmt",
     "yuv420p",
     "-movflags",

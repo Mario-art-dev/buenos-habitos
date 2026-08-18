@@ -48,17 +48,30 @@ Otros criterios que ya están en el prompt de `analyze.ts` y que hay que mantene
 
 ## Subtítulos (`src/lib/pipeline/subtitles.ts`, `transcribe.ts`)
 
-- Se queman sobre el vídeo **palabra por palabra** cuando el proveedor de transcripción da marcas
-  de tiempo por palabra — tanto `faster-whisper` local (`word_timestamps=True` en
-  `scripts/local_whisper.py`) como la API de Whisper (`timestamp_granularities: ["segment","word"]`)
-  las dan. Si un proveedor no las diera, `buildSrt` cae automáticamente a un cue por frase entera;
-  mantén ese fallback si tocas esta lógica, no asumas que las marcas de palabra siempre existen.
-- Tamaño de letra **normal** (no el "caption" gigante estilo TikTok) y pegados abajo, con margen
-  suficiente para no taparse con la interfaz de la plataforma (like/comentarios/descripción). Esto
-  se ajustó explícitamente a petición del usuario tras probarlo — no lo agrandes sin que te lo pidan.
-- Nunca dibujes texto grande encima del vídeo salvo estos subtítulos abajo. Hubo un overlay de
-  texto grande arriba (el número de puesto en modo Ranking) que se quitó a petición expresa del
-  usuario porque "no pegaba ni atraía" — no lo reintroduzcas ni añadas otro similar sin que se pida.
+Hay DOS capas de subtítulo quemadas a la vez (esto cambió de opinión el usuario a mitad de
+conversación tras ver un ejemplo real — no es un despiste, es el estado actual querido):
+
+1. **Abajo, normal** (`subtitles.ts` + `buildSrt`, filtro `subtitles=` con `.srt`): palabra por
+   palabra cuando el proveedor de transcripción da marcas de tiempo por palabra — tanto
+   `faster-whisper` local (`word_timestamps=True` en `scripts/local_whisper.py`) como la API de
+   Whisper (`timestamp_granularities: ["segment","word"]`) las dan; si un proveedor no las diera,
+   cae automáticamente a un cue por frase entera. Tamaño de letra normal, en una burbuja
+   semitransparente, `ENABLE_SUBTITLES`.
+2. **Centro, grande y de colores** (`bigCaptions.ts` + `buildBigCaptionsAss`, SEGUNDA llamada al
+   filtro `subtitles=` pero con un `.ass`, no `.srt`): 2-3 palabras por golpe, color distinto cada
+   vez (verde/blanco/amarillo/naranja) con contorno+desenfoque tipo "brillo/neón" — estilo
+   MrBeastClips, pedido explícitamente a partir de capturas reales de referencia.
+   `ENABLE_BIG_CAPTIONS`. Usa `.ass` en vez de `.srt` porque un `.srt` plano no soporta color por
+   línea; si tocas esto, cualquier estilo nuevo por línea va con tags `{\c...\3c...\bord...\blur...}`
+   dentro del propio texto del `.ass`, no con `force_style` (eso solo aplica un único estilo fijo
+   para todo el archivo).
+
+**Ojo con la contradicción histórica**: antes de esto, el usuario pidió explícitamente quitar TODO
+texto grande sobre el vídeo (incluido un overlay del número de puesto en modo Ranking, que sigue
+sin existir — eso no ha vuelto). El texto grande que SÍ existe ahora es únicamente esta segunda
+capa de captions, pedida después con un ejemplo concreto. Si en el futuro el usuario vuelve a decir
+"quita las letras grandes" sin más contexto, pregunta primero a cuál de las dos veces se refiere en
+vez de asumir — ya ha cambiado de opinión una vez sobre esto mismo.
 
 ## Zoom dinámico / ritmo de cámara (`src/lib/pipeline/clip.ts`)
 
@@ -71,6 +84,14 @@ desfase distinto por clip (derivado de su `startSec`) para que no todos los clip
 Detalle técnico importante si tocas esto: el recorte de zoom siempre es centrado (no hay detección
 de cara/sujeto), así que funciona bien cuando la acción está más o menos centrada pero puede
 recortar mal si el sujeto está muy a un lado — es una limitación conocida y aceptada, no un bug.
+Pendiente propuesto (no implementado, coméntalo antes de meterlo): usar detección de cortes de
+plano reales del vídeo fuente (p.ej. el filtro `scdet` de ffmpeg, sin coste de IA) para alinear los
+"punch-ins" con cambios de plano reales en vez de un ciclo fijo de 9s — el usuario pidió algo en
+esa línea ("planos que cambian") y esto es la forma barata de acercarse sin gastar cupo de IA.
+
+Codificación: `-preset fast -crf 18` (subido desde `veryfast`/`crf 20`) a petición expresa de "la
+mejor calidad posible" — no lo subas más (p.ej. `medium`/`slow`) sin comprobar antes cuánto alarga
+el tiempo de render por clip, el runner de GitHub Actions es compartido con el resto del trabajo.
 
 **No hay ffmpeg disponible en el entorno de desarrollo** para probar filtros nuevos en vivo — solo
 se despliega y se comprueba en el servidor real de GitHub Actions. Antes de escribir un filtro

@@ -115,6 +115,14 @@ export const config = {
     enabled: optional("ENABLE_DYNAMIC_ZOOM", "true") === "true",
   },
 
+  bigCaptions: {
+    // Segunda capa de subtítulos, aparte de la de abajo: un "caption" grande, de colores, con
+    // brillo, en el centro de la pantalla, resaltando 2-3 palabras por golpe — estilo pedido
+    // explícitamente por el usuario a partir de un ejemplo real (MrBeastClips). Se queman los dos
+    // subtítulos a la vez (el pequeño de abajo y este grande del centro).
+    enabled: optional("ENABLE_BIG_CAPTIONS", "true") === "true",
+  },
+
   hookFrameCheck: {
     // Comprueba con IA (un único fotograma, una única llamada por clip) si al principio del
     // short se ve a una persona en pantalla — el gancho engancha mucho más con una cara desde el

@@ -9,6 +9,7 @@ import {
   narrationAudioPath,
   candidateCardPath,
   srtPath,
+  bigCaptionsPath,
   hookFramePath,
   tmpDir,
 } from "@/lib/storagePaths";
@@ -17,6 +18,7 @@ import { extractAudio, transcribeAudio, type TranscriptSegment } from "./transcr
 import { analyzeTranscriptForClips } from "./analyze";
 import { cutVerticalClip, concatClips, extractThumbnail } from "./clip";
 import { buildSrt } from "./subtitles";
+import { buildBigCaptionsAss } from "./bigCaptions";
 import { pickHookStartSec } from "./hookFrame";
 import { probeVideo, pickVerticalResolution } from "./probe";
 import { processRankingJob } from "./rankingPipeline";
@@ -127,6 +129,7 @@ async function processSingleJob(jobId: string): Promise<void> {
       const introCardPath = candidateCardPath(jobId, clip.id, "intro");
       const outroCardPath = candidateCardPath(jobId, clip.id, "outro");
       const subtitlesFilePath = srtPath(jobId, clip.id, 0);
+      const bigCaptionsFilePath = bigCaptionsPath(jobId, clip.id);
       try {
         await db.clip.update({ where: { id: clip.id }, data: { status: "RENDERING" } });
         const outPath = clipVideoPath(jobId, clip.id);
@@ -151,6 +154,15 @@ async function processSingleJob(jobId: string): Promise<void> {
           }
         }
 
+        let bigCaptionsFile: string | undefined;
+        if (config.bigCaptions.enabled) {
+          const ass = buildBigCaptionsAss(transcript.segments, hookStartSec, clip.endSec, resolution);
+          if (ass) {
+            fs.writeFileSync(bigCaptionsFilePath, ass, "utf-8");
+            bigCaptionsFile = bigCaptionsFilePath;
+          }
+        }
+
         let commentaryIntro: string | null = null;
         let commentaryOutro: string | null = null;
 
@@ -164,6 +176,7 @@ async function processSingleJob(jobId: string): Promise<void> {
             endSec: clip.endSec,
             resolution,
             subtitlesPath,
+            bigCaptionsPath: bigCaptionsFile,
             dynamicZoom: config.dynamicZoom.enabled,
           });
 
@@ -202,6 +215,7 @@ async function processSingleJob(jobId: string): Promise<void> {
             endSec: clip.endSec,
             resolution,
             subtitlesPath,
+            bigCaptionsPath: bigCaptionsFile,
             dynamicZoom: config.dynamicZoom.enabled,
           });
         }
@@ -226,7 +240,7 @@ async function processSingleJob(jobId: string): Promise<void> {
         // Los archivos intermedios (corte sin envolver, narración, tarjetas, subtítulos) ya no
         // hacen falta una vez terminado este clip (listo o fallido): si no se borran aquí, se
         // van acumulando durante todo el trabajo y pueden agotar el disco antes de terminar.
-        for (const tmp of [bodyPath, introNarrationPath, outroNarrationPath, introCardPath, outroCardPath, subtitlesFilePath]) {
+        for (const tmp of [bodyPath, introNarrationPath, outroNarrationPath, introCardPath, outroCardPath, subtitlesFilePath, bigCaptionsFilePath]) {
           try {
             fs.rmSync(tmp, { force: true });
           } catch {

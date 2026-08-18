@@ -100,6 +100,11 @@ export function srtPath(jobId: string, clipId: string, position: number): string
   return path.join(tmpDir(jobId), `${clipId}_item_${position}.srt`);
 }
 
+/** Archivo .ass de la capa de "caption" grande y de colores del centro de la pantalla. */
+export function bigCaptionsPath(jobId: string, clipId: string, position = 0): string {
+  return path.join(tmpDir(jobId), `${clipId}_bigcap_${position}.ass`);
+}
+
 /** Fotograma temporal para comprobar si el gancho inicial del clip muestra a una persona. */
 export function hookFramePath(jobId: string, clipId: string): string {
   return path.join(tmpDir(jobId), `${clipId}_hook.jpg`);

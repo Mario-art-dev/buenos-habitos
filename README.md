@@ -63,7 +63,17 @@ ve la mayoría de los shorts) y refuerza el gancho inicial. Desactívalo con `EN
 El tamaño es el de un subtítulo normal (no el "caption" gigante típico de TikTok), pegado abajo.
 Van palabra por palabra (no por frase entera) cuando el motor de transcripción da marcas de tiempo
 por palabra — tanto `faster-whisper` local como la API de Whisper las dan; si algún proveedor no las
-diera, cae automáticamente a subtítulos por frase.
+diera, cae automáticamente a subtítulos por frase. Van en una "burbuja" semitransparente (esquinas
+rectas, no redondeadas — es la aproximación más cercana sin escribir un renderizador propio).
+
+### Caption grande y de colores en el centro
+
+`ENABLE_BIG_CAPTIONS="true"` (activado por defecto): una SEGUNDA capa de subtítulo, aparte del de
+abajo, con 2-3 palabras por golpe en el centro de la pantalla, cambiando de color (verde/blanco/
+amarillo/naranja) y con un contorno + desenfoque que da un efecto de brillo — el estilo de canales
+tipo MrBeastClips. Se queman los dos subtítulos a la vez. Necesita marcas de tiempo por palabra
+(si el proveedor no las diera, esta capa simplemente no aparece, igual que la de abajo). Desactívalo
+con `ENABLE_BIG_CAPTIONS="false"` si prefieres solo el subtítulo de abajo.
 
 ### Zoom dinámico ("punch-in")
 
