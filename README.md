@@ -69,11 +69,14 @@ rectas, no redondeadas — es la aproximación más cercana sin escribir un rend
 ### Caption grande y de colores en el centro
 
 `ENABLE_BIG_CAPTIONS="true"` (activado por defecto): una SEGUNDA capa de subtítulo, aparte del de
-abajo, con 2-3 palabras por golpe en el centro de la pantalla, cambiando de color (verde/blanco/
-amarillo/naranja) y con un contorno + desenfoque que da un efecto de brillo — el estilo de canales
-tipo MrBeastClips. Se queman los dos subtítulos a la vez. Necesita marcas de tiempo por palabra
-(si el proveedor no las diera, esta capa simplemente no aparece, igual que la de abajo). Desactívalo
-con `ENABLE_BIG_CAPTIONS="false"` si prefieres solo el subtítulo de abajo.
+abajo, con 2-4 palabras por golpe en el centro de la pantalla (el corte de cada golpe sigue las
+pausas reales al hablar, no un conteo fijo, para que el ritmo se sienta natural), cambiando de
+color (verde/blanco/amarillo/naranja) y con un contorno + desenfoque que da un efecto de brillo —
+el estilo de canales tipo MrBeastClips. Se queman los dos subtítulos a la vez, con TODAS las
+palabras que se dicen en el tramo (ninguna se salta). Necesita marcas de tiempo por palabra (si el
+proveedor no las diera, esta capa simplemente no aparece, igual que la de abajo). Ambas capas usan
+la tipografía en negrita de `fonts-liberation` (instalada junto a ffmpeg), equivalente libre de
+Arial. Desactívalo con `ENABLE_BIG_CAPTIONS="false"` si prefieres solo el subtítulo de abajo.
 
 ### Zoom dinámico ("punch-in")
 

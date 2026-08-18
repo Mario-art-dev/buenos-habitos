@@ -37,7 +37,7 @@ jobs:
       - name: Instalar ffmpeg, yt-dlp y dependencias de Python
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg python3 python3-pip fonts-dejavu-core
+          sudo apt-get install -y ffmpeg python3 python3-pip fonts-dejavu-core fonts-liberation
           pip3 install --no-cache-dir --break-system-packages yt-dlp faster-whisper piper-tts librosa bgutil-ytdlp-pot-provider yt-dlp-invidious
 
       - name: Instalar dependencias de Node

@@ -1,6 +1,7 @@
 import type { TranscriptSegment } from "./transcribe";
 
-const WORDS_PER_GROUP = 3;
+const MAX_WORDS_PER_GROUP = 4;
+const PAUSE_BREAK_SEC = 0.35; // una pausa natural al hablar corta el golpe, no solo el conteo de palabras
 const MIN_CUE_SEC = 0.35;
 
 // Paleta inspirada en el ejemplo real que pidió el usuario (MrBeastClips): verde neón, blanco,
@@ -34,15 +35,30 @@ interface Cue {
   text: string;
 }
 
+/**
+ * Agrupa en golpes de 2-4 palabras, cortando por pausa natural al hablar (no solo por conteo
+ * fijo) para que el ritmo siga la cadencia real de la voz en vez de sentirse mecánico.
+ */
 function groupIntoPhrases(words: { start: number; end: number; text: string }[]): Cue[] {
   const cues: Cue[] = [];
-  for (let i = 0; i < words.length; i += WORDS_PER_GROUP) {
-    const group = words.slice(i, i + WORDS_PER_GROUP);
+  let group: typeof words = [];
+
+  const flush = () => {
+    if (group.length === 0) return;
     const start = group[0].start;
     const end = Math.max(group[group.length - 1].end, start + MIN_CUE_SEC);
-    const text = group.map((w) => w.text).join(" ");
-    cues.push({ start, end, text });
+    cues.push({ start, end, text: group.map((w) => w.text).join(" ") });
+    group = [];
+  };
+
+  for (const word of words) {
+    const prev = group[group.length - 1];
+    if (prev && word.start - prev.end > PAUSE_BREAK_SEC) flush();
+    group.push(word);
+    if (group.length >= MAX_WORDS_PER_GROUP) flush();
   }
+  flush();
+
   return cues;
 }
 
