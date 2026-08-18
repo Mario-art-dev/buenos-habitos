@@ -8,7 +8,6 @@ import {
   clipBodyPath,
   narrationAudioPath,
   candidateCardPath,
-  bottomCaptionsPath,
   bigCaptionsPath,
   hookFramePath,
   clipCommentedPath,
@@ -19,9 +18,8 @@ import { resolveSourceVideo } from "./download";
 import { extractAudio, transcribeAudio, type TranscriptSegment } from "./transcribe";
 import { analyzeTranscriptForClips } from "./analyze";
 import { cutVerticalClip, concatClips, extractThumbnail } from "./clip";
-import { buildBottomCaptionsAss } from "./subtitles";
 import { buildBigCaptionsAss } from "./bigCaptions";
-import { pickHookStartSec } from "./hookFrame";
+import { pickHookStartSec, hookVerifiedFrameSec } from "./hookFrame";
 import { probeVideo, pickVerticalResolution } from "./probe";
 import { processRankingJob } from "./rankingPipeline";
 import { processProductJob } from "./productPipeline";
@@ -131,7 +129,6 @@ async function processSingleJob(jobId: string): Promise<void> {
       const outroNarrationPath = narrationAudioPath(jobId, clip.id, "outro");
       const introCardPath = candidateCardPath(jobId, clip.id, "intro");
       const outroCardPath = candidateCardPath(jobId, clip.id, "outro");
-      const subtitlesFilePath = bottomCaptionsPath(jobId, clip.id);
       const bigCaptionsFilePath = bigCaptionsPath(jobId, clip.id);
       const commentedPath = clipCommentedPath(jobId, clip.id);
       const coverPath = coverCardPath(jobId, clip.id);
@@ -149,15 +146,6 @@ async function processSingleJob(jobId: string): Promise<void> {
           endSec: clip.endSec,
           framePath: hookFramePath(jobId, clip.id),
         });
-
-        let subtitlesPath: string | undefined;
-        if (config.subtitles.enabled) {
-          const ass = buildBottomCaptionsAss(transcript.segments, hookStartSec, clip.endSec, resolution);
-          if (ass) {
-            fs.writeFileSync(subtitlesFilePath, ass, "utf-8");
-            subtitlesPath = subtitlesFilePath;
-          }
-        }
 
         let bigCaptionsFile: string | undefined;
         if (config.bigCaptions.enabled) {
@@ -179,7 +167,6 @@ async function processSingleJob(jobId: string): Promise<void> {
           startSec: hookStartSec,
           endSec: clip.endSec,
           resolution,
-          subtitlesPath,
           bigCaptionsPath: bigCaptionsFile,
           dynamicZoom: config.dynamicZoom.enabled,
         });
@@ -219,9 +206,13 @@ async function processSingleJob(jobId: string): Promise<void> {
         // Y al final, la misma en los dos sitios — pedido explícito: "la pantalla en pausa con
         // la portada mientras suena el sonido, y directo al vídeo después".
         if (config.coverCard.enabled) {
+          // La portada reutiliza el trabajo del gancho, pero tiene que extraer el fotograma del
+          // instante que la IA REALMENTE verificó (hookStartSec + el margen de hookFrame.ts), no
+          // hookStartSec a secas — ese punto exacto puede caer justo en un corte (negro/borroso),
+          // que es justo lo que esa comprobación evita para el gancho.
           await renderCoverCard({
             sourcePath: srcPath,
-            frameAtSec: hookStartSec,
+            frameAtSec: hookVerifiedFrameSec(hookStartSec, clip.endSec),
             title: clip.title,
             outPath: coverPath,
             resolution,
@@ -259,7 +250,6 @@ async function processSingleJob(jobId: string): Promise<void> {
           outroNarrationPath,
           introCardPath,
           outroCardPath,
-          subtitlesFilePath,
           bigCaptionsFilePath,
         ]) {
           try {

@@ -101,12 +101,6 @@ export const config = {
     enabled: optional("ENABLE_COMMENTARY", "false") === "true",
   },
 
-  subtitles: {
-    // Quema subtítulos (de la propia transcripción) sobre el vídeo del short. Activado por
-    // defecto: ayuda mucho a la retención (se puede ver sin sonido) y refuerza el gancho inicial.
-    enabled: optional("ENABLE_SUBTITLES", "true") === "true",
-  },
-
   dynamicZoom: {
     // De vez en cuando (unos segundos cada ~9s, variando por clip) recorta el plano a más zoom
     // ocupando el vertical entero, en vez de quedarse fijo con las barras de fondo desenfocado
@@ -116,10 +110,11 @@ export const config = {
   },
 
   bigCaptions: {
-    // Segunda capa de subtítulos, aparte de la de abajo: un "caption" grande, de colores, con
-    // brillo, en el centro de la pantalla, resaltando 2-3 palabras por golpe — estilo pedido
-    // explícitamente por el usuario a partir de un ejemplo real (MrBeastClips). Se queman los dos
-    // subtítulos a la vez (el pequeño de abajo y este grande del centro).
+    // Único subtítulo quemado sobre el vídeo: un "caption" grande en el centro, blanco, que
+    // resalta en verde y un poco más grande la palabra exacta que se está diciendo — estilo
+    // pedido explícitamente por el usuario a partir de ejemplos reales (MrBeastClips). Antes
+    // había una segunda capa pequeña abajo; se quitó a petición expresa ("hay dos subtítulos,
+    // quiero que elimines el de abajo").
     enabled: optional("ENABLE_BIG_CAPTIONS", "true") === "true",
   },
 

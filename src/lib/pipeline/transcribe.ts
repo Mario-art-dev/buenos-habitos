@@ -82,8 +82,8 @@ async function transcribeChunk(client: OpenAI, filePath: string): Promise<Transc
     file: fs.createReadStream(filePath),
     model: config.whisper.model,
     response_format: "verbose_json",
-    // "word" además de "segment": necesario para poder quemar subtítulos palabra a palabra
-    // (ver src/lib/pipeline/subtitles.ts) en vez de bloques de frase entera.
+    // "word" además de "segment": necesario para poder resaltar palabra a palabra el caption
+    // grande (ver src/lib/pipeline/bigCaptions.ts) en vez de bloques de frase entera.
     timestamp_granularities: ["segment", "word"],
   });
 

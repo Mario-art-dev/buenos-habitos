@@ -1,6 +1,6 @@
 ---
 name: viral-shorts-editor
-description: Editorial and technical standards for Escenas Virales Studio's short-form video pipeline in this repo — clip selection, burned subtitles, dynamic zoom/camera pacing, brand sting/cover card, and hashtag strategy. Use this skill whenever working on src/lib/pipeline/analyze.ts, clip.ts, subtitles.ts, bigCaptions.ts, coverCard.ts, transcribe.ts, or src/lib/trends/hashtags.ts, or whenever asked to make shorts more professional/entertaining, fix clip selection quality, adjust subtitle style, add camera movement/zoom effects, change the brand sound/intro-outro cover, or improve hashtags for this channel — even if the user describes it in plain terms ("que los clips sean mejores", "que los subtítulos se vean bien", "que sea más viral", "el sonido de marca") instead of naming these files directly. Also consult it before changing feature-flag defaults in src/lib/config.ts or the GitHub Actions workflows/Dockerfiles, since this project has a recurring bug pattern of those silently overriding or missing config defaults.
+description: Editorial and technical standards for Escenas Virales Studio's short-form video pipeline in this repo — clip selection, burned captions, dynamic zoom/camera pacing, brand sting/cover card, and hashtag strategy. Use this skill whenever working on src/lib/pipeline/analyze.ts, clip.ts, bigCaptions.ts, coverCard.ts, transcribe.ts, or src/lib/trends/hashtags.ts, or whenever asked to make shorts more professional/entertaining, fix clip selection quality, adjust subtitle/caption style, add camera movement/zoom effects, change the brand sound/intro-outro cover, or improve hashtags for this channel — even if the user describes it in plain terms ("que los clips sean mejores", "que los subtítulos se vean bien", "que sea más viral", "el sonido de marca", "las portadas") instead of naming these files directly. Also consult it before changing feature-flag defaults in src/lib/config.ts or the GitHub Actions workflows/Dockerfiles, since this project has a recurring bug pattern of those silently overriding or missing config defaults, and before touching anything that gets concatenated with concatClips (-c copy), since mismatched fps/audio params between segments is another recurring bug class here.
 ---
 
 # Editor de shorts virales — Escenas Virales Studio
@@ -46,34 +46,40 @@ Otros criterios que ya están en el prompt de `analyze.ts` y que hay que mantene
   como visualización monetizable en TikTok/YouTube, y confiar solo en que la IA respete la duración
   pedida ya falló en la práctica.
 
-## Subtítulos (`src/lib/pipeline/bigCaptions.ts`, `subtitles.ts`, `transcribe.ts`)
+## Subtítulos (`src/lib/pipeline/bigCaptions.ts`, `transcribe.ts`)
 
-Hay DOS capas de subtítulo quemadas a la vez, y las dos comparten el mismo motor:
-`buildColoredCaptionsAss` en `bigCaptions.ts` (agrupa palabras en golpes, cicla colores de la
-paleta, genera el `.ass`) — cada capa solo le pasa un `style` distinto (tamaño, posición, cuántas
-palabras por golpe, si hay desenfoque/glow). Si tocas el motor, ambas capas cambian a la vez; si
-solo quieres tocar una, cambia el `style` de su wrapper, no el motor.
+Hubo dos capas de subtítulo a la vez (una pequeña abajo + esta grande del centro); se quitó la de
+abajo por completo a petición expresa ("hay dos subtítulos, no sé por qué, quiero que elimines el
+de abajo") — no la vuelvas a añadir sin que se pida explícitamente otra vez (ver la contradicción
+histórica más abajo: este proyecto ya ha ido y venido sobre "cuánto texto grande" varias veces).
 
-1. **Abajo, normal** (`subtitles.ts` + `buildBottomCaptionsAss`, `ENABLE_SUBTITLES`): UNA palabra
-   por golpe (`maxWordsPerGroup: 1`), tamaño normal (fuente `Liberation Sans`), contorno negro
-   fino SIN desenfoque (`blur: 0`) — nada de "burbuja"/caja de fondo, se quitó a petición expresa
-   ("blancos y con el borde negro"). Cada palabra cicla de color con la MISMA paleta que la capa
-   grande (verde/blanco/amarillo/naranja) para que la lectura sea interactiva — pedido explícito
-   del usuario, no lo dejes en blanco fijo si tocas esto.
-2. **Algo por debajo del centro, grande y de colores** (`bigCaptions.ts` + `buildBigCaptionsAss`,
-   `ENABLE_BIG_CAPTIONS`): 2-4 palabras por golpe (corta por pausa real al hablar, no por conteo
-   fijo), fuente `Comic Neue` (redondeada, a petición expresa — no uses una geométrica/angulosa sin
-   que se pida), tamaño la mitad de lo que empezó siendo (ajustado a petición expresa más de una
-   vez, no lo agrandes por tu cuenta), con contorno+desenfoque tipo "brillo/neón" — estilo
-   MrBeastClips, pedido explícitamente a partir de capturas reales de referencia.
+**Única capa actual**: `bigCaptions.ts` + `buildBigCaptionsAss`, `ENABLE_BIG_CAPTIONS`. 2-4
+palabras por golpe (corta por pausa real al hablar, no por conteo fijo), fuente `Comic Neue`
+(redondeada, a petición expresa — no uses una geométrica/angulosa sin que se pida), en **blanco**
+por defecto, y la palabra EXACTA que se está diciendo en ese instante cambia a **verde** (`00FF66`)
+y se agranda un ~25% mientras dura, volviendo a blanco/tamaño normal en cuanto termina de decirse
+— efecto "karaoke" pedido explícitamente ("cada vez que se lea esa palabra que se cambie de color
+... y se haga un poco más grande ... cuando termine se vuelva al tamaño original"). Esto NO es un
+cambio de color por golpe entero (esa era la versión anterior, con una paleta que ciclaba
+verde/blanco/amarillo/naranja) — es por PALABRA suelta dentro del golpe, usando los timestamps de
+palabra de la transcripción. Implementación: por cada golpe de palabras, se generan varias
+`Dialogue` consecutivas (una por cada ventana "esta palabra activa" + huecos "ninguna activa" entre
+palabras), cada una con el texto completo del golpe pero solo la palabra de esa ventana envuelta en
+tags `{\c...\fscx125\fscy125}...{\c...\fscx100\fscy100}` — así el resto de palabras se quedan
+quietas en su sitio y solo la que se dice en ese instante "salta". Tamaño y contorno más grandes
+que la versión anterior (antes `width/18`, ahora `width/14`, con más grosor de contorno) — pedido
+tras ver el resultado en vídeo real ("hazlo un poco más grande y la letra más gorda").
 
-Las dos van en `.ass` (no `.srt`) porque un `.srt` plano no soporta color por línea; el
-color/contorno/posición van con tags `{\an5\pos(x,y)\c...\3c...\bord...\blur...}` dentro del propio
-texto de cada `Dialogue` (ver `buildColoredCaptionsAss`), no con `force_style` (eso solo aplica un
-único estilo fijo para todo el archivo) — y la posición va con `\pos()` explícito, NO con `MarginV`
-del Style: con `Alignment=5` (centro) libass no siempre respeta `MarginV` para desplazar
-verticalmente, así que `\pos()` es la única forma fiable de posicionar con precisión en cualquiera
-de las dos capas.
+Va en `.ass` (no `.srt`) porque necesita color/tamaño distintos DENTRO de la misma línea, algo que
+un `.srt` plano no soporta; el color/contorno/posición van con tags
+`{\an5\pos(x,y)\c...\3c...\bord...\blur...}` dentro del propio texto de cada `Dialogue`, no con
+`force_style` (eso solo aplica un único estilo fijo para todo el archivo) — y la posición va con
+`\pos()` explícito, NO con `MarginV` del Style: con `Alignment=5` (centro) libass no siempre
+respeta `MarginV` para desplazar verticalmente, así que `\pos()` es la única forma fiable.
+
+**Modo Ranking** (`rankingRender.ts`) usa esta MISMA capa (`buildBigCaptionsAss`/`bigCaptionsPath`)
+para los subclips de cada puesto — antes usaba la capa de abajo que ya no existe; si no se
+sustituye, Ranking se queda sin ningún subtítulo quemado.
 
 **Tarjeta de título en modo Ranking**: `rankingRender.ts` (`assembleRankingVideo`) SOLO añade la
 tarjeta de título general (fondo negro, texto centrado vía `renderTitleCard`) cuando
@@ -124,11 +130,25 @@ el tiempo de render por clip, el runner de GitHub Actions es compartido con el r
 Cada short abre y cierra con la MISMA portada (`ENABLE_COVER_CARD`, activado por defecto): un
 fotograma del propio vídeo a máxima calidad (`extractCoverFrameAt` en `clip.ts` — NO uses
 `extractFrameAt`, esa es la versión pequeña de 480px para clasificación barata por IA, no sirve
-para una portada) tomado en el mismo `hookStartSec` ya verificado por `hookFrame.ts`, con el título
-del clip quemado encima estilo miniatura de creador real (negrita, contorno, franja oscura detrás
-para que se lea), congelado mientras suena `assets/audio/brand_sting.wav`. Se renderiza UNA sola
-vez por clip y se reutiliza el mismo archivo dos veces al montar el vídeo final (`concatClips([cover,
-core, cover], outPath)`) — no lo regeneres dos veces, es coste de render duplicado sin necesidad.
+para una portada) con el título del clip quemado encima estilo miniatura de creador real (blanco,
+negrita, contorno grueso, degradado inferior de varias `drawbox` apiladas en vez de una caja plana,
+más una insignia con el nombre del canal cerca de arriba para reforzar que es contenido de un
+creador real — pedido explícito y repetido: "que estén curradas... que parezca de un creador de
+contenido"), congelado mientras suena `assets/audio/brand_sting.wav`. Se renderiza UNA sola vez por
+clip y se reutiliza el mismo archivo dos veces al montar el vídeo final
+(`concatClips([cover, core, cover], outPath)`) — no lo regeneres dos veces, es coste de render
+duplicado sin necesidad.
+
+**Bug real corregido — el fotograma NO era el que la IA verificó**: `hookFrame.ts` comprueba con
+visión si hay una persona clara, pero NO en `startSec` a secas, sino en `startSec + 0.4s`
+(`CHECK_OFFSET_SEC`, para esquivar el fotograma justo en el corte, que suele salir negro/borroso).
+La portada, sin embargo, extraía el fotograma en `hookStartSec` tal cual — el instante que NUNCA se
+verificó, precisamente el que el offset existe para evitar. Por eso a veces salía un fotograma
+sin la persona bien visible pese a que la comprobación de IA había "pasado". Corregido exportando
+`hookVerifiedFrameSec(startSec, endSec)` desde `hookFrame.ts` (la misma cuenta que usa
+internamente) y usándolo también en `runPipeline.ts` al llamar a `renderCoverCard` — si tocas esto,
+la portada SIEMPRE debe pedir el fotograma de `hookVerifiedFrameSec(...)`, nunca de `hookStartSec`
+directamente, o vuelve el mismo bug.
 
 El sonido de `assets/audio/brand_sting.wav` es 100% sintetizado desde cero (ondas generadas por
 código, sin muestras de terceros) precisamente para evitar cualquier reclamación de copyright en
@@ -139,6 +159,23 @@ volumen de publicación automática de este proyecto.
 `probeAudioDurationSec` (en `probe.ts`) existe aparte de `probeVideo` porque este último pide
 `-select_streams v:0` y falla con un archivo de solo audio como el sting — no reutilices
 `probeVideo` para archivos de audio.
+
+**Bug real corregido — parámetros de códec desalineados al concatenar por copia**:
+`concatClips` usa `-c copy` (sin recodificar) para unir cuerpo + tarjetas + portada. Eso EXIGE que
+todos los tramos compartan exactamente fps de vídeo y frecuencia/canales de audio — si no, la
+concatenación queda con metadatos que no encajan con los timestamps reales de cada tramo. Antes de
+esta corrección, `renderCoverCard` (imagen fija en loop, fps por defecto de ffmpeg = 25, audio mono
+del `.wav` de marca) y `renderTitleCard` (fondo `color=` de lavfi, fps por defecto 25) no
+coincidían con `cutVerticalClip` (fps nativo del vídeo fuente, con frecuencia variable, audio
+estéreo) — eso se manifestó como sonido que desaparecía en algún tramo y el vídeo entero pareciendo
+ir a cámara lenta en el reproductor, justo lo reportado. Arreglado con tres constantes compartidas
+en `clip.ts` (`CONCAT_FPS=30`, `CONCAT_AUDIO_SAMPLE_RATE=44100`, `CONCAT_AUDIO_CHANNELS=2`) forzadas
+con `-r`/`-ar`/`-ac` en los TRES sitios que generan tramos que acaban concatenados por copia:
+`cutVerticalClip`, `renderTitleCard` y `renderCoverCard`. Si añades una función nueva que genere un
+tramo que se vaya a concatenar con `concatClips`, tiene que forzar estas mismas tres constantes —
+si no, vuelve el mismo bug. `-r` no cambia la velocidad real del contenido (solo remuestrea cuántos
+fotogramas por segundo se cuentan para la misma duración), así que es seguro forzarlo igual en
+todos los tramos sin alterar el ritmo real del vídeo.
 
 **No hay ffmpeg disponible en el entorno de desarrollo** para probar filtros nuevos en vivo — solo
 se despliega y se comprueba en el servidor real de GitHub Actions. Antes de escribir un filtro

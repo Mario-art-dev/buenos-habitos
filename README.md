@@ -55,31 +55,19 @@ Y dos modos pensados para monetización con publicidad de terceros:
 - Hay un **login con contraseña** (`APP_PASSWORD`) porque esta app puede subir vídeos a tus
   cuentas: no la dejes accesible sin contraseña en internet.
 
-### Subtítulos quemados
+### Caption grande estilo "karaoke" en el centro
 
-`ENABLE_SUBTITLES="true"` (activado por defecto): cada short quema sobre el vídeo los subtítulos
-de su propia transcripción — ayuda mucho a la retención (se entiende sin sonido, que es como se
-ve la mayoría de los shorts) y refuerza el gancho inicial. Desactívalo con `ENABLE_SUBTITLES="false"`.
-El tamaño es algo mayor que un subtítulo normal (no el "caption" gigante típico de TikTok), pegado
-abajo, con un contorno negro grueso y un ligero brillo (menos intenso que el caption grande del
-centro). Van palabra por palabra (no por frase entera) cuando el motor de
-transcripción da marcas de tiempo por palabra — tanto `faster-whisper` local como la API de Whisper
-las dan; si algún proveedor no las diera, cae automáticamente a subtítulos por frase. **Cada palabra
-cambia de color** (verde/blanco/amarillo/naranja, rotando) según se va leyendo, para que sea más
-interactivo y llame la atención — a petición expresa del usuario.
-
-### Caption grande y de colores en el centro
-
-`ENABLE_BIG_CAPTIONS="true"` (activado por defecto): una SEGUNDA capa de subtítulo, aparte del de
-abajo, con 2-4 palabras por golpe, algo por debajo del centro de la pantalla (el corte de cada
+`ENABLE_BIG_CAPTIONS="true"` (activado por defecto): una única capa de subtítulo quemada sobre el
+vídeo, algo por debajo del centro de la pantalla, con 2-4 palabras por golpe (el corte de cada
 golpe sigue las pausas reales al hablar, no un conteo fijo, para que el ritmo se sienta natural),
-cambiando de color (verde/blanco/amarillo/naranja) y con un contorno + desenfoque que da un efecto
-de brillo — el estilo de canales tipo MrBeastClips. Se queman los dos subtítulos a la vez, con
-TODAS las palabras que se dicen en el tramo (ninguna se salta). Necesita marcas de tiempo por
-palabra (si el proveedor no las diera, esta capa simplemente no aparece, igual que la de abajo).
-El subtítulo de abajo usa `fonts-liberation` (equivalente libre de Arial); el caption grande del
-centro usa `fonts-comic-neue` (una tipografía redondeada, instaladas ambas junto a ffmpeg).
-Desactívalo con `ENABLE_BIG_CAPTIONS="false"` si prefieres solo el subtítulo de abajo.
+fuente redondeada (`fonts-comic-neue`) con contorno + desenfoque que da un efecto de brillo — el
+estilo de canales tipo MrBeastClips. El texto es **blanco**, y la palabra EXACTA que se está
+diciendo en cada instante cambia a **verde** y se agranda ligeramente mientras dura, volviendo a
+blanco y tamaño normal en cuanto termina — efecto "karaoke" para que la lectura sea interactiva.
+Necesita marcas de tiempo por palabra (tanto `faster-whisper` local como la API de Whisper las
+dan); si el proveedor no las diera, cae automáticamente a un golpe por frase entera sin resaltado
+de palabra. Desactívalo con `ENABLE_BIG_CAPTIONS="false"` si prefieres el vídeo sin ningún
+subtítulo quemado.
 
 ### Zoom dinámico ("punch-in")
 

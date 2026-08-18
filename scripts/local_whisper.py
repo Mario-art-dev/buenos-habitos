@@ -36,8 +36,8 @@ def main() -> int:
     # int8 en CPU: bastante más rápido y con menos memoria, calidad casi idéntica.
     model = WhisperModel(model_size, device="cpu", compute_type="int8")
     # word_timestamps=True: da la marca de tiempo de cada palabra suelta, no solo de la frase
-    # entera — lo necesita src/lib/pipeline/subtitles.ts para quemar subtítulos palabra por
-    # palabra en vez de bloques de frase completa.
+    # entera — lo necesita src/lib/pipeline/bigCaptions.ts para resaltar palabra por palabra
+    # en vez de bloques de frase completa.
     segments, _info = model.transcribe(audio_path, vad_filter=True, word_timestamps=True)
 
     result = []

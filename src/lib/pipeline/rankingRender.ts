@@ -3,7 +3,7 @@ import type { TranscriptSegment } from "./transcribe";
 import { probeVideo, type VerticalResolution } from "./probe";
 import { cutVerticalClip, renderTitleCard, concatClips, mixBackgroundMusic, extractThumbnail, extractAudioSegment } from "./clip";
 import { renderCommentaryCard } from "./commentaryCards";
-import { buildBottomCaptionsAss } from "./subtitles";
+import { buildBigCaptionsAss } from "./bigCaptions";
 import { getTTSProvider } from "@/lib/tts/provider";
 import {
   candidateSubClipPath,
@@ -11,7 +11,7 @@ import {
   clipAssembledPath,
   clipVideoPath,
   clipThumbnailPath,
-  bottomCaptionsPath,
+  bigCaptionsPath,
   musicSegmentPath,
   narrationAudioPath,
 } from "@/lib/storagePaths";
@@ -77,11 +77,11 @@ export async function assembleRankingVideo(params: {
     segmentPaths.push(cardPath);
 
     const subPath = candidateSubClipPath(jobId, clipId, item.position);
-    const assContent = buildBottomCaptionsAss(transcriptSegments, item.startSec, item.endSec, resolution);
-    let subtitlesFile: string | undefined;
+    const assContent = buildBigCaptionsAss(transcriptSegments, item.startSec, item.endSec, resolution);
+    let bigCaptionsFile: string | undefined;
     if (assContent) {
-      subtitlesFile = bottomCaptionsPath(jobId, clipId, item.position);
-      fs.writeFileSync(subtitlesFile, assContent);
+      bigCaptionsFile = bigCaptionsPath(jobId, clipId, item.position);
+      fs.writeFileSync(bigCaptionsFile, assContent);
     }
 
     // El número de puesto ya se ve en la tarjeta "#N" que precede a este segmento (arriba);
@@ -92,7 +92,7 @@ export async function assembleRankingVideo(params: {
       startSec: item.startSec,
       endSec: item.endSec,
       resolution,
-      subtitlesPath: subtitlesFile,
+      bigCaptionsPath: bigCaptionsFile,
       dynamicZoom: config.dynamicZoom.enabled,
     });
     segmentPaths.push(subPath);

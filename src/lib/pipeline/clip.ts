@@ -6,6 +6,21 @@ import { probeVideo, type VerticalResolution } from "./probe";
 
 const DEFAULT_RES: VerticalResolution = { width: 1080, height: 1920 };
 
+/**
+ * `concatClips` une varios mp4 por copia de flujo (`-c copy`, sin recodificar). Eso exige que
+ * TODOS los tramos que se vayan a concatenar entre sí (cuerpo del clip, tarjetas de título/
+ * comentario y portada de marca) compartan exactamente estos mismos parámetros de códec. Si no
+ * coinciden (p.ej. una tarjeta de imagen fija a 25fps con audio mono junto a un cuerpo a 30/60fps
+ * con audio estéreo), la concatenación por copia queda con metadatos de fotogramas/duración que
+ * no encajan con los timestamps reales de cada tramo — eso se ha visto tanto como sonido que
+ * desaparece en algún tramo como el vídeo entero pareciendo ir a cámara lenta en el reproductor.
+ * `-r` no cambia la velocidad real del contenido (solo remuestrea a cuántos fotogramas por
+ * segundo se cuenta la misma duración), así que es seguro forzarlo igual en todos los tramos.
+ */
+export const CONCAT_FPS = 30;
+export const CONCAT_AUDIO_SAMPLE_RATE = 44100;
+export const CONCAT_AUDIO_CHANNELS = 2;
+
 export function escapeDrawtext(text: string): string {
   return text.replace(/\\/g, "\\\\").replace(/:/g, "\\:").replace(/'/g, "\\'").replace(/%/g, "\\%");
 }
@@ -37,7 +52,7 @@ export function wrapText(text: string, maxCharsPerLine: number): string {
 
 export function buildVerticalFilter(
   res: VerticalResolution,
-  opts: { subtitlesPath?: string; bigCaptionsPath?: string; dynamicZoomPhase?: number } = {}
+  opts: { bigCaptionsPath?: string; dynamicZoomPhase?: number } = {}
 ): string {
   const { width, height } = res;
   let filter =
@@ -64,15 +79,6 @@ export function buildVerticalFilter(
     lastLabel = "base";
   }
 
-  if (opts.subtitlesPath) {
-    // Subtítulo normal pegado abajo: blanco con contorno negro fino, cambiando de color palabra
-    // a palabra (mismo motor/paleta que el caption grande, ver subtitles.ts) para que la lectura
-    // sea interactiva. Va en .ass con el estilo ya definido dentro del propio archivo, así que
-    // aquí no hace falta force_style (igual que el caption grande de abajo).
-    filter += `;[${lastLabel}]subtitles=${escapeSubtitlesPath(opts.subtitlesPath)}[subbed]`;
-    lastLabel = "subbed";
-  }
-
   if (opts.bigCaptionsPath) {
     // Segunda capa de subtítulos, aparte de la de abajo: el "caption" grande y de colores en el
     // centro de la pantalla que pidió el usuario (estilo MrBeastClips). Va en un .ass (no .srt)
@@ -93,7 +99,6 @@ export interface CutClipOptions {
   startSec: number;
   endSec: number;
   resolution?: VerticalResolution;
-  subtitlesPath?: string;
   bigCaptionsPath?: string;
   muted?: boolean;
   dynamicZoom?: boolean;
@@ -102,14 +107,13 @@ export interface CutClipOptions {
 /**
  * Corta el segmento y lo recompone a formato vertical estilo short:
  * fondo desenfocado ampliado + vídeo original centrado sin recortar el encuadre.
- * Opcionalmente quema subtítulos, la capa de "caption" grande, y/o mete "punch-ins" de zoom
- * periódicos (dynamicZoom).
+ * Opcionalmente quema la capa de "caption" grande y/o mete "punch-ins" de zoom periódicos
+ * (dynamicZoom).
  */
 export async function cutVerticalClip(opts: CutClipOptions): Promise<void> {
   const { sourcePath, outPath, startSec, endSec, resolution = DEFAULT_RES, muted } = opts;
   const duration = Math.max(0.5, endSec - startSec);
   const filter = buildVerticalFilter(resolution, {
-    subtitlesPath: opts.subtitlesPath,
     bigCaptionsPath: opts.bigCaptionsPath,
     dynamicZoomPhase: opts.dynamicZoom ? startSec : undefined,
   });
@@ -129,7 +133,7 @@ export async function cutVerticalClip(opts: CutClipOptions): Promise<void> {
   ];
 
   if (!muted) {
-    args.push("-map", "0:a?", "-c:a", "aac", "-b:a", "192k");
+    args.push("-map", "0:a?", "-c:a", "aac", "-b:a", "192k", "-ar", String(CONCAT_AUDIO_SAMPLE_RATE), "-ac", String(CONCAT_AUDIO_CHANNELS));
   } else {
     args.push("-an");
   }
@@ -138,6 +142,8 @@ export async function cutVerticalClip(opts: CutClipOptions): Promise<void> {
   // tiempo de renderizado por clip — pedido explícitamente ("la mejor calidad posible"). No se
   // sube más el preset (p.ej. "medium"/"slow") porque el coste en tiempo de CPU por clip crece
   // deprisa y el runner de GitHub Actions es compartido con el resto del trabajo del vídeo.
+  // "-r" fuerza el mismo fps que las tarjetas/portada (ver CONCAT_FPS) para que la concatenación
+  // por copia de flujo no quede corrupta.
   args.push(
     "-c:v",
     "libx264",
@@ -147,6 +153,8 @@ export async function cutVerticalClip(opts: CutClipOptions): Promise<void> {
     "18",
     "-pix_fmt",
     "yuv420p",
+    "-r",
+    String(CONCAT_FPS),
     "-movflags",
     "+faststart",
     outPath
@@ -211,10 +219,16 @@ export async function renderTitleCard(
     "20",
     "-pix_fmt",
     "yuv420p",
+    "-r",
+    String(CONCAT_FPS),
     "-c:a",
     "aac",
     "-b:a",
     "128k",
+    "-ar",
+    String(CONCAT_AUDIO_SAMPLE_RATE),
+    "-ac",
+    String(CONCAT_AUDIO_CHANNELS),
     "-shortest",
     outPath
   );
