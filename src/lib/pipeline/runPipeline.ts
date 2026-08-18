@@ -8,12 +8,14 @@ import {
   clipBodyPath,
   narrationAudioPath,
   candidateCardPath,
+  srtPath,
   tmpDir,
 } from "@/lib/storagePaths";
 import { resolveSourceVideo } from "./download";
 import { extractAudio, transcribeAudio, type TranscriptSegment } from "./transcribe";
 import { analyzeTranscriptForClips } from "./analyze";
 import { cutVerticalClip, concatClips, extractThumbnail } from "./clip";
+import { buildSrt } from "./subtitles";
 import { probeVideo, pickVerticalResolution } from "./probe";
 import { processRankingJob } from "./rankingPipeline";
 import { processProductJob } from "./productPipeline";
@@ -122,23 +124,36 @@ async function processSingleJob(jobId: string): Promise<void> {
       const outroNarrationPath = narrationAudioPath(jobId, clip.id, "outro");
       const introCardPath = candidateCardPath(jobId, clip.id, "intro");
       const outroCardPath = candidateCardPath(jobId, clip.id, "outro");
+      const subtitlesFilePath = srtPath(jobId, clip.id, 0);
       try {
         await db.clip.update({ where: { id: clip.id }, data: { status: "RENDERING" } });
         const outPath = clipVideoPath(jobId, clip.id);
         const thumbPath = clipThumbnailPath(jobId, clip.id);
 
-        await cutVerticalClip({
-          sourcePath: srcPath,
-          outPath: bodyPath,
-          startSec: clip.startSec,
-          endSec: clip.endSec,
-          resolution,
-        });
+        let subtitlesPath: string | undefined;
+        if (config.subtitles.enabled) {
+          const srt = buildSrt(transcript.segments, clip.startSec, clip.endSec);
+          if (srt) {
+            fs.writeFileSync(subtitlesFilePath, srt, "utf-8");
+            subtitlesPath = subtitlesFilePath;
+          }
+        }
 
         let commentaryIntro: string | null = null;
         let commentaryOutro: string | null = null;
 
         if (config.commentary.enabled) {
+          // Con comentario activado, los subtítulos se queman en el cuerpo del clip (las
+          // tarjetas de intro/cierre son solo texto de reacción, sin diálogo que subtitular).
+          await cutVerticalClip({
+            sourcePath: srcPath,
+            outPath: bodyPath,
+            startSec: clip.startSec,
+            endSec: clip.endSec,
+            resolution,
+            subtitlesPath,
+          });
+
           const excerpt = transcriptExcerptFor(transcript.segments, clip.startSec, clip.endSec);
           const commentary = await generateSingleCommentary({
             title: clip.title,
@@ -165,7 +180,16 @@ async function processSingleJob(jobId: string): Promise<void> {
           });
           await concatClips([introCard, bodyPath, outroCard], outPath);
         } else {
-          fs.copyFileSync(bodyPath, outPath);
+          // Sin comentario (por defecto): el short entra directo a la acción, se corta ya
+          // directamente al archivo final, sin pantalla negra ni pasos de más.
+          await cutVerticalClip({
+            sourcePath: srcPath,
+            outPath,
+            startSec: clip.startSec,
+            endSec: clip.endSec,
+            resolution,
+            subtitlesPath,
+          });
         }
 
         await extractThumbnail(outPath, thumbPath);
@@ -185,10 +209,10 @@ async function processSingleJob(jobId: string): Promise<void> {
           data: { status: "FAILED", error: (err as Error).message },
         });
       } finally {
-        // Los archivos intermedios (corte sin envolver, narración, tarjetas) ya no hacen falta
-        // una vez terminado este clip (listo o fallido): si no se borran aquí, se van acumulando
-        // durante todo el trabajo y pueden agotar el disco antes de terminar los últimos clips.
-        for (const tmp of [bodyPath, introNarrationPath, outroNarrationPath, introCardPath, outroCardPath]) {
+        // Los archivos intermedios (corte sin envolver, narración, tarjetas, subtítulos) ya no
+        // hacen falta una vez terminado este clip (listo o fallido): si no se borran aquí, se
+        // van acumulando durante todo el trabajo y pueden agotar el disco antes de terminar.
+        for (const tmp of [bodyPath, introNarrationPath, outroNarrationPath, introCardPath, outroCardPath, subtitlesFilePath]) {
           try {
             fs.rmSync(tmp, { force: true });
           } catch {

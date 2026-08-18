@@ -93,9 +93,16 @@ export const config = {
   },
 
   commentary: {
-    // Añade voz en off + texto de comentario/reacción con IA a cada short (intro y cierre),
-    // para reforzar que el contenido esté transformado y no sea una copia directa.
-    enabled: optional("ENABLE_COMMENTARY", "true") === "true",
+    // Añade voz en off + una tarjeta de texto sobre fondo negro (intro y cierre) antes/después
+    // de cada short. Por defecto DESACTIVADO: un short profesional (estilo MrBeast) entra
+    // directo a la acción, no se detiene unos segundos en una pantalla negra con letras.
+    enabled: optional("ENABLE_COMMENTARY", "false") === "true",
+  },
+
+  subtitles: {
+    // Quema subtítulos (de la propia transcripción) sobre el vídeo del short. Activado por
+    // defecto: ayuda mucho a la retención (se puede ver sin sonido) y refuerza el gancho inicial.
+    enabled: optional("ENABLE_SUBTITLES", "true") === "true",
   },
 
   tts: {

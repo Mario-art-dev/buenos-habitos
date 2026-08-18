@@ -55,21 +55,28 @@ Y dos modos pensados para monetización con publicidad de terceros:
 - Hay un **login con contraseña** (`APP_PASSWORD`) porque esta app puede subir vídeos a tus
   cuentas: no la dejes accesible sin contraseña en internet.
 
+### Subtítulos quemados
+
+`ENABLE_SUBTITLES="true"` (activado por defecto): cada short quema sobre el vídeo los subtítulos
+de su propia transcripción — ayuda mucho a la retención (se entiende sin sonido, que es como se
+ve la mayoría de los shorts) y refuerza el gancho inicial. Desactívalo con `ENABLE_SUBTITLES="false"`.
+
 ### Comentario/reacción narrado con IA
 
-Con `ENABLE_COMMENTARY="true"` (activado por defecto), cada short y cada vídeo de ranking se
-envuelve con comentario en off generado por IA:
+Con `ENABLE_COMMENTARY="true"` (DESACTIVADO por defecto — un short profesional entra directo a
+la acción, sin pantalla negra al principio), cada short y cada vídeo de ranking se envuelve con
+comentario en off generado por IA:
 
 - **Shorts individuales**: una frase de intro antes del clip (presentando el momento con
   gancho) y una frase de cierre después (con opinión/análisis), narradas con voz y mostradas
-  también como texto en pantalla.
+  también como texto en pantalla sobre fondo negro.
 - **Rankings**: intro narrada para todo el vídeo, un comentario narrado en la tarjeta de cada
   puesto (`#5`, `#4`...) y un cierre narrado al final con la conclusión del ranking.
 
 El guion generado se guarda y se muestra en la ficha de cada vídeo, para que veas exactamente
 qué se ha dicho. La voz se sintetiza con `TTS_PROVIDER`: `local` (Piper, gratis, corre en tu
-servidor) u `openai` (de pago, voz más natural). Desactívalo con `ENABLE_COMMENTARY="false"`
-si prefieres los clips sin comentario.
+servidor) u `openai` (de pago, voz más natural). Actívalo con `ENABLE_COMMENTARY="true"` si
+prefieres esa reacción en off (a cambio de una pantalla negra de unos segundos al principio/final).
 
 ⚠️ **Sobre "contenido original" — lo que esto soluciona y lo que NO soluciona.** Hay dos
 sistemas distintos y separados:

@@ -3,6 +3,7 @@ import type { TranscriptSegment } from "./transcribe";
 import { probeVideo, type VerticalResolution } from "./probe";
 import { cutVerticalClip, renderTitleCard, concatClips, mixBackgroundMusic, extractThumbnail, extractAudioSegment } from "./clip";
 import { renderCommentaryCard } from "./commentaryCards";
+import { buildSrt } from "./subtitles";
 import { getTTSProvider } from "@/lib/tts/provider";
 import {
   candidateSubClipPath,
@@ -23,28 +24,6 @@ export interface RenderRankingItem {
   endSec: number;
   label: string;
   commentary?: string | null;
-}
-
-function srtTime(sec: number): string {
-  const ms = Math.round(sec * 1000);
-  const h = Math.floor(ms / 3_600_000);
-  const m = Math.floor((ms % 3_600_000) / 60_000);
-  const s = Math.floor((ms % 60_000) / 1000);
-  const rem = ms % 1000;
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")},${String(rem).padStart(3, "0")}`;
-}
-
-function buildSrt(segments: TranscriptSegment[], itemStart: number, itemEnd: number): string | null {
-  const overlapping = segments
-    .filter((s) => s.end > itemStart && s.start < itemEnd)
-    .map((s) => ({ start: Math.max(0, s.start - itemStart), end: Math.min(itemEnd - itemStart, s.end - itemStart), text: s.text.trim() }))
-    .filter((s) => s.text && s.end > s.start);
-
-  if (overlapping.length === 0) return null;
-
-  return overlapping
-    .map((s, i) => `${i + 1}\n${srtTime(s.start)} --> ${srtTime(s.end)}\n${s.text}\n`)
-    .join("\n");
 }
 
 /**

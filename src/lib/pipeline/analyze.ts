@@ -45,9 +45,13 @@ function chunkSegments(segments: TranscriptSegment[], maxChars: number): Transcr
   return chunks;
 }
 
-const SYSTEM_PROMPT = `Eres un productor experto en contenido viral de shorts/reels para YouTube Shorts, TikTok e Instagram Reels.
-Trabajas para el canal "${config.channel.name}", cuyo contenido es: ${config.channel.niche}.
-Tu único objetivo es maximizar las visualizaciones, la retención y por tanto los ingresos publicitarios de cada short.
+const SYSTEM_PROMPT = `Eres un editor y productor de shorts/reels virales con 20 años de experiencia real en canales
+grandes de YouTube Shorts, TikTok e Instagram Reels — el tipo de editor que contrataría un canal del nivel
+de MrBeast. Trabajas para el canal "${config.channel.name}", cuyo contenido es: ${config.channel.niche}.
+Tu único objetivo es maximizar la retención (que el espectador aguante más de los primeros 5 segundos, que
+es cuando la plataforma empieza a contar la visualización de verdad) y por tanto los ingresos publicitarios.
+Escribes títulos y descripciones como los escribiría una persona real enganchada al contenido, no como un
+resumen robótico ni un anuncio: con gancho, intriga, humor o tensión — nunca genéricos ni con relleno.
 Respondes EXCLUSIVAMENTE con JSON válido, sin texto adicional, sin markdown, sin backticks.`;
 
 function buildPrompt(params: {
@@ -76,15 +80,19 @@ ${formatTranscript(segments)}
 """
 
 Tarea: identifica ${maxClips} momentos de este fragmento para convertir en shorts virales (los más divertidos,
-sorprendentes, polémicos, emotivos o con mayor "gancho" en los primeros 2 segundos). El canal necesita cantidad
-Y calidad: intenta encontrar los ${maxClips}, aunque no todos sean igual de espectaculares — prefiere elegir el
-mejor momento disponible en vez de forzar un corte a media frase. Solo devuelve menos si el fragmento es
-literalmente silencio, transición o publicidad sin ni un solo momento aprovechable.
+sorprendentes, polémicos, emotivos o con mayor "gancho" en los primeros 2 segundos, capaces de retener al
+espectador más allá del segundo 5). El canal necesita cantidad Y calidad: intenta encontrar los ${maxClips},
+aunque no todos sean igual de espectaculares — prefiere elegir el mejor momento disponible en vez de forzar
+un corte a media frase. Solo devuelve menos si el fragmento es literalmente silencio, transición o publicidad
+sin ni un solo momento aprovechable.
 Escribe TODO el texto que generes (título, descripción, gancho, razón de viralidad, hashtags) en
 ${contentLanguageName()}, sea cual sea el idioma del vídeo fuente: el audio original del clip nunca se
 traduce ni se dobla, se usa tal cual; solo el texto que tú escribes va en ${contentLanguageName()}.
-Cada clip debe durar entre ${minLen} y ${maxLen} segundos, empezar y acabar en un punto natural (no cortar una frase a la mitad),
-y no solaparse con otros clips elegidos.
+IMPORTANTE — obligatorio, no orientativo: cada clip debe durar ENTRE ${minLen} Y ${maxLen} SEGUNDOS, sin
+excepción. Un clip de menos de ${minLen}s no cuenta como visualización monetizable en TikTok/YouTube, así
+que un candidato corto no vale nada aunque el momento sea buenísimo — si el mejor gancho dura poco, AMPLÍA
+el clip con el contexto natural de alrededor (antes y/o después) hasta llegar al mínimo, sin cortar una
+frase a la mitad. No solapes clips entre sí.
 
 Para cada clip, evalúa su probabilidad de hacerse viral (0-100) considerando: fuerza del gancho inicial,
 sorpresa/emoción, ritmo, si funciona sin contexto previo, y si genera comentarios o ganas de compartir.
@@ -95,8 +103,12 @@ Devuelve SOLO este JSON (sin texto extra):
     {
       "startSec": number,
       "endSec": number,
-      "title": "título corto y estratégico (máx 60 caracteres, con gancho, en ${contentLanguageName()}, pensado para YouTube Shorts/TikTok, sin comillas ni emojis excesivos)",
-      "description": "descripción corta (1-2 frases) de qué pasa en el clip, adaptada al canal ${config.channel.name}",
+      "title": "título corto (máx 60 caracteres) en ${contentLanguageName()}, escrito como lo escribiría una
+        persona real enganchada al vídeo (curiosidad, tensión, humor o sorpresa) — NUNCA un resumen plano tipo
+        titular de noticia ni relleno genérico; sin comillas ni emojis excesivos, pensado para YouTube
+        Shorts/TikTok",
+      "description": "descripción corta (1-2 frases) en ${contentLanguageName()}, con el mismo tono humano y
+        directo que el título — que dé ganas de quedarse a ver qué pasa, adaptada al canal ${config.channel.name}",
       "hook": "la frase o momento exacto que engancha en el segundo 0-2",
       "viralityScore": number entre 0 y 100,
       "viralityReason": "explicación breve (1 frase) de por qué puede volverse viral",
@@ -108,15 +120,32 @@ Devuelve SOLO este JSON (sin texto extra):
 Ordena el array "clips" de mayor a menor viralityScore.`;
 }
 
+/**
+ * La IA no siempre respeta la duración pedida en el prompt (se ha visto en real: clips de 20s
+ * pedidos de 60-180s), y un clip por debajo del mínimo no cuenta como visualización monetizable
+ * en TikTok/YouTube — así que aquí se fuerza de verdad, no se confía solo en el prompt:
+ * los que se quedan cortos se descartan (mejor menos clips que clips que no valen para nada), y
+ * los que se pasan de largo simplemente se recortan al máximo en vez de descartarse.
+ */
 function parseClips(raw: string): MomentCandidate[] {
   const cleaned = raw.trim().replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "");
   const parsed = JSON.parse(cleaned) as { clips?: MomentCandidate[] };
   if (!Array.isArray(parsed.clips)) {
     throw new Error("La IA no devolvió una lista de clips válida.");
   }
-  return parsed.clips.filter(
-    (c) => Number.isFinite(c.startSec) && Number.isFinite(c.endSec) && c.endSec > c.startSec
-  );
+
+  const minLen = config.pipeline.clipMinSeconds;
+  const maxLen = config.pipeline.clipMaxSeconds;
+  const clips: MomentCandidate[] = [];
+
+  for (const c of parsed.clips) {
+    if (!Number.isFinite(c.startSec) || !Number.isFinite(c.endSec) || c.endSec <= c.startSec) continue;
+    const endSec = c.endSec - c.startSec > maxLen ? c.startSec + maxLen : c.endSec;
+    if (endSec - c.startSec < minLen) continue;
+    clips.push({ ...c, endSec });
+  }
+
+  return clips;
 }
 
 /** Descarta clips que se solapen con otro ya elegido de mayor puntuación. */
