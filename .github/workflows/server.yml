@@ -87,6 +87,13 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          # Sin estos cuatro, config.google/config.tiktok se quedan vacíos y la web no puede
+          # conectar YouTube/TikTok aunque el código de OAuth esté bien — hacían falta como
+          # secretos de GitHub PERO nunca se pasaban aquí al proceso.
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          TIKTOK_CLIENT_KEY: ${{ secrets.TIKTOK_CLIENT_KEY }}
+          TIKTOK_CLIENT_SECRET: ${{ secrets.TIKTOK_CLIENT_SECRET }}
           TRANSCRIPTION_PROVIDER: "local"
           PYTHON_PATH: "python3"
           TTS_PROVIDER: "local"
