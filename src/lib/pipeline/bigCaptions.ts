@@ -94,9 +94,14 @@ export function buildBigCaptionsAss(
   if (cues.length === 0) return null;
 
   const { width, height } = resolution;
-  const fontSize = Math.round(width / 9);
-  const outline = Math.max(2, Math.round(fontSize / 16));
-  const marginV = Math.round(height * 0.42); // centro-ish, no pegado al borde
+  // La mitad de grande que antes (antes width/9) a petición expresa del usuario.
+  const fontSize = Math.round(width / 18);
+  const outline = Math.max(1, Math.round(fontSize / 16));
+  // Posición fija con \pos() en vez de fiarse de MarginV: con Alignment=5 (centro) libass no
+  // siempre respeta MarginV para desplazar verticalmente, así que \pos() es la única forma
+  // fiable de ponerlo "un poco más abajo del centro" como se pidió, no en el centro exacto.
+  const posX = Math.round(width / 2);
+  const posY = Math.round(height * 0.62);
 
   const header = `[Script Info]
 ScriptType: v4.00+
@@ -106,7 +111,7 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Big,Arial,${fontSize},&H00FFFFFF,&H000000FF,&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,${outline},0,5,60,60,${marginV},1
+Style: Big,Comic Neue,${fontSize},&H00FFFFFF,&H000000FF,&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,${outline},0,5,60,60,0,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -115,9 +120,9 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
   const lines = cues.map((cue, i) => {
     const color = PALETTE_RGB[i % PALETTE_RGB.length];
     const fill = rgbToAssColor(color);
-    // Contorno oscuro + blur: aproximación estándar de libass para un efecto "brillo/neón"
-    // sin tener que dibujar una segunda capa desenfocada aparte.
-    const tags = `{\\c${fill}\\3c&H101010&\\bord${outline}\\blur3}`;
+    // Contorno oscuro + blur: aproximación estándar de libass para un efecto "brillo/neón" sin
+    // dibujar una segunda capa desenfocada aparte. \an5\pos fija la posición exacta (ver arriba).
+    const tags = `{\\an5\\pos(${posX},${posY})\\c${fill}\\3c&H101010&\\bord${outline}\\blur3}`;
     return `Dialogue: 0,${assTime(cue.start)},${assTime(cue.end)},Big,,0,0,0,,${tags}${cue.text.toUpperCase()}`;
   });
 

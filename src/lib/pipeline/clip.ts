@@ -48,19 +48,19 @@ export function buildVerticalFilter(
   let lastLabel = "wide";
 
   if (opts.dynamicZoomPhase !== undefined) {
-    // "Punch-in" periódico: unos segundos de cada ciclo se recorta en el centro con más zoom,
-    // ocupando el vertical entero (sin las barras de fondo desenfocado) — corte de cámara
-    // habitual en edición de shorts virales para que el plano no se sienta estático 60-180s
-    // seguidos. El desfase varía por clip (según su startSec) para que no todos los clips del
-    // mismo vídeo "salten" exactamente a la vez.
-    const period = 9;
-    const punchDurationSec = 2.2;
+    // La MAYORÍA del tiempo se ve el plano recortado en vertical, llenando toda la pantalla sin
+    // barras de fondo desenfocado; solo de vez en cuando (ráfaga corta) se abre al plano ancho
+    // original con las barras — al revés que la versión anterior, a petición expresa ("la
+    // mayoría en vertical, alguna que otra escena en horizontal"). El desfase varía por clip
+    // (según su startSec) para que no todos los clips del mismo vídeo "abran" a la vez.
+    const period = 12;
+    const wideBurstSec = 1.8;
     const zoomFactor = 1.35;
     const zoomW = Math.round(width * zoomFactor);
     const zoomH = Math.round(height * zoomFactor);
     const phase = Math.round(opts.dynamicZoomPhase) % period;
-    filter += `;[0:v]scale=${zoomW}:${zoomH}:force_original_aspect_ratio=increase,crop=${width}:${height}[zoom]`;
-    filter += `;[wide][zoom]overlay=0:0:enable='lt(mod(t+${phase},${period}),${punchDurationSec})':format=auto,format=yuv420p[base]`;
+    filter += `;[0:v]scale=${zoomW}:${zoomH}:force_original_aspect_ratio=increase,crop=${width}:${height},format=yuv420p[zoomed]`;
+    filter += `;[zoomed][wide]overlay=0:0:enable='lt(mod(t+${phase},${period}),${wideBurstSec})':format=auto,format=yuv420p[base]`;
     lastLabel = "base";
   }
 

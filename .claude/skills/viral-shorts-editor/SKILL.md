@@ -57,14 +57,19 @@ conversación tras ver un ejemplo real — no es un despiste, es el estado actua
    Whisper (`timestamp_granularities: ["segment","word"]`) las dan; si un proveedor no las diera,
    cae automáticamente a un cue por frase entera. Tamaño de letra normal, en una burbuja
    semitransparente, `ENABLE_SUBTITLES`.
-2. **Centro, grande y de colores** (`bigCaptions.ts` + `buildBigCaptionsAss`, SEGUNDA llamada al
-   filtro `subtitles=` pero con un `.ass`, no `.srt`): 2-3 palabras por golpe, color distinto cada
-   vez (verde/blanco/amarillo/naranja) con contorno+desenfoque tipo "brillo/neón" — estilo
-   MrBeastClips, pedido explícitamente a partir de capturas reales de referencia.
+2. **Algo por debajo del centro, grande y de colores** (`bigCaptions.ts` + `buildBigCaptionsAss`,
+   SEGUNDA llamada al filtro `subtitles=` pero con un `.ass`, no `.srt`): 2-4 palabras por golpe
+   (corta por pausa real al hablar, no por conteo fijo), color distinto cada vez (verde/blanco/
+   amarillo/naranja), fuente `Comic Neue` (redondeada, a petición expresa — no uses una geométrica/
+   angulosa sin que se pida), tamaño la mitad de lo que empezó siendo (ajustado a petición expresa
+   más de una vez, no lo agrandes por tu cuenta), con contorno+desenfoque tipo "brillo/neón" —
+   estilo MrBeastClips, pedido explícitamente a partir de capturas reales de referencia.
    `ENABLE_BIG_CAPTIONS`. Usa `.ass` en vez de `.srt` porque un `.srt` plano no soporta color por
-   línea; si tocas esto, cualquier estilo nuevo por línea va con tags `{\c...\3c...\bord...\blur...}`
-   dentro del propio texto del `.ass`, no con `force_style` (eso solo aplica un único estilo fijo
-   para todo el archivo).
+   línea; el color/posición van con tags `{\an5\pos(x,y)\c...\3c...\bord...\blur...}` dentro del
+   propio texto de cada `Dialogue`, no con `force_style` (eso solo aplica un único estilo fijo para
+   todo el archivo) — y la posición va con `\pos()` explícito, NO con `MarginV` del Style: con
+   `Alignment=5` (centro) libass no siempre respeta `MarginV` para desplazar verticalmente, así
+   que `\pos()` es la única forma fiable de moverlo hacia abajo del centro exacto.
 
 **Ojo con la contradicción histórica**: antes de esto, el usuario pidió explícitamente quitar TODO
 texto grande sobre el vídeo (incluido un overlay del número de puesto en modo Ranking, que sigue
@@ -75,19 +80,26 @@ vez de asumir — ya ha cambiado de opinión una vez sobre esto mismo.
 
 ## Zoom dinámico / ritmo de cámara (`src/lib/pipeline/clip.ts`)
 
-Un plano fijo durante 60-180s seguidos se siente estático y pierde audiencia. El patrón ya
-implementado es un "punch-in" periódico: unos ~2 segundos de cada ciclo de ~9 segundos, el plano se
-recorta con más zoom y ocupa el vertical entero (sin las barras de fondo desenfocado), con un
-desfase distinto por clip (derivado de su `startSec`) para que no todos los clips del mismo vídeo
-"salten" a la vez. Es configurable con `ENABLE_DYNAMIC_ZOOM`.
+Un plano fijo durante 60-180s seguidos se siente estático y pierde audiencia. El patrón
+implementado invierte cuál es la base: el recorte vertical (zoom, sin barras de fondo desenfocado)
+es la vista POR DEFECTO la mayor parte del tiempo, y el plano ancho original (con barras) solo
+aparece en ráfagas cortas (~1.8s cada ~12s) — al revés de como se hizo la primera vez; se cambió a
+petición expresa ("la mayoría en vertical, alguna que otra escena en horizontal"), así que si
+alguna vez hay que tocar esto de nuevo, la base debe seguir siendo el recorte vertical, no el plano
+ancho. El desfase varía por clip (derivado de su `startSec`) para que no todos los clips del mismo
+vídeo "abran" al plano ancho a la vez. Es configurable con `ENABLE_DYNAMIC_ZOOM`.
 
 Detalle técnico importante si tocas esto: el recorte de zoom siempre es centrado (no hay detección
 de cara/sujeto), así que funciona bien cuando la acción está más o menos centrada pero puede
 recortar mal si el sujeto está muy a un lado — es una limitación conocida y aceptada, no un bug.
 Pendiente propuesto (no implementado, coméntalo antes de meterlo): usar detección de cortes de
-plano reales del vídeo fuente (p.ej. el filtro `scdet` de ffmpeg, sin coste de IA) para alinear los
-"punch-ins" con cambios de plano reales en vez de un ciclo fijo de 9s — el usuario pidió algo en
-esa línea ("planos que cambian") y esto es la forma barata de acercarse sin gastar cupo de IA.
+plano reales del vídeo fuente (p.ej. el filtro `scdet` de ffmpeg, sin coste de IA) para alinear las
+ráfagas de plano ancho con cambios de plano reales en vez de un ciclo fijo, y para elegir CUÁNDO
+mostrar cada plano de forma realmente estratégica (el usuario lo ha pedido más de una vez: "que el
+zoom y cada escena estén escogidas estratégicamente para entretener"). Ahora mismo el ciclo es
+puramente por tiempo (no por contenido) porque un análisis por escena con IA para decidir esto
+tendría el mismo riesgo de presupuesto diario que ya se evitó a propósito en `hookFrame.ts` — no lo
+metas sin verificar antes el coste real con números, como se hizo allí.
 
 Codificación: `-preset fast -crf 18` (subido desde `veryfast`/`crf 20`) a petición expresa de "la
 mejor calidad posible" — no lo subas más (p.ej. `medium`/`slow`) sin comprobar antes cuánto alarga

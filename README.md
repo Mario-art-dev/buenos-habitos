@@ -69,22 +69,24 @@ rectas, no redondeadas — es la aproximación más cercana sin escribir un rend
 ### Caption grande y de colores en el centro
 
 `ENABLE_BIG_CAPTIONS="true"` (activado por defecto): una SEGUNDA capa de subtítulo, aparte del de
-abajo, con 2-4 palabras por golpe en el centro de la pantalla (el corte de cada golpe sigue las
-pausas reales al hablar, no un conteo fijo, para que el ritmo se sienta natural), cambiando de
-color (verde/blanco/amarillo/naranja) y con un contorno + desenfoque que da un efecto de brillo —
-el estilo de canales tipo MrBeastClips. Se queman los dos subtítulos a la vez, con TODAS las
-palabras que se dicen en el tramo (ninguna se salta). Necesita marcas de tiempo por palabra (si el
-proveedor no las diera, esta capa simplemente no aparece, igual que la de abajo). Ambas capas usan
-la tipografía en negrita de `fonts-liberation` (instalada junto a ffmpeg), equivalente libre de
-Arial. Desactívalo con `ENABLE_BIG_CAPTIONS="false"` si prefieres solo el subtítulo de abajo.
+abajo, con 2-4 palabras por golpe, algo por debajo del centro de la pantalla (el corte de cada
+golpe sigue las pausas reales al hablar, no un conteo fijo, para que el ritmo se sienta natural),
+cambiando de color (verde/blanco/amarillo/naranja) y con un contorno + desenfoque que da un efecto
+de brillo — el estilo de canales tipo MrBeastClips. Se queman los dos subtítulos a la vez, con
+TODAS las palabras que se dicen en el tramo (ninguna se salta). Necesita marcas de tiempo por
+palabra (si el proveedor no las diera, esta capa simplemente no aparece, igual que la de abajo).
+El subtítulo de abajo usa `fonts-liberation` (equivalente libre de Arial); el caption grande del
+centro usa `fonts-comic-neue` (una tipografía redondeada, instaladas ambas junto a ffmpeg).
+Desactívalo con `ENABLE_BIG_CAPTIONS="false"` si prefieres solo el subtítulo de abajo.
 
 ### Zoom dinámico ("punch-in")
 
-`ENABLE_DYNAMIC_ZOOM="true"` (activado por defecto): de vez en cuando (unos ~2 segundos cada
-9 segundos, con un desfase distinto por clip para que no todos "salten" a la vez) el short recorta
-el plano con más zoom, ocupando el vertical entero sin las barras de fondo desenfocado — un corte
-de cámara habitual en edición viral para que el vídeo no se sienta estático durante 60-180s
-seguidos. Desactívalo con `ENABLE_DYNAMIC_ZOOM="false"` si prefieres el encuadre fijo.
+`ENABLE_DYNAMIC_ZOOM="true"` (activado por defecto): la MAYORÍA del tiempo el short se ve recortado
+en vertical, llenando toda la pantalla sin barras de fondo desenfocado; solo de vez en cuando (una
+ráfaga de ~2s cada 12s, con un desfase distinto por clip para que no todos "abran" a la vez) se ve
+el plano ancho original con las barras — para que la mayoría del short se sienta en vertical de
+verdad y el plano ancho quede como un respiro ocasional, no al revés. Desactívalo con
+`ENABLE_DYNAMIC_ZOOM="false"` si prefieres el encuadre ancho fijo de siempre.
 
 ### Gancho inicial con persona en pantalla
 
