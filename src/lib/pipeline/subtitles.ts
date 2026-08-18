@@ -9,9 +9,17 @@ function srtTime(sec: number): string {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")},${String(rem).padStart(3, "0")}`;
 }
 
-/** Genera el contenido de un .srt para el tramo [start, end] de un vídeo, con tiempos relativos a ese tramo. */
+/**
+ * Genera el contenido de un .srt para el tramo [start, end] de un vídeo, con tiempos relativos a
+ * ese tramo. Usa las marcas de tiempo palabra a palabra si el proveedor de transcripción las dio
+ * (un subtítulo por palabra, más dinámico y fácil de leer sin sonido); si no las hay, cae a un
+ * subtítulo por frase/segmento entero.
+ */
 export function buildSrt(segments: TranscriptSegment[], start: number, end: number): string | null {
-  const overlapping = segments
+  const words = segments.flatMap((s) => s.words ?? []);
+  const source = words.length > 0 ? words : segments;
+
+  const overlapping = source
     .filter((s) => s.end > start && s.start < end)
     .map((s) => ({ start: Math.max(0, s.start - start), end: Math.min(end - start, s.end - start), text: s.text.trim() }))
     .filter((s) => s.text && s.end > s.start);

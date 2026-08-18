@@ -35,13 +35,21 @@ def main() -> int:
 
     # int8 en CPU: bastante más rápido y con menos memoria, calidad casi idéntica.
     model = WhisperModel(model_size, device="cpu", compute_type="int8")
-    segments, _info = model.transcribe(audio_path, vad_filter=True)
+    # word_timestamps=True: da la marca de tiempo de cada palabra suelta, no solo de la frase
+    # entera — lo necesita src/lib/pipeline/subtitles.ts para quemar subtítulos palabra por
+    # palabra en vez de bloques de frase completa.
+    segments, _info = model.transcribe(audio_path, vad_filter=True, word_timestamps=True)
 
-    result = [
-        {"start": float(s.start), "end": float(s.end), "text": s.text.strip()}
-        for s in segments
-        if s.text and s.text.strip()
-    ]
+    result = []
+    for s in segments:
+        if not s.text or not s.text.strip():
+            continue
+        words = [
+            {"start": float(w.start), "end": float(w.end), "text": w.word.strip()}
+            for w in (s.words or [])
+            if w.word and w.word.strip()
+        ]
+        result.append({"start": float(s.start), "end": float(s.end), "text": s.text.strip(), "words": words})
 
     json.dump(result, sys.stdout, ensure_ascii=False)
     return 0

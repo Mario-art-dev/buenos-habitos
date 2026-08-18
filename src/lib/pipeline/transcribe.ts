@@ -4,10 +4,18 @@ import OpenAI from "openai";
 import { config } from "@/lib/config";
 import { run } from "./exec";
 
+export interface TranscriptWord {
+  start: number;
+  end: number;
+  text: string;
+}
+
 export interface TranscriptSegment {
   start: number;
   end: number;
   text: string;
+  /** Marca de tiempo de cada palabra suelta, si el proveedor las da (para subtítulos palabra a palabra). */
+  words?: TranscriptWord[];
 }
 
 export interface Transcript {
@@ -74,11 +82,25 @@ async function transcribeChunk(client: OpenAI, filePath: string): Promise<Transc
     file: fs.createReadStream(filePath),
     model: config.whisper.model,
     response_format: "verbose_json",
+    // "word" además de "segment": necesario para poder quemar subtítulos palabra a palabra
+    // (ver src/lib/pipeline/subtitles.ts) en vez de bloques de frase entera.
+    timestamp_granularities: ["segment", "word"],
   });
 
-  const segments = (result as unknown as { segments?: { start: number; end: number; text: string }[] }).segments;
-  if (segments && segments.length > 0) {
-    return segments.map((s) => ({ start: s.start, end: s.end, text: s.text.trim() }));
+  const raw = result as unknown as {
+    segments?: { start: number; end: number; text: string }[];
+    words?: { start: number; end: number; word: string }[];
+  };
+  const words = raw.words ?? [];
+  if (raw.segments && raw.segments.length > 0) {
+    return raw.segments.map((s) => ({
+      start: s.start,
+      end: s.end,
+      text: s.text.trim(),
+      words: words
+        .filter((w) => w.start >= s.start && w.start < s.end)
+        .map((w) => ({ start: w.start, end: w.end, text: w.word.trim() })),
+    }));
   }
   // fallback si el modelo no devuelve segmentos con timestamps
   return [{ start: 0, end: 0, text: (result as { text: string }).text }];
@@ -133,7 +155,14 @@ export async function transcribeAudio(audioFilePath: string): Promise<Transcript
     let offset = 0;
     for (const chunkFile of chunkFiles) {
       const segments = await transcribeChunk(client, chunkFile);
-      allSegments.push(...segments.map((s) => ({ start: s.start + offset, end: s.end + offset, text: s.text })));
+      allSegments.push(
+        ...segments.map((s) => ({
+          start: s.start + offset,
+          end: s.end + offset,
+          text: s.text,
+          words: s.words?.map((w) => ({ start: w.start + offset, end: w.end + offset, text: w.text })),
+        }))
+      );
       offset += CHUNK_SECONDS;
     }
     fs.rmSync(chunksDir, { recursive: true, force: true });

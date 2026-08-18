@@ -79,12 +79,13 @@ Transcripción con marcas de tiempo en segundos [inicio-fin]:
 ${formatTranscript(segments)}
 """
 
-Tarea: identifica ${maxClips} momentos de este fragmento para convertir en shorts virales (los más divertidos,
-sorprendentes, polémicos, emotivos o con mayor "gancho" en los primeros 2 segundos, capaces de retener al
-espectador más allá del segundo 5). El canal necesita cantidad Y calidad: intenta encontrar los ${maxClips},
-aunque no todos sean igual de espectaculares — prefiere elegir el mejor momento disponible en vez de forzar
-un corte a media frase. Solo devuelve menos si el fragmento es literalmente silencio, transición o publicidad
-sin ni un solo momento aprovechable.
+Tarea: identifica hasta ${maxClips} momentos de este fragmento para convertir en shorts virales (los más
+divertidos, sorprendentes, polémicos, emotivos o con mayor "gancho" en los primeros 2 segundos, capaces de
+retener al espectador más allá del segundo 5). Calidad antes que cantidad: por cada candidato, pregúntate de
+verdad "¿esto va a divertir/entretener a quien lo vea entero, o solo lo estoy metiendo para rellenar el
+número?" — si la respuesta no es un sí claro, descártalo, aunque eso signifique proponer menos de ${maxClips}.
+Solo pasa a un momento distinto cuando el vídeo cambie de verdad de tema/situación/gracia — no trocees
+mecánicamente un mismo momento en varios clips ni fuerces un corte a media frase solo para llegar al número.
 Escribe TODO el texto que generes (título, descripción, gancho, razón de viralidad, hashtags) en
 ${contentLanguageName()}, sea cual sea el idioma del vídeo fuente: el audio original del clip nunca se
 traduce ni se dobla, se usa tal cual; solo el texto que tú escribes va en ${contentLanguageName()}.
