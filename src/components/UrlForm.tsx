@@ -12,6 +12,28 @@ interface UrlFormProps {
 
 const CHUNK_SIZE = 20 * 1024 * 1024; // 20MB por trozo, con margen de sobra bajo el límite del túnel
 
+/**
+ * El túnel gratuito (Cloudflare Quick Tunnel) a veces tarda en "despertar" la conexión en la
+ * primera petición tras un rato inactivo, y eso hace que fetch() falle a bajo nivel ("Load
+ * failed" en Safari/iOS). Reintentamos solos esos fallos de red y los 5xx (no los 4xx, que no
+ * se arreglan reintentando) en vez de obligar al usuario a volver a darle al botón.
+ */
+async function fetchWithRetry(input: string, init: RequestInit, retries = 3): Promise<Response> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const res = await fetch(input, init);
+      if (!res.ok && res.status >= 500 && attempt < retries) {
+        await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+        continue;
+      }
+      return res;
+    } catch (err) {
+      if (attempt >= retries) throw err;
+      await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+    }
+  }
+}
+
 async function uploadInChunks(
   file: File,
   mode: string,
@@ -23,7 +45,7 @@ async function uploadInChunks(
   for (let i = 0; i < totalChunks; i++) {
     const start = i * CHUNK_SIZE;
     const chunk = file.slice(start, start + CHUNK_SIZE);
-    const res = await fetch(`/api/jobs/upload/chunk?uploadId=${uploadId}&index=${i}`, {
+    const res = await fetchWithRetry(`/api/jobs/upload/chunk?uploadId=${uploadId}&index=${i}`, {
       method: "POST",
       body: chunk,
     });
@@ -34,7 +56,7 @@ async function uploadInChunks(
     onProgress(Math.round(((i + 1) / totalChunks) * 100));
   }
 
-  const finalizeRes = await fetch("/api/jobs/upload", {
+  const finalizeRes = await fetchWithRetry("/api/jobs/upload", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ uploadId, mode, filename: file.name }),
@@ -66,7 +88,7 @@ export default function UrlForm({
     try {
       let job: { id: string };
       if (tab === "url") {
-        const res = await fetch("/api/jobs", {
+        const res = await fetchWithRetry("/api/jobs", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ url, mode }),
