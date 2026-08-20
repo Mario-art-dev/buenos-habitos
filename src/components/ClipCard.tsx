@@ -121,6 +121,46 @@ export default function ClipCard({ clip }: { clip: ClipData }) {
   const [note, setNote] = useState<string | null>(null);
   const [videoVersion, setVideoVersion] = useState(0);
 
+  const [editingMeta, setEditingMeta] = useState(false);
+  const [savingMeta, setSavingMeta] = useState(false);
+  const [metaError, setMetaError] = useState<string | null>(null);
+  const [title, setTitle] = useState(clip.title);
+  const [description, setDescription] = useState(clip.description);
+  const [hashtagsText, setHashtagsText] = useState(clip.hashtags.join(", "));
+  const [hashtags, setHashtags] = useState(clip.hashtags);
+
+  async function saveMeta() {
+    setSavingMeta(true);
+    setMetaError(null);
+    try {
+      const nextHashtags = hashtagsText
+        .split(",")
+        .map((h) => h.trim().replace(/^#/, ""))
+        .filter(Boolean);
+      const res = await fetch(`/api/clips/${clip.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, description, hashtags: nextHashtags }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "No se pudo guardar");
+      setHashtags(nextHashtags);
+      setEditingMeta(false);
+    } catch (err) {
+      setMetaError((err as Error).message);
+    } finally {
+      setSavingMeta(false);
+    }
+  }
+
+  function cancelMeta() {
+    setTitle(clip.title);
+    setDescription(clip.description);
+    setHashtagsText(hashtags.join(", "));
+    setMetaError(null);
+    setEditingMeta(false);
+  }
+
   const statusFor = (platform: string) =>
     publications.find((p) => p.platform === platform && p.status !== "FAILED");
 
@@ -183,8 +223,61 @@ export default function ClipCard({ clip }: { clip: ClipData }) {
             )}
           </div>
 
-          <h3 className="mt-2 text-base font-semibold text-slate-50">{clip.title}</h3>
-          <p className="mt-1 text-sm text-slate-400">{clip.description}</p>
+          {editingMeta ? (
+            <div className="mt-2 space-y-2">
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Título"
+                className="w-full rounded-lg border border-ink-600 bg-ink-900 px-2 py-1.5 text-sm font-semibold text-slate-100 outline-none focus:border-brand-500"
+              />
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Descripción"
+                rows={2}
+                className="w-full rounded-lg border border-ink-600 bg-ink-900 px-2 py-1.5 text-sm text-slate-300 outline-none focus:border-brand-500"
+              />
+              <input
+                type="text"
+                value={hashtagsText}
+                onChange={(e) => setHashtagsText(e.target.value)}
+                placeholder="hashtags separados por comas"
+                className="w-full rounded-lg border border-ink-600 bg-ink-900 px-2 py-1.5 text-xs text-slate-300 outline-none focus:border-brand-500"
+              />
+              {metaError && <p className="text-xs text-red-400">{metaError}</p>}
+              <div className="flex gap-2">
+                <button
+                  onClick={saveMeta}
+                  disabled={savingMeta || !title.trim()}
+                  className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
+                >
+                  {savingMeta ? "Guardando…" : "Guardar"}
+                </button>
+                <button
+                  onClick={cancelMeta}
+                  disabled={savingMeta}
+                  className="rounded-lg border border-ink-600 px-3 py-1.5 text-xs text-slate-300"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="mt-2 flex items-start justify-between gap-2">
+                <h3 className="text-base font-semibold text-slate-50">{title}</h3>
+                <button
+                  onClick={() => setEditingMeta(true)}
+                  className="shrink-0 text-xs text-slate-400 underline hover:text-slate-300"
+                >
+                  ✏️ Editar
+                </button>
+              </div>
+              <p className="mt-1 text-sm text-slate-400">{description}</p>
+            </>
+          )}
           <p className="mt-1 text-xs italic text-slate-500">Por qué puede ser viral: {clip.viralityReason}</p>
 
           {isRanking && clip.rankingItems && clip.rankingItems.length > 0 && (
@@ -199,13 +292,15 @@ export default function ClipCard({ clip }: { clip: ClipData }) {
             </ol>
           )}
 
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            {clip.hashtags.map((tag) => (
-              <span key={tag} className="rounded-full bg-ink-700 px-2 py-0.5 text-xs text-slate-300">
-                #{tag}
-              </span>
-            ))}
-          </div>
+          {!editingMeta && (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {hashtags.map((tag) => (
+                <span key={tag} className="rounded-full bg-ink-700 px-2 py-0.5 text-xs text-slate-300">
+                  #{tag}
+                </span>
+              ))}
+            </div>
+          )}
 
           {clip.affiliateLink && (
             <div className="mt-3 rounded-xl border border-amber-600/40 bg-amber-500/10 p-3 text-xs text-amber-300">

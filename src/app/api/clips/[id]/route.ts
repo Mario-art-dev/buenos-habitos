@@ -74,6 +74,11 @@ const editSchema = z.object({
   // valor por defecto (ver coverCard.ts / regenerateClip.ts).
   coverFrameSec: z.number().min(0).nullable().optional(),
   coverTitle: z.string().max(200).nullable().optional(),
+  // Metadatos de publicación: no están quemados en el vídeo (salvo coverTitle, que es aparte),
+  // así que se guardan sin necesidad de regenerar nada.
+  title: z.string().min(1).max(200).optional(),
+  description: z.string().max(5000).optional(),
+  hashtags: z.array(z.string().min(1).max(50)).max(30).optional(),
 });
 
 /** Guarda los subtítulos editados/borrados y los textos personalizados del editor (sin regenerar el vídeo todavía). */
@@ -111,6 +116,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       ...(parsed.data.endSec !== undefined && { endSec: parsed.data.endSec }),
       ...(parsed.data.coverFrameSec !== undefined && { coverFrameSec: parsed.data.coverFrameSec }),
       ...(parsed.data.coverTitle !== undefined && { coverTitle: parsed.data.coverTitle }),
+      ...(parsed.data.title !== undefined && { title: parsed.data.title }),
+      ...(parsed.data.description !== undefined && { description: parsed.data.description }),
+      ...(parsed.data.hashtags !== undefined && { hashtags: JSON.stringify(parsed.data.hashtags) }),
     },
   });
 

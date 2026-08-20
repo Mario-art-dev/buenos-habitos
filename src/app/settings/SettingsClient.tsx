@@ -11,14 +11,41 @@ interface Account {
   updatedAt: string;
 }
 
+interface OAuthInfo {
+  youtubeConfigured: boolean;
+  tiktokConfigured: boolean;
+  youtubeCallbackUrl: string;
+  tiktokCallbackUrl: string;
+}
+
+/** Botón "Copiar" para pegar directo en Google Cloud Console / TikTok for Developers. */
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={async () => {
+        await navigator.clipboard.writeText(text);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }}
+      className="shrink-0 rounded-lg border border-ink-600 px-2 py-1 text-xs text-slate-300 hover:border-brand-500"
+    >
+      {copied ? "✓ Copiado" : "Copiar"}
+    </button>
+  );
+}
+
 export default function SettingsClient() {
   const [accounts, setAccounts] = useState<Account[]>([]);
+  const [oauth, setOauth] = useState<OAuthInfo | null>(null);
   const params = useSearchParams();
 
   async function load() {
     const res = await fetch("/api/accounts");
     const data = await res.json();
     setAccounts(data.accounts);
+    setOauth(data.oauth);
   }
 
   useEffect(() => {
@@ -73,12 +100,50 @@ export default function SettingsClient() {
             <button onClick={() => disconnect("YOUTUBE")} className="rounded-lg border border-ink-600 px-4 py-2 text-sm text-slate-300 hover:border-red-500 hover:text-red-400">
               Desconectar
             </button>
+          ) : oauth && !oauth.youtubeConfigured ? (
+            <span className="rounded-lg border border-amber-600/40 px-4 py-2 text-sm text-amber-400">
+              Faltan credenciales
+            </span>
           ) : (
             <a href="/api/auth/youtube" className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white">
               Conectar YouTube
             </a>
           )}
         </div>
+        {!yt && oauth && (
+          <div className="mt-4 rounded-xl border border-ink-600 bg-ink-900/50 p-3 text-xs text-slate-400">
+            {!oauth.youtubeConfigured ? (
+              <p>
+                Falta configurar <code className="text-slate-300">GOOGLE_CLIENT_ID</code> y{" "}
+                <code className="text-slate-300">GOOGLE_CLIENT_SECRET</code> en el .env (README, sección
+                YouTube) antes de poder conectar la cuenta.
+              </p>
+            ) : (
+              <>
+                <p>
+                  Antes de darle a "Conectar", añade esta URL exacta como "URI de redirección autorizado"
+                  en tu{" "}
+                  <a
+                    href="https://console.cloud.google.com/apis/credentials"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-brand-400 underline"
+                  >
+                    Google Cloud Console → Credenciales
+                  </a>{" "}
+                  (cambia cada vez que se reinicia el "Servidor temporal", así que puede que tengas que
+                  volver a añadirla):
+                </p>
+                <div className="mt-2 flex items-center gap-2">
+                  <code className="flex-1 overflow-x-auto whitespace-nowrap rounded-lg bg-ink-900 px-2 py-1.5 text-slate-300">
+                    {oauth.youtubeCallbackUrl}
+                  </code>
+                  <CopyButton text={oauth.youtubeCallbackUrl} />
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="rounded-2xl border border-ink-700 bg-ink-800 p-6">
@@ -95,12 +160,49 @@ export default function SettingsClient() {
             <button onClick={() => disconnect("TIKTOK")} className="rounded-lg border border-ink-600 px-4 py-2 text-sm text-slate-300 hover:border-red-500 hover:text-red-400">
               Desconectar
             </button>
+          ) : oauth && !oauth.tiktokConfigured ? (
+            <span className="rounded-lg border border-amber-600/40 px-4 py-2 text-sm text-amber-400">
+              Faltan credenciales
+            </span>
           ) : (
             <a href="/api/auth/tiktok" className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-semibold text-black">
               Conectar TikTok
             </a>
           )}
         </div>
+        {!tt && oauth && (
+          <div className="mt-4 rounded-xl border border-ink-600 bg-ink-900/50 p-3 text-xs text-slate-400">
+            {!oauth.tiktokConfigured ? (
+              <p>
+                Falta configurar <code className="text-slate-300">TIKTOK_CLIENT_KEY</code> y{" "}
+                <code className="text-slate-300">TIKTOK_CLIENT_SECRET</code> en el .env (README, sección
+                TikTok) antes de poder conectar la cuenta.
+              </p>
+            ) : (
+              <>
+                <p>
+                  Antes de darle a "Conectar", añade esta URL exacta como "Redirect URI" en tu{" "}
+                  <a
+                    href="https://developers.tiktok.com/apps"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-brand-400 underline"
+                  >
+                    TikTok for Developers → tu app → Login Kit
+                  </a>{" "}
+                  (cambia cada vez que se reinicia el "Servidor temporal", así que puede que tengas que
+                  volver a añadirla):
+                </p>
+                <div className="mt-2 flex items-center gap-2">
+                  <code className="flex-1 overflow-x-auto whitespace-nowrap rounded-lg bg-ink-900 px-2 py-1.5 text-slate-300">
+                    {oauth.tiktokCallbackUrl}
+                  </code>
+                  <CopyButton text={oauth.tiktokCallbackUrl} />
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       <ScheduleSettings />

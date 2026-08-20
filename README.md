@@ -469,12 +469,15 @@ azar). La app ya calcula el redirect_uri correcto solo, a partir de la URL con l
 admiten comodines, es una norma de seguridad suya, no algo que se pueda evitar con código).
 Así que **cada vez que quieras conectar o reconectar una cuenta después de un reinicio**:
 
-1. Copia tu URL actual (la del túnel, tipo `https://algo.trycloudflare.com`).
-2. Ve a Google Cloud Console (Credenciales → tu Client ID → URIs de redirección autorizados) o
-   al panel de TikTok for Developers (Login Kit → Redirect URI) desde el navegador del móvil.
-3. Añade `{esa URL}/api/auth/youtube/callback` (o `/api/auth/tiktok/callback`) a la lista —
-   puedes tener varias guardadas a la vez, no hace falta borrar las anteriores.
-4. Ya puedes darle a "Conectar" en Ajustes.
+1. Ve a **Ajustes** dentro de la app: si no está conectada, cada tarjeta (YouTube/TikTok) te
+   enseña ya la URL EXACTA que hace falta añadir (calculada con tu URL actual, botón "Copiar"
+   incluido) — no hace falta que la construyas a mano. Si en vez de eso ves "Faltan
+   credenciales", es que todavía no has puesto `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` o
+   `TIKTOK_CLIENT_KEY`/`TIKTOK_CLIENT_SECRET` en el `.env`.
+2. Pega esa URL en Google Cloud Console (Credenciales → tu Client ID → URIs de redirección
+   autorizados) o en TikTok for Developers (Login Kit → Redirect URI) desde el navegador del
+   móvil — puedes tener varias guardadas a la vez, no hace falta borrar las anteriores.
+3. Ya puedes darle a "Conectar" en Ajustes.
 
 Una vez conectada una cuenta, **no hace falta repetir esto para publicar** — solo para
 conectar o reconectar por primera vez tras un reinicio (los tokens ya guardados siguen
@@ -543,6 +546,13 @@ prisma/schema.prisma      modelo de datos (Job, Clip, RankingItem, Publication, 
 Cada short listo tiene un botón "Descargar" (sin marca de agua, con el archivo `.mp4`
 original que se generó, a la resolución elegida según el vídeo fuente). En **Galería**
 (`/gallery`) puedes ver y descargar todos los shorts de todos tus vídeos en un único sitio.
+
+### Editar título, descripción y hashtags
+
+En la tarjeta de cada clip, el botón "✏️ Editar" (junto al título) convierte el título, la
+descripción y los hashtags en campos editables — pulsa "Guardar" para aplicarlo. Es solo
+metadatos (no hace falta regenerar el vídeo), y se usa automáticamente la próxima vez que
+publiques ese clip en YouTube o TikTok.
 
 ## Configuración típica de vídeo/duración
 
