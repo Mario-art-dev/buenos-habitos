@@ -6,7 +6,9 @@ export const dynamic = "force-dynamic";
 
 const createJobSchema = z.object({
   url: z.string().url("Introduce una URL de vídeo válida"),
-  mode: z.enum(["SINGLE", "RANKING"]).optional(),
+  mode: z.enum(["SINGLE", "RANKING", "SPLIT"]).optional(),
+  // Solo modo SPLIT: duración en segundos de cada trozo.
+  splitDurationSec: z.number().min(15).max(600).optional(),
 });
 
 export async function GET(req: NextRequest) {
@@ -27,7 +29,12 @@ export async function POST(req: NextRequest) {
   }
 
   const job = await db.job.create({
-    data: { sourceUrl: parsed.data.url, mode: parsed.data.mode ?? "SINGLE", status: "PENDING" },
+    data: {
+      sourceUrl: parsed.data.url,
+      mode: parsed.data.mode ?? "SINGLE",
+      status: "PENDING",
+      ...(parsed.data.mode === "SPLIT" && { splitDurationSec: parsed.data.splitDurationSec ?? 60 }),
+    },
   });
 
   return NextResponse.json({ job }, { status: 201 });

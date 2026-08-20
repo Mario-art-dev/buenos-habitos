@@ -34,6 +34,9 @@ interface ClipData {
   sourceVideoUrl: string | null;
   captionCues: StoredCue[];
   customTexts: CustomTextElement[];
+  jobMode: string | null;
+  coverFrameSec: number | null;
+  coverTitle: string | null;
 }
 
 // Reloj virtual de la composición de Remotion — no tiene por qué coincidir con el fps real del
@@ -171,6 +174,9 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
   const [trimEnd, setTrimEnd] = useState(0);
   const [resolution, setResolution] = useState<{ width: number; height: number } | null>(null);
   const [thumbnails, setThumbnails] = useState<string[]>([]);
+  // Portada (solo SINGLE/SPLIT): null = usar el fotograma/título automático de coverCard.ts.
+  const [coverFrameSec, setCoverFrameSec] = useState<number | null>(null);
+  const [coverTitle, setCoverTitle] = useState("");
 
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const stripRef = useRef<HTMLDivElement | null>(null);
@@ -200,6 +206,8 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
       const dur = data.clip.endSec - (data.clip.effectiveStartSec ?? data.clip.startSec);
       setTrimStart(0);
       setTrimEnd(dur);
+      setCoverFrameSec(data.clip.coverFrameSec);
+      setCoverTitle(data.clip.coverTitle ?? data.clip.title);
       setLoading(false);
     }
     load();
@@ -427,6 +435,10 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
       const nextTexts = trimmed ? shiftTexts(texts, trimStart, newDuration) : texts;
       const nextEffectiveStart = clipStart + trimStart;
       const nextEnd = clipStart + trimEnd;
+      // Si el recorte deja el fotograma de portada elegido fuera del nuevo rango, se ajusta al
+      // extremo más cercano en vez de perder la elección o que la API la rechace por estar fuera.
+      const nextCoverFrameSec =
+        coverFrameSec == null ? null : Math.min(Math.max(coverFrameSec, nextEffectiveStart), nextEnd);
 
       const putRes = await fetch(`/api/clips/${clipId}`, {
         method: "PUT",
@@ -436,6 +448,8 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
           customTexts: nextTexts,
           effectiveStartSec: nextEffectiveStart,
           endSec: nextEnd,
+          coverFrameSec: nextCoverFrameSec,
+          coverTitle,
         }),
       });
       const putData = await putRes.json();
@@ -449,12 +463,15 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
       setTexts(nextTexts);
       setTrimStart(0);
       setTrimEnd(newDuration);
+      setCoverFrameSec(nextCoverFrameSec);
       setClip((prev) =>
         prev
           ? {
               ...prev,
               effectiveStartSec: nextEffectiveStart,
               endSec: nextEnd,
+              coverFrameSec: nextCoverFrameSec,
+              coverTitle,
               videoUrl: regenData.videoUrl,
               thumbnailUrl: regenData.thumbnailUrl,
             }
@@ -632,6 +649,64 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
         </div>
 
         <div className="flex-1 space-y-6">
+          {/* Portada (solo SINGLE/SPLIT: RANKING usa su propia tarjeta de ranking) */}
+          {(clip.jobMode === "SINGLE" || clip.jobMode === "SPLIT") && (
+            <div>
+              <h2 className="mb-2 text-sm font-semibold text-slate-300">Portada</h2>
+              <div className="flex gap-4">
+                {clip.thumbnailUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={clip.thumbnailUrl}
+                    alt="Portada actual"
+                    className="h-24 w-14 shrink-0 rounded-lg border border-ink-600 object-cover"
+                  />
+                )}
+                <div className="flex-1">
+                  <label className="mb-1 block text-xs text-slate-400">Título de la portada</label>
+                  <input
+                    type="text"
+                    value={coverTitle}
+                    onChange={(e) => setCoverTitle(e.target.value)}
+                    className="w-full rounded-lg border border-ink-600 bg-ink-900 px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-brand-500"
+                  />
+                </div>
+              </div>
+              <p className="mb-1 mt-3 text-xs text-slate-400">Elige el fotograma de portada:</p>
+              <div className="flex gap-1 overflow-x-auto rounded-lg bg-ink-900 p-1">
+                {thumbnails.length > 0 ? (
+                  thumbnails.map((src, i) => {
+                    const t = clipStart + (duration * i) / (THUMBNAIL_COUNT - 1);
+                    const isSelected = coverFrameSec != null && Math.abs(coverFrameSec - t) < 0.01;
+                    return (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        key={i}
+                        src={src}
+                        alt=""
+                        onClick={() => setCoverFrameSec(t)}
+                        draggable={false}
+                        className={`h-14 w-9 shrink-0 cursor-pointer rounded object-cover ${
+                          isSelected ? "outline outline-2 outline-brand-500" : "opacity-70 hover:opacity-100"
+                        }`}
+                      />
+                    );
+                  })
+                ) : (
+                  <p className="p-2 text-xs text-slate-600">Generando miniaturas…</p>
+                )}
+              </div>
+              {coverFrameSec != null && (
+                <button
+                  onClick={() => setCoverFrameSec(null)}
+                  className="mt-1 text-xs text-slate-400 underline hover:text-slate-300"
+                >
+                  Usar el fotograma automático
+                </button>
+              )}
+            </div>
+          )}
+
           {/* Subtítulos automáticos */}
           <div>
             <h2 className="mb-2 text-sm font-semibold text-slate-300">Subtítulos generados automáticamente</h2>

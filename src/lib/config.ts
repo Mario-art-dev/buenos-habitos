@@ -178,6 +178,10 @@ export const config = {
     minItems: Number(optional("RANKING_MIN_ITEMS", "5")),
     maxItems: Number(optional("RANKING_MAX_ITEMS", "10")),
     minSegmentSeconds: Number(optional("RANKING_MIN_SEGMENT_SECONDS", "3")),
+    // Duración total mínima (suma de los momentos, sin contar tarjetas/subtítulos) que tiene que
+    // tener un vídeo de ranking para publicarse — por debajo de esto no cuenta como visualización
+    // monetizable de verdad en TikTok/YouTube, igual que el mínimo por clip en modo SINGLE.
+    minDurationSec: Number(optional("RANKING_MIN_DURATION_SEC", "60")),
   },
 
   song: {

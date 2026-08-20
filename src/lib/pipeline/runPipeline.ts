@@ -23,6 +23,7 @@ import { probeVideo, pickVerticalResolution } from "./probe";
 import { processRankingJob } from "./rankingPipeline";
 import { processProductJob } from "./productPipeline";
 import { processSongJob } from "./songPipeline";
+import { processSplitJob } from "./splitPipeline";
 import { setStatus } from "./status";
 import { generateSingleCommentary } from "./commentary";
 import { renderCommentaryCard } from "./commentaryCards";
@@ -47,6 +48,9 @@ export async function processJob(jobId: string): Promise<void> {
   }
   if (job.mode === "SONG") {
     return processSongJob(jobId);
+  }
+  if (job.mode === "SPLIT") {
+    return processSplitJob(jobId);
   }
   return processSingleJob(jobId);
 }

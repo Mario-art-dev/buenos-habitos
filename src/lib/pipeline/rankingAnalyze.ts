@@ -170,8 +170,22 @@ export function groupIntoRankings(classified: ClassifiedMoment[]): RankingGroup[
   const groups: RankingGroup[] = [];
   for (const [category, items] of byCategory) {
     if (items.length < config.ranking.minItems) continue;
-    const sorted = items.sort((a, b) => b.score - a.score).slice(0, config.ranking.maxItems);
-    groups.push({ category, items: sorted });
+    const sorted = items.sort((a, b) => b.score - a.score);
+    let picked = sorted.slice(0, config.ranking.maxItems);
+
+    // Un vídeo de ranking tiene que durar al menos config.ranking.minDurationSec de verdad (no
+    // solo tener el nº mínimo de momentos) — si con maxItems no llega, se añaden más momentos de
+    // la MISMA categoría (por orden de score) hasta llegar a la duración mínima o agotar la lista.
+    let totalDuration = picked.reduce((sum, i) => sum + (i.endSec - i.startSec), 0);
+    let extra = config.ranking.maxItems;
+    while (totalDuration < config.ranking.minDurationSec && extra < sorted.length) {
+      picked = sorted.slice(0, extra + 1);
+      totalDuration += sorted[extra].endSec - sorted[extra].startSec;
+      extra++;
+    }
+    if (totalDuration < config.ranking.minDurationSec) continue;
+
+    groups.push({ category, items: picked });
   }
 
   return groups.sort((a, b) => b.items.length - a.items.length);

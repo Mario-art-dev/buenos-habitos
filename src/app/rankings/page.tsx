@@ -10,8 +10,9 @@ export default function RankingsPage() {
           Pega un vídeo largo de recopilación (ej. una hora de fails variados) y la IA detecta los momentos,
           los agrupa por categoría (fails de coches, de acrobacias, de animales…) y monta un vídeo de cuenta
           atrás por cada categoría con al menos {""}
-          <span className="text-slate-300">5 momentos</span>, con el número de puesto y los subtítulos ya
-          incrustados, listo para descargar o publicar.
+          <span className="text-slate-300">5 momentos</span> y {""}
+          <span className="text-slate-300">1 minuto de duración</span>, con el número de puesto y los
+          subtítulos ya incrustados, listo para descargar o publicar.
         </p>
       </div>
       <UrlForm

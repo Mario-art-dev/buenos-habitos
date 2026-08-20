@@ -18,7 +18,7 @@ export default function JobList({
   mode,
   emptyMessage = "Todavía no has generado ningún short. Pega un enlace arriba para empezar.",
 }: {
-  mode?: "SINGLE" | "RANKING" | "PRODUCT" | "SONG";
+  mode?: "SINGLE" | "RANKING" | "PRODUCT" | "SONG" | "SPLIT";
   emptyMessage?: string;
 }) {
   const [jobs, setJobs] = useState<JobSummary[]>([]);

@@ -11,7 +11,7 @@ function serialize(clip: {
   customTexts: string;
   filePath: string | null;
   thumbnailPath: string | null;
-  job?: { sourceFilePath: string | null };
+  job?: { sourceFilePath: string | null; mode: string };
   [key: string]: unknown;
 }) {
   const { job, ...rest } = clip;
@@ -26,6 +26,8 @@ function serialize(clip: {
     // vivo con Remotion, recortando en el navegador el mismo tramo [effectiveStartSec, endSec] que
     // ya se usa para renderizar de verdad, sin gastar otro render de servidor solo para previsualizar.
     sourceVideoUrl: job ? toMediaUrl(job.sourceFilePath) : null,
+    // La portada (coverCard.ts) solo existe en SINGLE/SPLIT — el editor la muestra solo entonces.
+    jobMode: job?.mode ?? null,
   };
 }
 
@@ -67,6 +69,11 @@ const editSchema = z.object({
   // nuevo inicio — este endpoint solo persiste los valores, no hace ningún cálculo de recorte.
   effectiveStartSec: z.number().min(0).optional(),
   endSec: z.number().min(0).optional(),
+  // Portada (solo SINGLE/SPLIT): fotograma elegido a mano (absoluto sobre el vídeo fuente, debe
+  // caer dentro del propio clip) y/o título propio a quemar encima. null explícito = volver al
+  // valor por defecto (ver coverCard.ts / regenerateClip.ts).
+  coverFrameSec: z.number().min(0).nullable().optional(),
+  coverTitle: z.string().max(200).nullable().optional(),
 });
 
 /** Guarda los subtítulos editados/borrados y los textos personalizados del editor (sin regenerar el vídeo todavía). */
@@ -88,6 +95,13 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     return NextResponse.json({ error: "El recorte es demasiado corto (mínimo medio segundo)" }, { status: 400 });
   }
 
+  if (
+    parsed.data.coverFrameSec != null &&
+    (parsed.data.coverFrameSec < newStart || parsed.data.coverFrameSec > newEnd)
+  ) {
+    return NextResponse.json({ error: "El fotograma de portada tiene que estar dentro del clip" }, { status: 400 });
+  }
+
   const updated = await db.clip.update({
     where: { id: params.id },
     data: {
@@ -95,6 +109,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       ...(parsed.data.customTexts !== undefined && { customTexts: JSON.stringify(parsed.data.customTexts) }),
       ...(parsed.data.effectiveStartSec !== undefined && { effectiveStartSec: parsed.data.effectiveStartSec }),
       ...(parsed.data.endSec !== undefined && { endSec: parsed.data.endSec }),
+      ...(parsed.data.coverFrameSec !== undefined && { coverFrameSec: parsed.data.coverFrameSec }),
+      ...(parsed.data.coverTitle !== undefined && { coverTitle: parsed.data.coverTitle }),
     },
   });
 

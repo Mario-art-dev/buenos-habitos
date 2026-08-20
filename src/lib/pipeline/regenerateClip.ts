@@ -77,9 +77,11 @@ export async function regenerateClip(clipId: string): Promise<void> {
       }
     }
 
-    // Modo SINGLE ("vídeos virales"): sin zoom dinámico, por la misma petición explícita que ya
-    // aplica en la generación inicial (ver runPipeline.ts) — se mantiene igual al regenerar.
-    const dynamicZoom = clip.job.mode === "SINGLE" ? false : config.dynamicZoom.enabled;
+    // Modo SINGLE/SPLIT ("vídeos virales" y "cortes"): sin zoom dinámico, por la misma petición
+    // explícita que ya aplica en la generación inicial (ver runPipeline.ts/splitPipeline.ts) — se
+    // mantiene igual al regenerar.
+    const noZoomModes = clip.job.mode === "SINGLE" || clip.job.mode === "SPLIT";
+    const dynamicZoom = noZoomModes ? false : config.dynamicZoom.enabled;
 
     await cutVerticalClip({
       sourcePath: srcPath,
@@ -118,11 +120,14 @@ export async function regenerateClip(clipId: string): Promise<void> {
       fs.rmSync(outroCard, { force: true });
     }
 
-    if (config.coverCard.enabled) {
+    // La portada (coverCard.ts) solo la usan los modos SINGLE/SPLIT — RANKING tiene su propia
+    // tarjeta de ranking (rankingIntroCard.ts) y PRODUCT/SONG nunca la usaron; envolverla aquí
+    // para esos modos añadiría una portada que el clip original nunca tuvo.
+    if (config.coverCard.enabled && noZoomModes) {
       await renderCoverCard({
         sourcePath: srcPath,
-        frameAtSec: hookVerifiedFrameSec(startSec, endSec),
-        title: clip.title,
+        frameAtSec: clip.coverFrameSec ?? hookVerifiedFrameSec(startSec, endSec),
+        title: clip.coverTitle ?? clip.title,
         outPath: coverPath,
         resolution,
       });

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 interface UrlFormProps {
-  mode?: "SINGLE" | "RANKING";
+  mode?: "SINGLE" | "RANKING" | "SPLIT";
   label?: string;
   buttonLabel?: string;
   helpText?: string;
@@ -37,7 +37,8 @@ async function fetchWithRetry(input: string, init: RequestInit, retries = 3): Pr
 async function uploadInChunks(
   file: File,
   mode: string,
-  onProgress: (pct: number) => void
+  onProgress: (pct: number) => void,
+  splitDurationSec?: number
 ): Promise<{ id: string }> {
   const uploadId = crypto.randomUUID();
   const totalChunks = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
@@ -59,7 +60,7 @@ async function uploadInChunks(
   const finalizeRes = await fetchWithRetry("/api/jobs/upload", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ uploadId, mode, filename: file.name }),
+    body: JSON.stringify({ uploadId, mode, filename: file.name, splitDurationSec }),
   });
   const data = await finalizeRes.json();
   if (!finalizeRes.ok) throw new Error(data.error ?? "No se pudo crear el trabajo");
@@ -78,7 +79,9 @@ export default function UrlForm({
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [splitMinutes, setSplitMinutes] = useState(1);
   const router = useRouter();
+  const splitDurationSec = mode === "SPLIT" ? Math.round(splitMinutes * 60) : undefined;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -91,14 +94,14 @@ export default function UrlForm({
         const res = await fetchWithRetry("/api/jobs", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url, mode }),
+          body: JSON.stringify({ url, mode, splitDurationSec }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? "No se pudo crear el trabajo");
         job = data.job;
       } else {
         if (!file) throw new Error("Elige un archivo de vídeo");
-        job = await uploadInChunks(file, mode, setProgress);
+        job = await uploadInChunks(file, mode, setProgress, splitDurationSec);
       }
       setUrl("");
       setFile(null);
@@ -133,6 +136,29 @@ export default function UrlForm({
           Subir vídeo
         </button>
       </div>
+
+      {mode === "SPLIT" && (
+        <div className="mb-4">
+          <label className="mb-2 block text-sm font-medium text-slate-300">Duración de cada trozo</label>
+          <div className="flex items-center gap-3">
+            <input
+              type="range"
+              min={0.5}
+              max={10}
+              step={0.5}
+              value={splitMinutes}
+              onChange={(e) => setSplitMinutes(Number(e.target.value))}
+              className="flex-1"
+            />
+            <span className="w-20 shrink-0 rounded-lg bg-ink-900 px-3 py-1.5 text-center text-sm text-slate-200">
+              {splitMinutes} min
+            </span>
+          </div>
+          <p className="mt-1 text-xs text-slate-500">
+            El vídeo se corta entero, de principio a fin, en shorts consecutivos de esta duración.
+          </p>
+        </div>
+      )}
 
       {tab === "url" ? (
         <>

@@ -9,7 +9,7 @@ datasource db {
 
 // SQLite no soporta enums nativos en Prisma: los estados se validan como
 // strings a nivel de aplicación (ver src/lib/types.ts).
-// Job.mode: SINGLE | RANKING | PRODUCT | SONG
+// Job.mode: SINGLE | RANKING | PRODUCT | SONG | SPLIT
 // JobStatus: PENDING | DOWNLOADING | TRANSCRIBING | ANALYZING | CLIPPING | DONE | FAILED
 // ClipStatus: PENDING | RENDERING | READY | FAILED
 // Platform: YOUTUBE | TIKTOK
@@ -36,6 +36,9 @@ model Job {
 
   // Solo modo SONG
   songUrl String? // vídeo de YouTube de la canción con la que se re-edita el vídeo
+
+  // Solo modo SPLIT: duración fija (segundos) de cada trozo al cortar el vídeo en shorts secuenciales
+  splitDurationSec Int?
 
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
@@ -81,6 +84,11 @@ model Clip {
   // Textos que el usuario añade a mano en el editor (fuente/color/tamaño/posición propios).
   // Formato: [{ id, text, start, end, xPct, yPct, fontName, fontSize, colorHex, uppercase }]
   customTexts       String    @default("[]")
+
+  // Portada (SINGLE/SPLIT): override elegido a mano desde el editor. Si es null, se usa el
+  // fotograma/título por defecto (ver coverCard.ts) — RANKING/PRODUCT/SONG no usan portada.
+  coverFrameSec Float?
+  coverTitle    String?
 
   // Solo para clips generados en modo RANKING
   category       String?

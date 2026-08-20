@@ -21,13 +21,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Formulario inválido" }, { status: 400 });
   }
 
-  const { uploadId, mode, filename } = body as { uploadId?: string; mode?: string; filename?: string };
+  const { uploadId, mode, filename, splitDurationSec } = body as {
+    uploadId?: string;
+    mode?: string;
+    filename?: string;
+    splitDurationSec?: number;
+  };
 
   if (!uploadId || !UPLOAD_ID_RE.test(uploadId)) {
     return NextResponse.json({ error: "uploadId inválido" }, { status: 400 });
   }
-  if (mode !== "SINGLE" && mode !== "RANKING") {
+  if (mode !== "SINGLE" && mode !== "RANKING" && mode !== "SPLIT") {
     return NextResponse.json({ error: "Modo no válido" }, { status: 400 });
+  }
+  if (mode === "SPLIT" && splitDurationSec != null && (splitDurationSec < 15 || splitDurationSec > 600)) {
+    return NextResponse.json({ error: "Duración de trozo no válida" }, { status: 400 });
   }
 
   const partPath = uploadPartPath(uploadId);
@@ -49,7 +57,12 @@ export async function POST(req: NextRequest) {
   }
 
   const job = await db.job.create({
-    data: { mode, sourceTitle: filename || "Vídeo subido", status: "PENDING" },
+    data: {
+      mode,
+      sourceTitle: filename || "Vídeo subido",
+      status: "PENDING",
+      ...(mode === "SPLIT" && { splitDurationSec: splitDurationSec ?? 60 }),
+    },
   });
 
   const outPath = sourceVideoPath(job.id);

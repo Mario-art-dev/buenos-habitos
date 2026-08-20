@@ -84,6 +84,9 @@ Cada clip listo tiene un botón "✏️ Editar" que lleva a `/clips/[id]/edit`, 
   quedarte solo con la parte del clip que quieras.
 - **Agrandar/encoger texto**: al seleccionar un texto añadido a mano aparece un tirador en su
   esquina — arrástralo hacia fuera para agrandarlo, hacia dentro para encogerlo.
+- **Portada** (solo modos Inicio/Cortar en shorts — Rankings tiene su propia tarjeta): elige de qué
+  fotograma del propio clip se saca la carátula (haz clic en una de las miniaturas) y cambia el
+  título que se quema encima, independiente del título del clip.
 - Al pulsar "Guardar y regenerar vídeo", el clip se vuelve a cortar desde el vídeo original con
   esos cambios ya aplicados — no es una edición de los píxeles del vídeo ya hecho (eso no es
   posible sobre un archivo ya quemado), así que hace falta el vídeo fuente todavía disponible en el
@@ -103,11 +106,11 @@ el plano ancho original con las barras — para que la mayoría del short se sie
 verdad y el plano ancho quede como un respiro ocasional, no al revés. Desactívalo con
 `ENABLE_DYNAMIC_ZOOM="false"` si prefieres el encuadre ancho fijo de siempre.
 
-**La sección principal (Inicio, modo SINGLE) no usa zoom dinámico ni el caption grande automático
-— el short se queda siempre en el recorte vertical fijo, sin ningún texto quemado por defecto**,
-para que edites tú a mano desde el editor lo que quieras (recortar, añadir tus propios textos).
-Esto es así siempre, no depende de `ENABLE_DYNAMIC_ZOOM`/`ENABLE_BIG_CAPTIONS` (esos dos flags solo
-afectan a los vídeos de Rankings).
+**Inicio (modo SINGLE) y Cortar en shorts (modo SPLIT) no usan zoom dinámico ni el caption grande
+automático — el short se queda siempre en el recorte vertical fijo, sin ningún texto quemado por
+defecto**, para que edites tú a mano desde el editor lo que quieras (recortar, añadir tus propios
+textos). Esto es así siempre, no depende de `ENABLE_DYNAMIC_ZOOM`/`ENABLE_BIG_CAPTIONS` (esos dos
+flags solo afectan a los vídeos de Rankings).
 
 ### Portada de marca (sonido + carátula) al principio y al final
 
@@ -191,12 +194,14 @@ hashtags y el comentario que TÚ añades por encima.
    en qué categoría de UNA palabra encaja (Dogs, Girls, Flips, Skate, Fails...) y qué puntuación
    de impacto/gracia tiene.
 3. Agrupa los momentos por categoría; cada categoría con al menos `RANKING_MIN_ITEMS`
-   (por defecto 5) momentos se convierte en un vídeo de cuenta atrás propio (del puesto más
-   bajo al puesto 1) — así un vídeo largo de momentos variados sale troceado en varios shorts
-   temáticos (uno de perros, otro de chicas, otro de flips...) en vez de mezclarlo todo. Cada
-   uno abre con la tarjeta "Ranking Funniest {Categoría} Moments" (fuente Anton, colores fijos
-   por palabra), tiene una tarjeta de número por puesto con un título corto sobre ese clip
-   concreto, y lleva los subtítulos del audio original quemados en el vídeo.
+   (por defecto 5) momentos Y al menos `RANKING_MIN_DURATION_SEC` (por defecto 60s) de duración
+   total se convierte en un vídeo de cuenta atrás propio (del puesto más bajo al puesto 1) — así
+   un vídeo largo de momentos variados sale troceado en varios shorts temáticos (uno de perros,
+   otro de chicas, otro de flips...) en vez de mezclarlo todo. Si con el número máximo de momentos
+   (`RANKING_MAX_ITEMS`) no se llega al minuto, se añaden más momentos de la misma categoría antes
+   de descartarla. Cada uno abre con la tarjeta "Ranking Funniest {Categoría} Moments" (fuente
+   Anton, colores fijos por palabra), tiene una tarjeta de número por puesto con un título corto
+   sobre ese clip concreto, y lleva los subtítulos del audio original quemados en el vídeo.
 4. La IA sugiere además el **título de una canción concreta** que pegaría como música de
    fondo (`musicQuery`). En el detalle del vídeo puedes pegar el enlace de YouTube de esa
    canción (o de cualquier otra) y el segundo en el que empieza el fragmento que quieres: la
@@ -206,6 +211,18 @@ hashtags y el comentario que TÚ añades por encima.
    aunque el resto del vídeo sea tuyo. La app lo permite porque tú decides qué canción usar,
    pero la responsabilidad de esa elección es tuya. Si prefieres evitar el riesgo, no añadas
    música: el vídeo queda listo igualmente con el audio original de cada clip.
+
+### Modo Cortar en shorts (corte mecánico por duración fija)
+
+A diferencia de Inicio (la IA elige los mejores momentos) y Rankings (la IA elige y agrupa por
+categoría), este modo no usa IA para decidir qué usar: pegas un vídeo, eliges cuántos minutos
+quieres que dure cada trozo, y se corta el vídeo ENTERO de principio a fin en shorts consecutivos
+de esa duración — útil para repartir una charla, un directo o un vídeo largo en varias partes
+seguidas sin perderte nada del contenido. Cada trozo sí recibe título, descripción y hashtags
+generados por IA a partir de su propia transcripción (para que sea publicable), y el mismo
+tratamiento visual que Inicio: sin zoom dinámico, sin caption grande automático, con la portada de
+marca al principio/final (editable desde el editor). Si el último trozo queda muy corto para tener
+sentido solo, se funde con el anterior en vez de dejarlo suelto.
 
 ### Modo Producto (vídeos publicitarios con enlace de afiliado)
 
