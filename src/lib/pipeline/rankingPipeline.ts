@@ -93,7 +93,7 @@ export async function processRankingJob(jobId: string): Promise<void> {
           jobId,
           clipId: created.id,
           sourcePath: srcPath,
-          overallTitle: composition.title,
+          category: group.category,
           overallIntroCommentary: commentaryOn ? composition.commentaryIntro : null,
           overallOutroCommentary: commentaryOn ? composition.commentaryOutro : null,
           items: created.rankingItems.map((i) => ({

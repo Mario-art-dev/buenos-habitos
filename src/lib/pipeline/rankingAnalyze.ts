@@ -92,10 +92,12 @@ ${items}
 Para cada candidato decide:
 - "include": true solo si es un momento claro y usable (algo ocurre: una caída, una acrobacia, un susto, algo
   gracioso o impactante). false si es un tramo de transición, introducción, publicidad, o no pasa nada relevante.
-- "category": categoría temática breve en ${contentLanguageName()} para agrupar candidatos similares en un mismo
-  vídeo de ranking (ejemplos orientativos: "fails de coches", "fails de acrobacias", "fails de animales", "fails en
-  el trabajo", "fails de bicicleta", "resbalones", "fails de nieve/agua"... usa la que mejor describa el contenido,
-  sé consistente para que candidatos del mismo tipo caigan en la MISMA categoría exacta).
+- "category": UNA sola palabra en ${contentLanguageName()} (excepcionalmente dos si de verdad hace falta) que
+  describa el tema del candidato, para agrupar los parecidos en un mismo vídeo de ranking Y para mostrarse en
+  pantalla dentro de la plantilla fija "Ranking Funniest {category} Moments" — tiene que sonar bien ahí metida tal
+  cual (ejemplos: "Dogs", "Girls", "Flips", "Skate", "Fails", "Pranks", "Gym", "Cats", "Cars"...). Elige la que
+  mejor describa el contenido real del candidato, sé consistente para que candidatos del mismo tipo caigan en la
+  MISMA categoría exacta (mismo singular/plural, misma capitalización).
 - "label": texto muy corto (máx 6 palabras) en ${contentLanguageName()} para mostrar en pantalla como título de ese
   puesto del ranking.
 - "description": 1 frase en ${contentLanguageName()} describiendo qué pasa.

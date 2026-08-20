@@ -2,6 +2,7 @@ import fs from "fs";
 import type { TranscriptSegment } from "./transcribe";
 import { probeVideo, type VerticalResolution } from "./probe";
 import { cutVerticalClip, renderTitleCard, concatClips, mixBackgroundMusic, extractThumbnail, extractAudioSegment } from "./clip";
+import { renderRankingIntroCard } from "./rankingIntroCard";
 import { renderCommentaryCard } from "./commentaryCards";
 import { buildBigCaptionsAss } from "./bigCaptions";
 import { getTTSProvider } from "@/lib/tts/provider";
@@ -35,34 +36,32 @@ export async function assembleRankingVideo(params: {
   jobId: string;
   clipId: string;
   sourcePath: string;
-  overallTitle: string;
+  category: string;
   overallIntroCommentary?: string | null;
   overallOutroCommentary?: string | null;
   items: RenderRankingItem[]; // ya ordenados de mejor a peor (position 1..N)
   transcriptSegments: TranscriptSegment[];
   resolution: VerticalResolution;
 }): Promise<string> {
-  const { jobId, clipId, sourcePath, overallTitle, items, transcriptSegments, resolution } = params;
+  const { jobId, clipId, sourcePath, category, items, transcriptSegments, resolution } = params;
   const playOrder = [...items].sort((a, b) => b.position - a.position); // peor -> mejor
 
   const segmentPaths: string[] = [];
 
-  // Tarjeta de título con fondo negro: igual que en modo SINGLE, solo se añade si el comentario
-  // está activado (ENABLE_COMMENTARY) — un ranking profesional entra directo al primer puesto,
-  // sin pantalla negra con el título antes. Antes esto se añadía siempre, sin condición; si el
-  // título general que genera la IA salía corto/en minúsculas, se veía como una única palabra
-  // enorme sobre negro al principio del vídeo — justo lo que se pidió quitar.
-  if (config.commentary.enabled) {
-    const introPath = candidateCardPath(jobId, clipId, "intro");
-    if (params.overallIntroCommentary) {
-      const introAudioPath = narrationAudioPath(jobId, clipId, "intro");
-      await getTTSProvider().synthesize(params.overallIntroCommentary, introAudioPath);
-      await renderTitleCard(introPath, overallTitle, 2, resolution, introAudioPath);
-    } else {
-      await renderTitleCard(introPath, overallTitle, 2, resolution);
-    }
-    segmentPaths.push(introPath);
+  // Tarjeta de intro con la plantilla fija "Ranking Funniest {Category} Moments" (fuente/colores
+  // pedidos a partir de una captura real de referencia) — se añade SIEMPRE, a diferencia de la
+  // vieja tarjeta de título libre de la IA, que solo se añadía con el comentario activado porque
+  // un título corto/en minúsculas podía verse como una palabra suelta gigante sobre negro. Esa
+  // plantilla es fija y controlada, así que ese riesgo ya no existe.
+  const introPath = candidateCardPath(jobId, clipId, "intro");
+  if (config.commentary.enabled && params.overallIntroCommentary) {
+    const introAudioPath = narrationAudioPath(jobId, clipId, "intro");
+    await getTTSProvider().synthesize(params.overallIntroCommentary, introAudioPath);
+    await renderRankingIntroCard(introPath, category, 2, resolution, introAudioPath);
+  } else {
+    await renderRankingIntroCard(introPath, category, 2, resolution);
   }
+  segmentPaths.push(introPath);
 
   for (const item of playOrder) {
     const cardPath = candidateCardPath(jobId, clipId, `pos${item.position}`);

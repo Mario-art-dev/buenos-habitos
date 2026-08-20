@@ -177,12 +177,15 @@ hashtags y el comentario que TÚ añades por encima.
    compilaciones editadas).
 2. Extrae un fotograma de cada momento candidato y se lo enseña a la IA (Claude/GPT con
    visión) junto con la transcripción de ese tramo, para que decida si es un momento válido,
-   en qué categoría encaja (fails de coches, de acrobacias, de animales...) y qué puntuación
+   en qué categoría de UNA palabra encaja (Dogs, Girls, Flips, Skate, Fails...) y qué puntuación
    de impacto/gracia tiene.
 3. Agrupa los momentos por categoría; cada categoría con al menos `RANKING_MIN_ITEMS`
    (por defecto 5) momentos se convierte en un vídeo de cuenta atrás propio (del puesto más
-   bajo al puesto 1), con una tarjeta de número por puesto y los subtítulos del audio original
-   quemados en el vídeo.
+   bajo al puesto 1) — así un vídeo largo de momentos variados sale troceado en varios shorts
+   temáticos (uno de perros, otro de chicas, otro de flips...) en vez de mezclarlo todo. Cada
+   uno abre con la tarjeta "Ranking Funniest {Categoría} Moments" (fuente Anton, colores fijos
+   por palabra), tiene una tarjeta de número por puesto con un título corto sobre ese clip
+   concreto, y lleva los subtítulos del audio original quemados en el vídeo.
 4. La IA sugiere además el **título de una canción concreta** que pegaría como música de
    fondo (`musicQuery`). En el detalle del vídeo puedes pegar el enlace de YouTube de esa
    canción (o de cualquier otra) y el segundo en el que empieza el fragmento que quieres: la

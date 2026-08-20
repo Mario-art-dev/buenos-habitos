@@ -1,6 +1,6 @@
 ---
 name: viral-shorts-editor
-description: Editorial and technical standards for Escenas Virales Studio's short-form video pipeline in this repo — clip selection, burned captions, the post-render text/caption editor, dynamic zoom/camera pacing, brand sting/cover card, and hashtag strategy. Use this skill whenever working on src/lib/pipeline/analyze.ts, clip.ts, bigCaptions.ts, coverCard.ts, regenerateClip.ts, transcribe.ts, src/app/clips/[id]/edit/**, or src/lib/trends/hashtags.ts, or whenever asked to make shorts more professional/entertaining, fix clip selection quality, adjust subtitle/caption style, add camera movement/zoom effects, change the brand sound/intro-outro cover, add fonts, or improve hashtags for this channel — even if the user describes it in plain terms ("que los clips sean mejores", "que los subtítulos se vean bien", "que sea más viral", "el sonido de marca", "las portadas", "el editor de texto") instead of naming these files directly. Also consult it before changing feature-flag defaults in src/lib/config.ts or the GitHub Actions workflows/Dockerfiles, since this project has a recurring bug pattern of those silently overriding or missing config defaults, and before touching anything that gets concatenated with concatClips (-c copy), since mismatched fps/audio params between segments is another recurring bug class here.
+description: Editorial and technical standards for Escenas Virales Studio's short-form video pipeline in this repo — clip selection, burned captions, the post-render text/caption editor, dynamic zoom/camera pacing, brand sting/cover card, and hashtag strategy. Use this skill whenever working on src/lib/pipeline/analyze.ts, clip.ts, bigCaptions.ts, coverCard.ts, regenerateClip.ts, rankingAnalyze.ts, rankingIntroCard.ts, transcribe.ts, src/app/clips/[id]/edit/**, or src/lib/trends/hashtags.ts, or whenever asked to make shorts more professional/entertaining, fix clip selection quality, adjust subtitle/caption style, add camera movement/zoom effects, change the brand sound/intro-outro cover, add fonts, or improve hashtags for this channel — even if the user describes it in plain terms ("que los clips sean mejores", "que los subtítulos se vean bien", "que sea más viral", "el sonido de marca", "las portadas", "el editor de texto") instead of naming these files directly. Also consult it before changing feature-flag defaults in src/lib/config.ts or the GitHub Actions workflows/Dockerfiles, since this project has a recurring bug pattern of those silently overriding or missing config defaults, and before touching anything that gets concatenated with concatClips (-c copy), since mismatched fps/audio params between segments is another recurring bug class here.
 ---
 
 # Editor de shorts virales — Escenas Virales Studio
@@ -226,12 +226,40 @@ si no, vuelve el mismo bug. `-r` no cambia la velocidad real del contenido (solo
 fotogramas por segundo se cuentan para la misma duración), así que es seguro forzarlo igual en
 todos los tramos sin alterar el ritmo real del vídeo.
 
-**No hay ffmpeg disponible en el entorno de desarrollo** para probar filtros nuevos en vivo — solo
-se despliega y se comprueba en el servidor real de GitHub Actions. Antes de escribir un filtro
-`-filter_complex` nuevo, reutiliza el mismo patrón de escapado/estructura ya probado en
-`buildVerticalFilter` (scale + crop + overlay, comillas simples para proteger comas/dos puntos
-dentro de un valor de opción) en vez de inventar sintaxis sin verificar — un filtro mal escrito
-falla en producción sin forma fácil de depurarlo interactivamente.
+**ffmpeg no viene preinstalado en el entorno de desarrollo, pero SÍ se puede instalar sobre la
+marcha** (`apt-get update && apt-get install -y --no-install-recommends ffmpeg`, funciona bien en
+este sandbox — comprobado varias veces). Hazlo antes de escribir un filtro `-filter_complex` nuevo
+o tocar el sistema de fuentes: renderiza un fotograma/clip real de prueba (`ffmpeg ... -frames:v 1
+... salida.jpg`, luego el tool de lectura de imágenes) en vez de asumir que el filtro/color/fuente
+sale bien — así se detectan errores de sintaxis o de resolución de fuente ANTES de desplegar,
+no después. Reutiliza el mismo patrón de escapado/estructura ya probado en `buildVerticalFilter`
+(scale + crop + overlay, comillas simples para proteger comas/dos puntos dentro de un valor de
+opción) en vez de inventar sintaxis sin verificar.
+
+## Plantilla de intro de Ranking (`src/lib/pipeline/rankingIntroCard.ts`)
+
+Cada vídeo de ranking abre con la tarjeta fija "Ranking Funniest {Category} Moments" — fuente
+Anton, "Ranking" blanco, "Funniest" rojo, la categoría en amarillo, "Moments" blanco, contorno
+negro — pedida a partir de una captura real de referencia. A diferencia de la vieja tarjeta de
+título libre de la IA (`renderTitleCard` con `overallTitle`), esta plantilla es fija y SIEMPRE se
+añade (no depende de `ENABLE_COMMENTARY`): el motivo por el que antes se gateaba (un título
+generado por IA corto/en minúsculas podía parecer una palabra suelta gigante sobre negro) no
+existe aquí porque el texto es fijo y controlado, nunca texto libre de la IA.
+
+**La categoría tiene que ser UNA palabra** (excepcionalmente dos) para que encaje bien en la
+plantilla — el prompt de `rankingAnalyze.ts` lo pide explícitamente ("Dogs", "Girls", "Flips",
+"Skate", "Fails"...). Antes los ejemplos del prompt estaban sesgados hacia contenido de "fails"
+("fails de coches", "fails de bicicleta"...), lo cual no encajaba con el nicho real del canal
+(entretenimiento/comedia general, no solo accidentes) — se generalizó a petición expresa para que
+un vídeo largo de "momentos graciosos" variados se agrupe en categorías como perros/chicas/
+flips/skate en vez de forzarlo todo a la temática de fails.
+
+Esto no es una función nueva de agrupar por categoría — `groupIntoRankings` en `rankingAnalyze.ts`
+YA agrupaba candidatos por categoría en vídeos de ranking separados (uno por categoría, mínimo
+`RANKING_MIN_ITEMS` candidatos, por defecto 5) desde que se construyó el modo Ranking. Si el
+usuario pide "agrupa por parecidos: un short de perros, otro de chicas..." sin saber que esto ya
+existe, el problema real suele ser que las categorías del prompt no encajan con su contenido, no
+que falte la función — revisa el prompt antes de plantearte construir algo nuevo.
 
 ## Hashtags (`src/lib/trends/hashtags.ts`)
 
