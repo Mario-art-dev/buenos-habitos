@@ -11,20 +11,26 @@ function serialize(clip: {
   customTexts: string;
   filePath: string | null;
   thumbnailPath: string | null;
+  job?: { sourceFilePath: string | null };
   [key: string]: unknown;
 }) {
+  const { job, ...rest } = clip;
   return {
-    ...clip,
+    ...rest,
     hashtags: JSON.parse(clip.hashtags || "[]"),
     captionCues: JSON.parse(clip.captionCues || "[]"),
     customTexts: JSON.parse(clip.customTexts || "[]"),
     videoUrl: toMediaUrl(clip.filePath),
     thumbnailUrl: toMediaUrl(clip.thumbnailPath),
+    // Vídeo fuente original (sin recortar/verticalizar) — lo usa el editor para la vista previa en
+    // vivo con Remotion, recortando en el navegador el mismo tramo [effectiveStartSec, endSec] que
+    // ya se usa para renderizar de verdad, sin gastar otro render de servidor solo para previsualizar.
+    sourceVideoUrl: job ? toMediaUrl(job.sourceFilePath) : null,
   };
 }
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
-  const clip = await db.clip.findUnique({ where: { id: params.id } });
+  const clip = await db.clip.findUnique({ where: { id: params.id }, include: { job: true } });
   if (!clip) {
     return NextResponse.json({ error: "Clip no encontrado" }, { status: 404 });
   }

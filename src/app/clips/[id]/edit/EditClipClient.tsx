@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Player, type PlayerRef } from "@remotion/player";
+import { EditorComposition, type CompositionCustomText } from "./EditorComposition";
 
 interface CueWord {
   start: number;
@@ -18,18 +20,7 @@ interface StoredCue {
   deleted?: boolean;
 }
 
-interface CustomTextElement {
-  id: string;
-  text: string;
-  start: number;
-  end: number;
-  xPct: number;
-  yPct: number;
-  fontName: string;
-  fontSize: number;
-  colorHex: string;
-  uppercase?: boolean;
-}
+type CustomTextElement = CompositionCustomText;
 
 interface ClipData {
   id: string;
@@ -40,9 +31,15 @@ interface ClipData {
   status: string;
   videoUrl: string | null;
   thumbnailUrl: string | null;
+  sourceVideoUrl: string | null;
   captionCues: StoredCue[];
   customTexts: CustomTextElement[];
 }
+
+// Reloj virtual de la composición de Remotion — no tiene por qué coincidir con el fps real del
+// vídeo fuente, solo define en cuántos "pasos" se divide la línea de tiempo del editor.
+const FPS = 30;
+const THUMBNAIL_COUNT = 14;
 
 // Fuentes libres instaladas en el servidor de render (ver Dockerfile/workflows) — los nombres
 // tienen que coincidir EXACTAMENTE con el nombre de familia que resuelve fontconfig, o el vídeo
@@ -65,6 +62,17 @@ const FONT_OPTIONS = [
 const GOOGLE_FONTS_HREF =
   "https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Anton&family=Montserrat:wght@700&family=Poppins:wght@700&family=Oswald:wght@700&family=Permanent+Marker&family=Bangers&family=Lobster&family=Archivo+Black&family=Caveat:wght@700&display=swap";
 
+// Misma lógica que pickVerticalResolution en src/lib/pipeline/probe.ts — se replica aquí porque
+// el editor necesita saberla en el navegador (para que compositionWidth/Height, y por tanto el
+// tamaño real de los textos en px, coincida con lo que hará el servidor) sin pedirla a una API
+// aparte: basta con medir el vídeo fuente que ya se está cargando para la vista previa.
+function pickVerticalResolution(sourceW: number, sourceH: number) {
+  const m = Math.max(sourceW, sourceH);
+  if (m >= 3840) return { width: 2160, height: 3840 };
+  if (m >= 2560) return { width: 1440, height: 2560 };
+  return { width: 1080, height: 1920 };
+}
+
 function cueText(cue: StoredCue): string {
   if (cue.editedText != null) return cue.editedText;
   return cue.words.map((w) => w.text).join(" ");
@@ -75,7 +83,7 @@ function newCustomText(durationSec: number): CustomTextElement {
     id: crypto.randomUUID(),
     text: "Nuevo texto",
     start: 0,
-    end: Math.max(1, durationSec),
+    end: Math.max(1, Math.min(3, durationSec)),
     xPct: 50,
     yPct: 30,
     fontName: "Bangers",
@@ -118,6 +126,37 @@ function shiftTexts(texts: CustomTextElement[], offset: number, newDuration: num
     .map((t) => ({ ...t, start: Math.max(0, t.start), end: Math.min(newDuration, t.end) }));
 }
 
+/** Recorte centrado tipo CSS object-fit:cover, para que las miniaturas se parezcan al recorte vertical real. */
+function drawCoverThumbnail(ctx: CanvasRenderingContext2D, video: HTMLVideoElement, w: number, h: number) {
+  const vw = video.videoWidth || w;
+  const vh = video.videoHeight || h;
+  const targetRatio = w / h;
+  const srcRatio = vw / vh;
+  let sx = 0;
+  let sy = 0;
+  let sw = vw;
+  let sh = vh;
+  if (srcRatio > targetRatio) {
+    sw = vh * targetRatio;
+    sx = (vw - sw) / 2;
+  } else {
+    sh = vw / targetRatio;
+    sy = (vh - sh) / 2;
+  }
+  ctx.drawImage(video, sx, sy, sw, sh, 0, 0, w, h);
+}
+
+function seekVideo(video: HTMLVideoElement, t: number): Promise<void> {
+  return new Promise((resolve) => {
+    function onSeeked() {
+      video.removeEventListener("seeked", onSeeked);
+      resolve();
+    }
+    video.addEventListener("seeked", onSeeked);
+    video.currentTime = t;
+  });
+}
+
 export default function EditClipClient({ clipId }: { clipId: string }) {
   const router = useRouter();
   const [clip, setClip] = useState<ClipData | null>(null);
@@ -130,12 +169,19 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
   const [selectedTextId, setSelectedTextId] = useState<string | null>(null);
   const [trimStart, setTrimStart] = useState(0);
   const [trimEnd, setTrimEnd] = useState(0);
+  const [resolution, setResolution] = useState<{ width: number; height: number } | null>(null);
+  const [thumbnails, setThumbnails] = useState<string[]>([]);
 
   const overlayRef = useRef<HTMLDivElement | null>(null);
-  const barRef = useRef<HTMLDivElement | null>(null);
+  const stripRef = useRef<HTMLDivElement | null>(null);
+  const trackRef = useRef<HTMLDivElement | null>(null);
+  const playerRef = useRef<PlayerRef>(null);
   const draggingId = useRef<string | null>(null);
   const draggingHandle = useRef<"start" | "end" | null>(null);
   const resizingRef = useRef<{ id: string; anchorX: number; anchorY: number; baseDistance: number; baseFontSize: number } | null>(
+    null
+  );
+  const textDragRef = useRef<{ id: string; mode: "move" | "resize-start" | "resize-end"; startX: number; origStart: number; origEnd: number } | null>(
     null
   );
 
@@ -161,6 +207,80 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
 
   const clipStart = clip ? clip.effectiveStartSec ?? clip.startSec : 0;
   const duration = clip ? clip.endSec - clipStart : 0;
+
+  // Mide la resolución nativa del vídeo fuente (para que compositionWidth/Height del Player
+  // coincida con lo que usará el servidor) y genera las miniaturas de la línea de tiempo.
+  useEffect(() => {
+    if (!clip?.sourceVideoUrl || duration <= 0) return;
+    let cancelled = false;
+    const video = document.createElement("video");
+    // Tiene que estar realmente en el DOM (no solo creado en memoria) para que el navegador
+    // cargue los metadatos/fotogramas de forma fiable — un <video> nunca insertado en el árbol
+    // no siempre dispara "loadedmetadata" ni deja decodificar fotogramas para el canvas.
+    video.style.position = "fixed";
+    video.style.width = "1px";
+    video.style.height = "1px";
+    video.style.opacity = "0";
+    video.style.pointerEvents = "none";
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = "auto";
+    video.crossOrigin = "anonymous";
+    document.body.appendChild(video);
+    video.src = clip.sourceVideoUrl;
+    video.load();
+
+    video.addEventListener(
+      "loadedmetadata",
+      async () => {
+        if (cancelled) return;
+        setResolution(pickVerticalResolution(video.videoWidth, video.videoHeight));
+
+        const thumbW = 60;
+        const thumbH = 107;
+        const canvas = document.createElement("canvas");
+        canvas.width = thumbW;
+        canvas.height = thumbH;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+
+        const results: string[] = [];
+        for (let i = 0; i < THUMBNAIL_COUNT; i++) {
+          if (cancelled) return;
+          const t = clipStart + (duration * i) / (THUMBNAIL_COUNT - 1);
+          try {
+            await seekVideo(video, t);
+            drawCoverThumbnail(ctx, video, thumbW, thumbH);
+            results.push(canvas.toDataURL("image/jpeg", 0.6));
+          } catch {
+            // si un fotograma concreto falla, se sigue con el resto
+          }
+        }
+        if (!cancelled) setThumbnails(results);
+      },
+      { once: true }
+    );
+    video.addEventListener("error", () => {
+      // eslint-disable-next-line no-console
+      console.error("No se pudo cargar el vídeo fuente para la vista previa del editor", video.error);
+    });
+
+    return () => {
+      cancelled = true;
+      video.remove();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clip?.sourceVideoUrl]);
+
+  // Sincroniza el cabezal de la línea de tiempo con el fotograma actual del Player.
+  const [playheadSec, setPlayheadSec] = useState(0);
+  useEffect(() => {
+    const p = playerRef.current;
+    if (!p) return;
+    const handler = (e: { detail: { frame: number } }) => setPlayheadSec(e.detail.frame / FPS);
+    p.addEventListener("frameupdate", handler);
+    return () => p.removeEventListener("frameupdate", handler);
+  }, [resolution]);
 
   function updateCueText(id: string, text: string) {
     setCues((prev) => prev.map((c) => (c.id === id ? { ...c, editedText: text } : c)));
@@ -229,29 +349,69 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
     resizingRef.current = null;
   }
 
-  // Barra de recorte: dos tiradores (inicio/fin) que ajustan qué parte del clip actual se
-  // conserva al regenerar — mismo Pointer Events que el resto, arrastrable con el dedo.
+  // Barra de recorte sobre las miniaturas: dos tiradores (inicio/fin), mismo patrón de Pointer
+  // Events que el resto — arrastrable con el dedo.
   function onPointerDownTrimHandle(e: React.PointerEvent, which: "start" | "end") {
     e.preventDefault();
+    e.stopPropagation();
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
     draggingHandle.current = which;
   }
 
-  function onPointerMoveTrimBar(e: React.PointerEvent) {
-    const which = draggingHandle.current;
-    if (!which || !barRef.current || duration <= 0) return;
-    const rect = barRef.current.getBoundingClientRect();
+  function onPointerMoveStrip(e: React.PointerEvent) {
+    if (!stripRef.current || duration <= 0) return;
+    const rect = stripRef.current.getBoundingClientRect();
     const pct = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
     const sec = pct * duration;
+    const which = draggingHandle.current;
     if (which === "start") {
       setTrimStart(Math.min(sec, trimEnd - 0.5));
-    } else {
+    } else if (which === "end") {
       setTrimEnd(Math.max(sec, trimStart + 0.5));
     }
   }
 
-  function onPointerUpTrimBar() {
+  function onPointerUpStrip() {
     draggingHandle.current = null;
+  }
+
+  function onPointerDownStripBackground(e: React.PointerEvent) {
+    if (!stripRef.current || !playerRef.current || duration <= 0) return;
+    const rect = stripRef.current.getBoundingClientRect();
+    const pct = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+    playerRef.current.seekTo(Math.round(pct * duration * FPS));
+  }
+
+  // Pista de textos: arrastrar el bloque entero mueve el texto en el tiempo (conservando su
+  // duración), arrastrar el borde izquierdo/derecho cambia solo ese extremo.
+  function onPointerDownTextBlock(e: React.PointerEvent, t: CustomTextElement, mode: "move" | "resize-start" | "resize-end") {
+    e.preventDefault();
+    e.stopPropagation();
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    textDragRef.current = { id: t.id, mode, startX: e.clientX, origStart: t.start, origEnd: t.end };
+    setSelectedTextId(t.id);
+  }
+
+  function onPointerMoveTrack(e: React.PointerEvent) {
+    const d = textDragRef.current;
+    if (!d || !trackRef.current || duration <= 0) return;
+    const rect = trackRef.current.getBoundingClientRect();
+    const deltaSec = ((e.clientX - d.startX) / rect.width) * duration;
+    if (d.mode === "move") {
+      const span = d.origEnd - d.origStart;
+      const newStart = Math.max(0, Math.min(duration - span, d.origStart + deltaSec));
+      updateText(d.id, { start: newStart, end: newStart + span });
+    } else if (d.mode === "resize-start") {
+      const newStart = Math.max(0, Math.min(d.origEnd - 0.2, d.origStart + deltaSec));
+      updateText(d.id, { start: newStart });
+    } else {
+      const newEnd = Math.min(duration, Math.max(d.origStart + 0.2, d.origEnd + deltaSec));
+      updateText(d.id, { end: newEnd });
+    }
+  }
+
+  function onPointerUpTrack() {
+    textDragRef.current = null;
   }
 
   async function saveAndRegenerate() {
@@ -324,16 +484,40 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
       </div>
 
       <div className="flex flex-col gap-6 md:flex-row">
-        {/* Vista previa con los textos arrastrables encima */}
-        <div className="w-full shrink-0 md:w-72">
+        {/* Vista previa en vivo (Remotion) con los textos arrastrables encima */}
+        <div className="w-full shrink-0 md:w-80">
           <div
             ref={overlayRef}
             className="relative aspect-[9/16] w-full overflow-hidden rounded-2xl bg-black"
             onPointerMove={onPointerMoveOverlay}
             onPointerUp={onPointerUpOverlay}
           >
-            {videoSrc && (
-              <video src={videoSrc} poster={clip.thumbnailUrl ?? undefined} controls className="h-full w-full object-cover" />
+            {resolution && clip.sourceVideoUrl ? (
+              <Player
+                ref={playerRef}
+                component={EditorComposition}
+                inputProps={{
+                  sourceVideoUrl: clip.sourceVideoUrl,
+                  trimBeforeFrames: Math.round(clipStart * FPS),
+                  trimAfterFrames: Math.round(clip.endSec * FPS),
+                  fps: FPS,
+                  texts,
+                }}
+                durationInFrames={Math.max(1, Math.round(duration * FPS))}
+                compositionWidth={resolution.width}
+                compositionHeight={resolution.height}
+                fps={FPS}
+                style={{ width: "100%", height: "100%" }}
+                controls
+                clickToPlay={false}
+                acknowledgeRemotionLicense
+                inFrame={Math.round(trimStart * FPS)}
+                outFrame={Math.max(1, Math.round(trimEnd * FPS) - 1)}
+              />
+            ) : (
+              videoSrc && (
+                <video src={videoSrc} poster={clip.thumbnailUrl ?? undefined} controls className="h-full w-full object-cover" />
+              )
             )}
             {texts.map((t) => (
               <div
@@ -341,21 +525,14 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
                 className="absolute -translate-x-1/2 -translate-y-1/2"
                 style={{ left: `${t.xPct}%`, top: `${t.yPct}%` }}
               >
+                {/* Zona invisible para arrastrar/seleccionar: el texto REAL ya lo pinta Remotion
+                    debajo, esto solo captura el puntero para que no haya doble texto dibujado. */}
                 <div
                   onPointerDown={(e) => onPointerDownText(e, t.id)}
-                  className={`cursor-move select-none whitespace-nowrap px-1 text-center leading-none ${
-                    selectedTextId === t.id ? "outline outline-2 outline-brand-500" : ""
+                  className={`h-10 w-24 cursor-move select-none ${
+                    selectedTextId === t.id ? "rounded outline outline-2 outline-brand-500" : ""
                   }`}
-                  style={{
-                    fontFamily: `"${t.fontName}", sans-serif`,
-                    color: `#${t.colorHex}`,
-                    fontSize: `${Math.round(t.fontSize / 6)}px`,
-                    WebkitTextStroke: "1px black",
-                    textTransform: t.uppercase ? "uppercase" : "none",
-                  }}
-                >
-                  {t.text || "(vacío)"}
-                </div>
+                />
                 {selectedTextId === t.id && (
                   <div
                     onPointerDown={(e) => onPointerDownResize(e, t)}
@@ -367,39 +544,90 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
             ))}
           </div>
           <p className="mt-2 text-xs text-slate-500">
-            Arrastra un texto para moverlo, y el punto de su esquina para agrandarlo o encogerlo —
-            el tamaño real en el vídeo es mayor que en esta vista previa.
+            Arrastra un texto para moverlo, y el punto de su esquina para agrandarlo o encogerlo.
           </p>
 
-          {/* Barra de recorte */}
+          {/* Línea de tiempo: miniaturas + recorte */}
           <div className="mt-4">
             <p className="mb-1 text-xs text-slate-400">
               Recorte: {formatTime(trimStart)} – {formatTime(trimEnd)} (de {formatTime(duration)})
             </p>
             <div
-              ref={barRef}
-              className="relative h-8 w-full cursor-pointer rounded-lg bg-ink-900"
-              onPointerMove={onPointerMoveTrimBar}
-              onPointerUp={onPointerUpTrimBar}
+              ref={stripRef}
+              className="relative h-16 w-full cursor-pointer overflow-hidden rounded-lg bg-ink-900"
+              onPointerDown={onPointerDownStripBackground}
+              onPointerMove={onPointerMoveStrip}
+              onPointerUp={onPointerUpStrip}
             >
+              <div className="flex h-full w-full">
+                {thumbnails.length > 0 ? (
+                  thumbnails.map((src, i) => (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img key={i} src={src} alt="" className="h-full flex-1 object-cover" draggable={false} />
+                  ))
+                ) : (
+                  <p className="flex h-full w-full items-center justify-center text-xs text-slate-600">Generando miniaturas…</p>
+                )}
+              </div>
               <div
-                className="absolute top-0 h-full rounded-lg bg-brand-600/40"
-                style={{
-                  left: `${duration > 0 ? (trimStart / duration) * 100 : 0}%`,
-                  right: `${duration > 0 ? 100 - (trimEnd / duration) * 100 : 0}%`,
-                }}
+                className="pointer-events-none absolute top-0 h-full bg-black/60"
+                style={{ left: 0, width: `${duration > 0 ? (trimStart / duration) * 100 : 0}%` }}
+              />
+              <div
+                className="pointer-events-none absolute top-0 h-full bg-black/60"
+                style={{ right: 0, width: `${duration > 0 ? 100 - (trimEnd / duration) * 100 : 0}%` }}
+              />
+              <div
+                className="pointer-events-none absolute top-0 h-full w-0.5 bg-white"
+                style={{ left: `${duration > 0 ? (playheadSec / duration) * 100 : 0}%` }}
               />
               <div
                 onPointerDown={(e) => onPointerDownTrimHandle(e, "start")}
-                className="absolute top-0 h-full w-3 -translate-x-1/2 cursor-ew-resize rounded bg-brand-400"
+                className="absolute top-0 h-full w-2.5 -translate-x-1/2 cursor-ew-resize rounded bg-brand-400"
                 style={{ left: `${duration > 0 ? (trimStart / duration) * 100 : 0}%` }}
               />
               <div
                 onPointerDown={(e) => onPointerDownTrimHandle(e, "end")}
-                className="absolute top-0 h-full w-3 -translate-x-1/2 cursor-ew-resize rounded bg-brand-400"
+                className="absolute top-0 h-full w-2.5 -translate-x-1/2 cursor-ew-resize rounded bg-brand-400"
                 style={{ left: `${duration > 0 ? (trimEnd / duration) * 100 : 0}%` }}
               />
             </div>
+
+            {/* Pista de textos: arrastra un bloque para moverlo en el tiempo, sus bordes para acortarlo/alargarlo */}
+            {texts.length > 0 && (
+              <div
+                ref={trackRef}
+                className="relative mt-1 h-6 w-full rounded-lg bg-ink-900"
+                onPointerMove={onPointerMoveTrack}
+                onPointerUp={onPointerUpTrack}
+              >
+                {texts.map((t) => (
+                  <div
+                    key={t.id}
+                    onPointerDown={(e) => onPointerDownTextBlock(e, t, "move")}
+                    onClick={() => setSelectedTextId(t.id)}
+                    className={`absolute top-0.5 h-5 cursor-grab rounded px-1 text-[10px] leading-5 text-black ${
+                      selectedTextId === t.id ? "bg-brand-400" : "bg-brand-600/60"
+                    }`}
+                    style={{
+                      left: `${duration > 0 ? (t.start / duration) * 100 : 0}%`,
+                      width: `${duration > 0 ? ((t.end - t.start) / duration) * 100 : 0}%`,
+                    }}
+                    title={t.text}
+                  >
+                    <span className="truncate">{t.text}</span>
+                    <div
+                      onPointerDown={(e) => onPointerDownTextBlock(e, t, "resize-start")}
+                      className="absolute -left-1 top-0 h-full w-2 cursor-ew-resize"
+                    />
+                    <div
+                      onPointerDown={(e) => onPointerDownTextBlock(e, t, "resize-end")}
+                      className="absolute -right-1 top-0 h-full w-2 cursor-ew-resize"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -503,7 +731,7 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
                         type="number"
                         min={0}
                         step={0.1}
-                        value={t.start}
+                        value={Number(t.start.toFixed(1))}
                         onChange={(e) => updateText(t.id, { start: Number(e.target.value) })}
                         className="w-16 rounded-lg border border-ink-600 bg-ink-900 px-2 py-1 text-slate-200"
                       />
@@ -514,7 +742,7 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
                         type="number"
                         min={0}
                         step={0.1}
-                        value={t.end}
+                        value={Number(t.end.toFixed(1))}
                         onChange={(e) => updateText(t.id, { end: Number(e.target.value) })}
                         className="w-16 rounded-lg border border-ink-600 bg-ink-900 px-2 py-1 text-slate-200"
                       />
