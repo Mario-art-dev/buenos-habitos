@@ -69,6 +69,26 @@ dan); si el proveedor no las diera, cae automáticamente a un golpe por frase en
 de palabra. Desactívalo con `ENABLE_BIG_CAPTIONS="false"` si prefieres el vídeo sin ningún
 subtítulo quemado.
 
+### Editor de subtítulos y textos (una vez generado el clip)
+
+Cada clip listo tiene un botón "✏️ Editar" que lleva a `/clips/[id]/edit`, un editor tipo CapCut:
+
+- **Subtítulos automáticos**: se listan editables uno a uno (puedes cambiar el texto de cualquier
+  golpe) o borrarlos por completo si no quieres que aparezca ese trozo.
+- **Textos nuevos**: añade los que quieras, cada uno con su propia fuente (Bebas Neue, Anton,
+  Montserrat, Poppins, Oswald, Permanent Marker, Bangers, Lobster, Archivo Black, Caveat, Comic
+  Neue…), color, tamaño y con qué segundo del clip aparece/desaparece. Se arrastran con el dedo (o
+  el ratón) directamente sobre la vista previa del vídeo para colocarlos donde quieras.
+- Al pulsar "Guardar y regenerar vídeo", el clip se vuelve a cortar desde el vídeo original con
+  esos cambios ya aplicados — no es una edición de los píxeles del vídeo ya hecho (eso no es
+  posible sobre un archivo ya quemado), así que hace falta el vídeo fuente todavía disponible en el
+  servidor (se conserva mientras el job siga existiendo, incluso entre reinicios del "Servidor
+  temporal" gracias a la caché de `storage/`).
+
+Las fuentes que no vienen empaquetadas para `apt` se descargan directamente del repositorio oficial
+de Google Fonts (licencia libre OFL/Apache) al arrancar el servidor — ver el paso "Instalar fuentes
+libres" en `server.yml`/`generate.yml` y los `Dockerfile`.
+
 ### Zoom dinámico ("punch-in")
 
 `ENABLE_DYNAMIC_ZOOM="true"` (activado por defecto): la MAYORÍA del tiempo el short se ve recortado

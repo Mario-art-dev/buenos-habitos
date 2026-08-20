@@ -18,7 +18,7 @@ import { resolveSourceVideo } from "./download";
 import { extractAudio, transcribeAudio, type TranscriptSegment } from "./transcribe";
 import { analyzeTranscriptForClips } from "./analyze";
 import { cutVerticalClip, concatClips, extractThumbnail } from "./clip";
-import { buildBigCaptionsAss } from "./bigCaptions";
+import { cuesFromTranscript, buildBigCaptionsAssFromCues } from "./bigCaptions";
 import { pickHookStartSec, hookVerifiedFrameSec } from "./hookFrame";
 import { probeVideo, pickVerticalResolution } from "./probe";
 import { processRankingJob } from "./rankingPipeline";
@@ -147,9 +147,14 @@ async function processSingleJob(jobId: string): Promise<void> {
           framePath: hookFramePath(jobId, clip.id),
         });
 
+        // Golpes de subtítulo derivados de la transcripción — se guardan en la base de datos (más
+        // abajo) en vez de borrarse al terminar, para que el editor pueda mostrarlos/editarlos/
+        // borrarlos y volver a generar el vídeo después sin perder el resaltado por palabra.
+        const captionCues = cuesFromTranscript(transcript.segments, hookStartSec, clip.endSec, 4, true);
+
         let bigCaptionsFile: string | undefined;
-        if (config.bigCaptions.enabled) {
-          const ass = buildBigCaptionsAss(transcript.segments, hookStartSec, clip.endSec, resolution);
+        if (config.bigCaptions.enabled && captionCues.length > 0) {
+          const ass = buildBigCaptionsAssFromCues(captionCues, resolution);
           if (ass) {
             fs.writeFileSync(bigCaptionsFilePath, ass, "utf-8");
             bigCaptionsFile = bigCaptionsFilePath;
@@ -231,6 +236,8 @@ async function processSingleJob(jobId: string): Promise<void> {
             thumbnailPath: thumbPath,
             commentaryIntro,
             commentaryOutro,
+            effectiveStartSec: hookStartSec,
+            captionCues: JSON.stringify(captionCues),
           },
         });
       } catch (err) {

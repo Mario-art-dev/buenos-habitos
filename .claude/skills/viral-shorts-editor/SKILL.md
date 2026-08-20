@@ -1,6 +1,6 @@
 ---
 name: viral-shorts-editor
-description: Editorial and technical standards for Escenas Virales Studio's short-form video pipeline in this repo — clip selection, burned captions, dynamic zoom/camera pacing, brand sting/cover card, and hashtag strategy. Use this skill whenever working on src/lib/pipeline/analyze.ts, clip.ts, bigCaptions.ts, coverCard.ts, transcribe.ts, or src/lib/trends/hashtags.ts, or whenever asked to make shorts more professional/entertaining, fix clip selection quality, adjust subtitle/caption style, add camera movement/zoom effects, change the brand sound/intro-outro cover, or improve hashtags for this channel — even if the user describes it in plain terms ("que los clips sean mejores", "que los subtítulos se vean bien", "que sea más viral", "el sonido de marca", "las portadas") instead of naming these files directly. Also consult it before changing feature-flag defaults in src/lib/config.ts or the GitHub Actions workflows/Dockerfiles, since this project has a recurring bug pattern of those silently overriding or missing config defaults, and before touching anything that gets concatenated with concatClips (-c copy), since mismatched fps/audio params between segments is another recurring bug class here.
+description: Editorial and technical standards for Escenas Virales Studio's short-form video pipeline in this repo — clip selection, burned captions, the post-render text/caption editor, dynamic zoom/camera pacing, brand sting/cover card, and hashtag strategy. Use this skill whenever working on src/lib/pipeline/analyze.ts, clip.ts, bigCaptions.ts, coverCard.ts, regenerateClip.ts, transcribe.ts, src/app/clips/[id]/edit/**, or src/lib/trends/hashtags.ts, or whenever asked to make shorts more professional/entertaining, fix clip selection quality, adjust subtitle/caption style, add camera movement/zoom effects, change the brand sound/intro-outro cover, add fonts, or improve hashtags for this channel — even if the user describes it in plain terms ("que los clips sean mejores", "que los subtítulos se vean bien", "que sea más viral", "el sonido de marca", "las portadas", "el editor de texto") instead of naming these files directly. Also consult it before changing feature-flag defaults in src/lib/config.ts or the GitHub Actions workflows/Dockerfiles, since this project has a recurring bug pattern of those silently overriding or missing config defaults, and before touching anything that gets concatenated with concatClips (-c copy), since mismatched fps/audio params between segments is another recurring bug class here.
 ---
 
 # Editor de shorts virales — Escenas Virales Studio
@@ -97,6 +97,55 @@ sin existir — eso no ha vuelto). El texto grande que SÍ existe ahora es únic
 capa de captions, pedida después con un ejemplo concreto. Si en el futuro el usuario vuelve a decir
 "quita las letras grandes" sin más contexto, pregunta primero a cuál de las dos veces se refiere en
 vez de asumir — ya ha cambiado de opinión una vez sobre esto mismo.
+
+## Editor post-render (`src/lib/pipeline/regenerateClip.ts`, `src/app/clips/[id]/edit/`)
+
+Pedido explícito: poder editar/borrar los subtítulos automáticos y añadir texto libre (fuente,
+color, tamaño, posición arrastrable con el dedo) DESPUÉS de que el clip ya esté generado, sin tener
+que rehacer el vídeo entero desde cero.
+
+**Por qué hace falta guardar las cues en la base de datos**: el subtítulo va quemado en los píxeles
+del vídeo — no se puede "editar" un `.mp4` ya renderizado, hay que volver a cortarlo desde el vídeo
+fuente. Por eso `Clip.captionCues` (JSON) guarda los golpes generados (texto + timestamps por
+palabra) en vez de borrarlos tras el render como se hacía antes, y `Clip.effectiveStartSec` guarda
+el `startSec` real usado (tras el ajuste de `hookFrame.ts`) para poder re-cortar exactamente igual
+sin gastar otra llamada de IA de visión. `Clip.customTexts` (JSON) guarda los textos que el usuario
+añade a mano en el editor.
+
+**`bigCaptions.ts` separa generar cues de renderizarlas** a propósito: `cuesFromTranscript` deriva
+los golpes de la transcripción (se llama una vez, al generar el clip por primera vez, y el
+resultado se guarda); `buildBigCaptionsAssFromCues` renderiza el `.ass` a partir de una lista de
+cues YA agrupadas — la llama tanto la generación inicial como el editor al regenerar, así que
+cualquier cambio en cómo se ve el caption tiene que vivir en `buildBigCaptionsAssFromCues`/
+`defaultBigCaptionsStyle`, no en `cuesFromTranscript` (eso solo agrupa, no dibuja). Un golpe con
+`editedText` (el usuario cambió el texto) se renderiza en blanco fijo sin resaltado por palabra,
+porque los timestamps por palabra ya no corresponden al texto nuevo — es intencional, no un bug.
+
+**`buildCustomTextAss`** es la capa de texto libre del usuario: a diferencia del caption automático
+(un único `Style` de ASS compartido), aquí cada elemento lleva su propia fuente/tamaño/color como
+tags inline `\fn`/`\fs`/`\c`, porque cada uno puede ser completamente distinto al de al lado.
+`clip.ts` la añade como tercera capa opcional del filtro (`customTextPath`), después del caption
+grande.
+
+**`regenerateClip.ts`** reproduce los mismos pasos que `runPipeline.ts` (cortar cuerpo → envolver
+con comentario narrado si lo llevaba → envolver con portada si `ENABLE_COVER_CARD`) pero partiendo
+de las cues/textos guardados en vez de analizar la transcripción de nuevo, y sin repetir la
+comprobación de gancho. Necesita que el vídeo fuente (`Job.sourceFilePath`) siga en disco — se
+conserva mientras el job exista (la caché de `storage/` de `server.yml` lo sobrevive entre
+reinicios de la sesión), pero si el job es muy antiguo o se ha limpiado a mano, el regenerado
+falla con un mensaje claro en vez de romperse a medias.
+
+**Fuentes del selector del editor**: `Bebas Neue`/`Montserrat`/`Lobster` están empaquetadas para
+apt en Ubuntu (no verificado en Debian, la imagen Docker usa Debian bookworm), así que las 10
+fuentes del selector se descargan igual, directamente del repo oficial `google/fonts` (licencia
+libre OFL/Apache), en un paso propio de `server.yml`/`generate.yml`/ambos `Dockerfile*`. Ojo con
+los nombres de archivo: varias son "variable fonts" (`Nombre[wght].ttf`) y curl interpreta `[`/`]`
+sin codificar como un rango/glob, no como parte literal de la URL — hay que usar `%5B`/`%5D`. Se
+verificó cada URL una a una (con `curl -o /dev/null -w "%{http_code}"`) y se hizo un render real de
+prueba con `ffmpeg` antes de darlo por bueno — no asumas que un nombre de fuente "suena bien" existe
+tal cual en el repo, algunas familias solo tienen variable font (sin estáticas) y otras están en
+`apache/` en vez de `ofl/` según su licencia. Si añades una fuente nueva, sigue el mismo patrón:
+verifica la URL real antes de escribirla en el workflow.
 
 ## Zoom dinámico / ritmo de cámara (`src/lib/pipeline/clip.ts`)
 

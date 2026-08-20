@@ -71,6 +71,17 @@ model Clip {
   thumbnailPath  String?
   error          String?
 
+  // startSec real usado al cortar (tras el ajuste de hookFrame.ts) — necesario para poder volver
+  // a cortar el clip idéntico al regenerar tras una edición, sin repetir la llamada de IA del gancho.
+  effectiveStartSec Float?
+  // Subtítulos generados (palabra a palabra) ya no se borran tras el render: se guardan aquí como
+  // JSON para poder editarlos/borrarlos y volver a generar el vídeo desde el editor.
+  // Formato: [{ id, start, end, words: [{start,end,text}], editedText, deleted }]
+  captionCues       String    @default("[]")
+  // Textos que el usuario añade a mano en el editor (fuente/color/tamaño/posición propios).
+  // Formato: [{ id, text, start, end, xPct, yPct, fontName, fontSize, colorHex, uppercase }]
+  customTexts       String    @default("[]")
+
   // Solo para clips generados en modo RANKING
   category       String?
   musicQuery     String?

@@ -58,6 +58,24 @@ jobs:
           sudo apt-get install -y ffmpeg python3 python3-pip fonts-dejavu-core fonts-liberation fonts-comic-neue
           pip3 install --no-cache-dir --break-system-packages yt-dlp faster-whisper piper-tts librosa bgutil-ytdlp-pot-provider yt-dlp-invidious
 
+      - name: Instalar fuentes libres para el editor de texto del clip
+        run: |
+          sudo mkdir -p /usr/share/fonts/truetype/custom
+          # Google Fonts (licencia OFL/Apache), directo del repo oficial: no todas están
+          # empaquetadas para apt. "%5B"/"%5D" son "[" "]" codificados porque curl interpreta
+          # corchetes sin codificar como un rango/glob, no como parte literal de la URL.
+          sudo curl -fsSL -o /usr/share/fonts/truetype/custom/BebasNeue-Regular.ttf "https://raw.githubusercontent.com/google/fonts/main/ofl/bebasneue/BebasNeue-Regular.ttf"
+          sudo curl -fsSL -o /usr/share/fonts/truetype/custom/Anton-Regular.ttf "https://raw.githubusercontent.com/google/fonts/main/ofl/anton/Anton-Regular.ttf"
+          sudo curl -fsSL -o /usr/share/fonts/truetype/custom/Montserrat-Variable.ttf "https://raw.githubusercontent.com/google/fonts/main/ofl/montserrat/Montserrat%5Bwght%5D.ttf"
+          sudo curl -fsSL -o /usr/share/fonts/truetype/custom/Poppins-Bold.ttf "https://raw.githubusercontent.com/google/fonts/main/ofl/poppins/Poppins-Bold.ttf"
+          sudo curl -fsSL -o /usr/share/fonts/truetype/custom/Oswald-Variable.ttf "https://raw.githubusercontent.com/google/fonts/main/ofl/oswald/Oswald%5Bwght%5D.ttf"
+          sudo curl -fsSL -o /usr/share/fonts/truetype/custom/PermanentMarker-Regular.ttf "https://raw.githubusercontent.com/google/fonts/main/apache/permanentmarker/PermanentMarker-Regular.ttf"
+          sudo curl -fsSL -o /usr/share/fonts/truetype/custom/Bangers-Regular.ttf "https://raw.githubusercontent.com/google/fonts/main/ofl/bangers/Bangers-Regular.ttf"
+          sudo curl -fsSL -o /usr/share/fonts/truetype/custom/Lobster-Regular.ttf "https://raw.githubusercontent.com/google/fonts/main/ofl/lobster/Lobster-Regular.ttf"
+          sudo curl -fsSL -o /usr/share/fonts/truetype/custom/ArchivoBlack-Regular.ttf "https://raw.githubusercontent.com/google/fonts/main/ofl/archivoblack/ArchivoBlack-Regular.ttf"
+          sudo curl -fsSL -o /usr/share/fonts/truetype/custom/Caveat-Variable.ttf "https://raw.githubusercontent.com/google/fonts/main/ofl/caveat/Caveat%5Bwght%5D.ttf"
+          sudo fc-cache -f
+
       - name: Instalar dependencias de Node
         run: npm ci
 

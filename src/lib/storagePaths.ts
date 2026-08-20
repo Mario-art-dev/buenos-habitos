@@ -111,6 +111,11 @@ export function bigCaptionsPath(jobId: string, clipId: string, position = 0): st
   return path.join(tmpDir(jobId), `${clipId}_bigcap_${position}.ass`);
 }
 
+/** Archivo .ass de los textos que el usuario añade a mano en el editor del clip. */
+export function customTextPath(jobId: string, clipId: string): string {
+  return path.join(tmpDir(jobId), `${clipId}_customtext.ass`);
+}
+
 /** Fotograma temporal para comprobar si el gancho inicial del clip muestra a una persona. */
 export function hookFramePath(jobId: string, clipId: string): string {
   return path.join(tmpDir(jobId), `${clipId}_hook.jpg`);

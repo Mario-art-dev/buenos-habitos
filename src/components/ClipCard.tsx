@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import ViralityBadge from "./ViralityBadge";
 
 export interface RankingItemData {
@@ -247,6 +248,14 @@ export default function ClipCard({ clip }: { clip: ClipData }) {
               >
                 ⬇ Descargar
               </a>
+            )}
+            {clip.status === "READY" && (
+              <Link
+                href={`/clips/${clip.id}/edit`}
+                className="rounded-lg border border-ink-600 px-3 py-2 text-xs font-semibold text-slate-200 hover:border-brand-500"
+              >
+                ✏️ Editar
+              </Link>
             )}
             {yt?.remoteUrl && (
               <a href={yt.remoteUrl} target="_blank" rel="noreferrer" className="text-xs text-brand-400 underline">

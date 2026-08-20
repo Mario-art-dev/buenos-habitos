@@ -52,7 +52,7 @@ export function wrapText(text: string, maxCharsPerLine: number): string {
 
 export function buildVerticalFilter(
   res: VerticalResolution,
-  opts: { bigCaptionsPath?: string; dynamicZoomPhase?: number } = {}
+  opts: { bigCaptionsPath?: string; customTextPath?: string; dynamicZoomPhase?: number } = {}
 ): string {
   const { width, height } = res;
   let filter =
@@ -89,6 +89,14 @@ export function buildVerticalFilter(
     lastLabel = "bigcap";
   }
 
+  if (opts.customTextPath) {
+    // Tercera capa, opcional: textos que el usuario añade a mano en el editor (fuente/color/
+    // tamaño/posición propios de cada uno, ya resueltos dentro del propio .ass — ver
+    // buildCustomTextAss en bigCaptions.ts).
+    filter += `;[${lastLabel}]subtitles=${escapeSubtitlesPath(opts.customTextPath)}[customtext]`;
+    lastLabel = "customtext";
+  }
+
   filter += `;[${lastLabel}]null[v]`;
   return filter;
 }
@@ -100,6 +108,7 @@ export interface CutClipOptions {
   endSec: number;
   resolution?: VerticalResolution;
   bigCaptionsPath?: string;
+  customTextPath?: string;
   muted?: boolean;
   dynamicZoom?: boolean;
 }
@@ -115,6 +124,7 @@ export async function cutVerticalClip(opts: CutClipOptions): Promise<void> {
   const duration = Math.max(0.5, endSec - startSec);
   const filter = buildVerticalFilter(resolution, {
     bigCaptionsPath: opts.bigCaptionsPath,
+    customTextPath: opts.customTextPath,
     dynamicZoomPhase: opts.dynamicZoom ? startSec : undefined,
   });
 
