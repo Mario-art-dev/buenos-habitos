@@ -55,9 +55,10 @@ Y dos modos pensados para monetización con publicidad de terceros:
 - Hay un **login con contraseña** (`APP_PASSWORD`) porque esta app puede subir vídeos a tus
   cuentas: no la dejes accesible sin contraseña en internet.
 
-### Caption grande estilo "karaoke" en el centro
+### Caption grande estilo "karaoke" en el centro — solo modo Rankings
 
-`ENABLE_BIG_CAPTIONS="true"` (activado por defecto): una única capa de subtítulo quemada sobre el
+`ENABLE_BIG_CAPTIONS="true"` (activado por defecto para Rankings; el modo SINGLE no lo usa nunca,
+ver "Zoom dinámico" más abajo): una única capa de subtítulo quemada sobre el
 vídeo, algo por debajo del centro de la pantalla, con 2-4 palabras por golpe (el corte de cada
 golpe sigue las pausas reales al hablar, no un conteo fijo, para que el ritmo se sienta natural),
 fuente redondeada (`fonts-comic-neue`) con contorno + desenfoque que da un efecto de brillo — el
@@ -79,6 +80,10 @@ Cada clip listo tiene un botón "✏️ Editar" que lleva a `/clips/[id]/edit`, 
   Montserrat, Poppins, Oswald, Permanent Marker, Bangers, Lobster, Archivo Black, Caveat, Comic
   Neue…), color, tamaño y con qué segundo del clip aparece/desaparece. Se arrastran con el dedo (o
   el ratón) directamente sobre la vista previa del vídeo para colocarlos donde quieras.
+- **Recortar**: una barra bajo la vista previa con dos tiradores (inicio/fin) que arrastras para
+  quedarte solo con la parte del clip que quieras.
+- **Agrandar/encoger texto**: al seleccionar un texto añadido a mano aparece un tirador en su
+  esquina — arrástralo hacia fuera para agrandarlo, hacia dentro para encogerlo.
 - Al pulsar "Guardar y regenerar vídeo", el clip se vuelve a cortar desde el vídeo original con
   esos cambios ya aplicados — no es una edición de los píxeles del vídeo ya hecho (eso no es
   posible sobre un archivo ya quemado), así que hace falta el vídeo fuente todavía disponible en el
@@ -89,7 +94,7 @@ Las fuentes que no vienen empaquetadas para `apt` se descargan directamente del 
 de Google Fonts (licencia libre OFL/Apache) al arrancar el servidor — ver el paso "Instalar fuentes
 libres" en `server.yml`/`generate.yml` y los `Dockerfile`.
 
-### Zoom dinámico ("punch-in")
+### Zoom dinámico ("punch-in") — solo modo Rankings
 
 `ENABLE_DYNAMIC_ZOOM="true"` (activado por defecto): la MAYORÍA del tiempo el short se ve recortado
 en vertical, llenando toda la pantalla sin barras de fondo desenfocado; solo de vez en cuando (una
@@ -97,6 +102,12 @@ ráfaga de ~2s cada 12s, con un desfase distinto por clip para que no todos "abr
 el plano ancho original con las barras — para que la mayoría del short se sienta en vertical de
 verdad y el plano ancho quede como un respiro ocasional, no al revés. Desactívalo con
 `ENABLE_DYNAMIC_ZOOM="false"` si prefieres el encuadre ancho fijo de siempre.
+
+**La sección principal (Inicio, modo SINGLE) no usa zoom dinámico ni el caption grande automático
+— el short se queda siempre en el recorte vertical fijo, sin ningún texto quemado por defecto**,
+para que edites tú a mano desde el editor lo que quieras (recortar, añadir tus propios textos).
+Esto es así siempre, no depende de `ENABLE_DYNAMIC_ZOOM`/`ENABLE_BIG_CAPTIONS` (esos dos flags solo
+afectan a los vídeos de Rankings).
 
 ### Portada de marca (sonido + carátula) al principio y al final
 

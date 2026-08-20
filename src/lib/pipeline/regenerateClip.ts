@@ -77,6 +77,10 @@ export async function regenerateClip(clipId: string): Promise<void> {
       }
     }
 
+    // Modo SINGLE ("vídeos virales"): sin zoom dinámico, por la misma petición explícita que ya
+    // aplica en la generación inicial (ver runPipeline.ts) — se mantiene igual al regenerar.
+    const dynamicZoom = clip.job.mode === "SINGLE" ? false : config.dynamicZoom.enabled;
+
     await cutVerticalClip({
       sourcePath: srcPath,
       outPath: bodyPath,
@@ -85,7 +89,7 @@ export async function regenerateClip(clipId: string): Promise<void> {
       resolution,
       bigCaptionsPath: bigCaptionsFile,
       customTextPath: customTextFile,
-      dynamicZoom: config.dynamicZoom.enabled,
+      dynamicZoom,
     });
 
     let core = bodyPath;

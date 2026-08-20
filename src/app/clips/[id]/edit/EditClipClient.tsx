@@ -36,6 +36,7 @@ interface ClipData {
   title: string;
   startSec: number;
   endSec: number;
+  effectiveStartSec: number | null;
   status: string;
   videoUrl: string | null;
   thumbnailUrl: string | null;
@@ -84,6 +85,39 @@ function newCustomText(durationSec: number): CustomTextElement {
   };
 }
 
+function formatTime(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = (sec % 60).toFixed(1);
+  return `${m}:${s.padStart(4, "0")}`;
+}
+
+/** Recorte: desplaza cues/textos por `offset` segundos y recorta lo que quede fuera de [0, newDuration]. */
+function shiftCues(cues: StoredCue[], offset: number, newDuration: number): StoredCue[] {
+  return cues
+    .map((c) => ({
+      ...c,
+      start: c.start - offset,
+      end: c.end - offset,
+      words: c.words.map((w) => ({ ...w, start: w.start - offset, end: w.end - offset })),
+    }))
+    .filter((c) => c.end > 0 && c.start < newDuration)
+    .map((c) => ({
+      ...c,
+      start: Math.max(0, c.start),
+      end: Math.min(newDuration, c.end),
+      words: c.words
+        .filter((w) => w.end > 0 && w.start < newDuration)
+        .map((w) => ({ ...w, start: Math.max(0, w.start), end: Math.min(newDuration, w.end) })),
+    }));
+}
+
+function shiftTexts(texts: CustomTextElement[], offset: number, newDuration: number): CustomTextElement[] {
+  return texts
+    .map((t) => ({ ...t, start: t.start - offset, end: t.end - offset }))
+    .filter((t) => t.end > 0 && t.start < newDuration)
+    .map((t) => ({ ...t, start: Math.max(0, t.start), end: Math.min(newDuration, t.end) }));
+}
+
 export default function EditClipClient({ clipId }: { clipId: string }) {
   const router = useRouter();
   const [clip, setClip] = useState<ClipData | null>(null);
@@ -94,9 +128,16 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [videoVersion, setVideoVersion] = useState(0);
   const [selectedTextId, setSelectedTextId] = useState<string | null>(null);
+  const [trimStart, setTrimStart] = useState(0);
+  const [trimEnd, setTrimEnd] = useState(0);
 
   const overlayRef = useRef<HTMLDivElement | null>(null);
+  const barRef = useRef<HTMLDivElement | null>(null);
   const draggingId = useRef<string | null>(null);
+  const draggingHandle = useRef<"start" | "end" | null>(null);
+  const resizingRef = useRef<{ id: string; anchorX: number; anchorY: number; baseDistance: number; baseFontSize: number } | null>(
+    null
+  );
 
   useEffect(() => {
     async function load() {
@@ -110,12 +151,16 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
       setClip(data.clip);
       setCues(data.clip.captionCues);
       setTexts(data.clip.customTexts);
+      const dur = data.clip.endSec - (data.clip.effectiveStartSec ?? data.clip.startSec);
+      setTrimStart(0);
+      setTrimEnd(dur);
       setLoading(false);
     }
     load();
   }, [clipId]);
 
-  const duration = clip ? clip.endSec - clip.startSec : 0;
+  const clipStart = clip ? clip.effectiveStartSec ?? clip.startSec : 0;
+  const duration = clip ? clip.endSec - clipStart : 0;
 
   function updateCueText(id: string, text: string) {
     setCues((prev) => prev.map((c) => (c.id === id ? { ...c, editedText: text } : c)));
@@ -149,27 +194,89 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
     setSelectedTextId(id);
   }
 
-  function onPointerMoveOverlay(e: React.PointerEvent) {
-    const id = draggingId.current;
-    if (!id || !overlayRef.current) return;
+  // Tirador de la esquina de un texto seleccionado: arrastrarlo hacia fuera agranda la letra,
+  // hacia dentro la encoge — el tamaño escala con la distancia al punto de anclaje del texto.
+  function onPointerDownResize(e: React.PointerEvent, t: CustomTextElement) {
+    e.preventDefault();
+    e.stopPropagation();
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    if (!overlayRef.current) return;
     const rect = overlayRef.current.getBoundingClientRect();
-    const xPct = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100));
-    const yPct = Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100));
-    updateText(id, { xPct, yPct });
+    const anchorX = rect.left + (t.xPct / 100) * rect.width;
+    const anchorY = rect.top + (t.yPct / 100) * rect.height;
+    const baseDistance = Math.max(10, Math.hypot(e.clientX - anchorX, e.clientY - anchorY));
+    resizingRef.current = { id: t.id, anchorX, anchorY, baseDistance, baseFontSize: t.fontSize };
+  }
+
+  function onPointerMoveOverlay(e: React.PointerEvent) {
+    if (draggingId.current && overlayRef.current) {
+      const rect = overlayRef.current.getBoundingClientRect();
+      const xPct = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100));
+      const yPct = Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100));
+      updateText(draggingId.current, { xPct, yPct });
+      return;
+    }
+    if (resizingRef.current) {
+      const { id, anchorX, anchorY, baseDistance, baseFontSize } = resizingRef.current;
+      const dist = Math.max(10, Math.hypot(e.clientX - anchorX, e.clientY - anchorY));
+      const newSize = Math.round(Math.min(300, Math.max(20, baseFontSize * (dist / baseDistance))));
+      updateText(id, { fontSize: newSize });
+    }
   }
 
   function onPointerUpOverlay() {
     draggingId.current = null;
+    resizingRef.current = null;
+  }
+
+  // Barra de recorte: dos tiradores (inicio/fin) que ajustan qué parte del clip actual se
+  // conserva al regenerar — mismo Pointer Events que el resto, arrastrable con el dedo.
+  function onPointerDownTrimHandle(e: React.PointerEvent, which: "start" | "end") {
+    e.preventDefault();
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    draggingHandle.current = which;
+  }
+
+  function onPointerMoveTrimBar(e: React.PointerEvent) {
+    const which = draggingHandle.current;
+    if (!which || !barRef.current || duration <= 0) return;
+    const rect = barRef.current.getBoundingClientRect();
+    const pct = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+    const sec = pct * duration;
+    if (which === "start") {
+      setTrimStart(Math.min(sec, trimEnd - 0.5));
+    } else {
+      setTrimEnd(Math.max(sec, trimStart + 0.5));
+    }
+  }
+
+  function onPointerUpTrimBar() {
+    draggingHandle.current = null;
   }
 
   async function saveAndRegenerate() {
+    if (!clip) return;
     setSaving(true);
     setError(null);
     try {
+      const trimmed = trimStart > 0 || trimEnd < duration;
+      const newDuration = trimEnd - trimStart;
+      // Si se ha recortado, los tiempos guardados de cues/textos se desplazan para seguir
+      // alineados con el nuevo inicio del clip (t=0 pasa a ser el instante trimStart de antes).
+      const nextCues = trimmed ? shiftCues(cues, trimStart, newDuration) : cues;
+      const nextTexts = trimmed ? shiftTexts(texts, trimStart, newDuration) : texts;
+      const nextEffectiveStart = clipStart + trimStart;
+      const nextEnd = clipStart + trimEnd;
+
       const putRes = await fetch(`/api/clips/${clipId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ captionCues: cues, customTexts: texts }),
+        body: JSON.stringify({
+          captionCues: nextCues,
+          customTexts: nextTexts,
+          effectiveStartSec: nextEffectiveStart,
+          endSec: nextEnd,
+        }),
       });
       const putData = await putRes.json();
       if (!putRes.ok) throw new Error(putData.error ?? "No se pudieron guardar los cambios");
@@ -178,7 +285,21 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
       const regenData = await regenRes.json();
       if (!regenRes.ok) throw new Error(regenData.error ?? "No se pudo regenerar el vídeo");
 
-      setClip((prev) => (prev ? { ...prev, videoUrl: regenData.videoUrl, thumbnailUrl: regenData.thumbnailUrl } : prev));
+      setCues(nextCues);
+      setTexts(nextTexts);
+      setTrimStart(0);
+      setTrimEnd(newDuration);
+      setClip((prev) =>
+        prev
+          ? {
+              ...prev,
+              effectiveStartSec: nextEffectiveStart,
+              endSec: nextEnd,
+              videoUrl: regenData.videoUrl,
+              thumbnailUrl: regenData.thumbnailUrl,
+            }
+          : prev
+      );
       setVideoVersion((v) => v + 1);
     } catch (err) {
       setError((err as Error).message);
@@ -217,27 +338,69 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
             {texts.map((t) => (
               <div
                 key={t.id}
-                onPointerDown={(e) => onPointerDownText(e, t.id)}
-                className={`absolute -translate-x-1/2 -translate-y-1/2 cursor-move select-none whitespace-nowrap px-1 text-center leading-none ${
-                  selectedTextId === t.id ? "outline outline-2 outline-brand-500" : ""
-                }`}
-                style={{
-                  left: `${t.xPct}%`,
-                  top: `${t.yPct}%`,
-                  fontFamily: `"${t.fontName}", sans-serif`,
-                  color: `#${t.colorHex}`,
-                  fontSize: `${Math.round(t.fontSize / 6)}px`,
-                  WebkitTextStroke: "1px black",
-                  textTransform: t.uppercase ? "uppercase" : "none",
-                }}
+                className="absolute -translate-x-1/2 -translate-y-1/2"
+                style={{ left: `${t.xPct}%`, top: `${t.yPct}%` }}
               >
-                {t.text || "(vacío)"}
+                <div
+                  onPointerDown={(e) => onPointerDownText(e, t.id)}
+                  className={`cursor-move select-none whitespace-nowrap px-1 text-center leading-none ${
+                    selectedTextId === t.id ? "outline outline-2 outline-brand-500" : ""
+                  }`}
+                  style={{
+                    fontFamily: `"${t.fontName}", sans-serif`,
+                    color: `#${t.colorHex}`,
+                    fontSize: `${Math.round(t.fontSize / 6)}px`,
+                    WebkitTextStroke: "1px black",
+                    textTransform: t.uppercase ? "uppercase" : "none",
+                  }}
+                >
+                  {t.text || "(vacío)"}
+                </div>
+                {selectedTextId === t.id && (
+                  <div
+                    onPointerDown={(e) => onPointerDownResize(e, t)}
+                    className="absolute -bottom-2 -right-2 h-4 w-4 cursor-nwse-resize rounded-full border-2 border-white bg-brand-500"
+                    title="Arrastra para agrandar/encoger"
+                  />
+                )}
               </div>
             ))}
           </div>
           <p className="mt-2 text-xs text-slate-500">
-            Arrastra un texto para moverlo — el tamaño real en el vídeo es mayor que en esta vista previa.
+            Arrastra un texto para moverlo, y el punto de su esquina para agrandarlo o encogerlo —
+            el tamaño real en el vídeo es mayor que en esta vista previa.
           </p>
+
+          {/* Barra de recorte */}
+          <div className="mt-4">
+            <p className="mb-1 text-xs text-slate-400">
+              Recorte: {formatTime(trimStart)} – {formatTime(trimEnd)} (de {formatTime(duration)})
+            </p>
+            <div
+              ref={barRef}
+              className="relative h-8 w-full cursor-pointer rounded-lg bg-ink-900"
+              onPointerMove={onPointerMoveTrimBar}
+              onPointerUp={onPointerUpTrimBar}
+            >
+              <div
+                className="absolute top-0 h-full rounded-lg bg-brand-600/40"
+                style={{
+                  left: `${duration > 0 ? (trimStart / duration) * 100 : 0}%`,
+                  right: `${duration > 0 ? 100 - (trimEnd / duration) * 100 : 0}%`,
+                }}
+              />
+              <div
+                onPointerDown={(e) => onPointerDownTrimHandle(e, "start")}
+                className="absolute top-0 h-full w-3 -translate-x-1/2 cursor-ew-resize rounded bg-brand-400"
+                style={{ left: `${duration > 0 ? (trimStart / duration) * 100 : 0}%` }}
+              />
+              <div
+                onPointerDown={(e) => onPointerDownTrimHandle(e, "end")}
+                className="absolute top-0 h-full w-3 -translate-x-1/2 cursor-ew-resize rounded bg-brand-400"
+                style={{ left: `${duration > 0 ? (trimEnd / duration) * 100 : 0}%` }}
+              />
+            </div>
+          </div>
         </div>
 
         <div className="flex-1 space-y-6">

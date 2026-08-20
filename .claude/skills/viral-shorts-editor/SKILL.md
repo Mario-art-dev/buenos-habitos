@@ -127,6 +127,24 @@ tags inline `\fn`/`\fs`/`\c`, porque cada uno puede ser completamente distinto a
 `clip.ts` la añade como tercera capa opcional del filtro (`customTextPath`), después del caption
 grande.
 
+**Recorte (trim) y redimensionar arrastrando** (`EditClipClient.tsx`): el editor también deja
+recortar el clip (barra con dos tiradores, mismo patrón de Pointer Events que el arrastre de
+texto) y agrandar/encoger un texto arrastrando un tirador en su esquina (el tamaño escala con la
+distancia al punto de anclaje del texto). El recorte NO se aplica en el momento: solo mueve
+`trimStart`/`trimEnd` en estado local; al pulsar "Guardar y regenerar" es cuando `shiftCues`/
+`shiftTexts` desplazan los timestamps guardados de cues y textos para que sigan alineados con el
+nuevo inicio del clip (t=0 pasa a ser el instante `trimStart` de antes, y cualquier cue/texto que
+quede fuera del nuevo rango se descarta) y se calculan los nuevos `effectiveStartSec`/`endSec`
+absolutos sobre el vídeo fuente — la ruta `PUT /api/clips/[id]` solo persiste esos dos números
+ya calculados, no hace ningún cálculo de recorte ella misma. Si tocas el recorte, el desplazamiento
+de timestamps tiene que vivir en el cliente (o donde sea que se calculen los nuevos límites), nunca
+asumas que el servidor lo hace por ti.
+
+**Modo SINGLE no tiene caption automático que editar** (ver la sección de zoom dinámico más abajo):
+sus clips llegan al editor con `captionCues: []` — el editor no falla ni se rompe con eso, solo
+muestra "Este clip no tiene subtítulos guardados" en la lista, y el usuario añade lo que quiera a
+mano con "+ Añadir texto". Modo Ranking sí trae cues auto-generadas para editar/borrar, como antes.
+
 **`regenerateClip.ts`** reproduce los mismos pasos que `runPipeline.ts` (cortar cuerpo → envolver
 con comentario narrado si lo llevaba → envolver con portada si `ENABLE_COVER_CARD`) pero partiendo
 de las cues/textos guardados en vez de analizar la transcripción de nuevo, y sin repetir la
@@ -149,14 +167,25 @@ verifica la URL real antes de escribirla en el workflow.
 
 ## Zoom dinámico / ritmo de cámara (`src/lib/pipeline/clip.ts`)
 
-Un plano fijo durante 60-180s seguidos se siente estático y pierde audiencia. El patrón
-implementado invierte cuál es la base: el recorte vertical (zoom, sin barras de fondo desenfocado)
-es la vista POR DEFECTO la mayor parte del tiempo, y el plano ancho original (con barras) solo
-aparece en ráfagas cortas (~1.8s cada ~12s) — al revés de como se hizo la primera vez; se cambió a
-petición expresa ("la mayoría en vertical, alguna que otra escena en horizontal"), así que si
-alguna vez hay que tocar esto de nuevo, la base debe seguir siendo el recorte vertical, no el plano
-ancho. El desfase varía por clip (derivado de su `startSec`) para que no todos los clips del mismo
-vídeo "abran" al plano ancho a la vez. Es configurable con `ENABLE_DYNAMIC_ZOOM`.
+**Modo SINGLE ("vídeos virales", `runPipeline.ts`) NO usa zoom dinámico ni caption grande
+automático** — petición explícita: el short se queda siempre en el recorte vertical fijo, sin
+ráfagas de plano ancho y sin texto quemado por defecto, porque el usuario prefiere controlarlo todo
+a mano desde el editor (`/clips/[id]/edit`: recortar, añadir sus propios textos con su fuente/
+color/tamaño). Esto se hace con `dynamicZoom: false` hardcodeado en la llamada a `cutVerticalClip`
+(no leyendo `config.dynamicZoom.enabled`) y sin calcular `captionCues` en absoluto (se guarda `[]`).
+`regenerateClip.ts` respeta lo mismo comprobando `clip.job.mode === "SINGLE"`. **Esto NO aplica al
+modo Ranking** (`rankingRender.ts`), que sigue usando `config.dynamicZoom.enabled`/
+`config.bigCaptions.enabled` normalmente — si tocas cualquiera de los dos flags, comprueba en qué
+modo estás before asumir que aplica a los dos.
+
+Detalle histórico si en algún momento se reactiva el zoom dinámico en algún modo: un plano fijo
+durante 60-180s seguidos se siente estático y pierde audiencia, así que el patrón implementado
+invierte cuál es la base — el recorte vertical (zoom, sin barras de fondo desenfocado) es la vista
+POR DEFECTO la mayor parte del tiempo, y el plano ancho original (con barras) solo aparece en
+ráfagas cortas (~1.8s cada ~12s), al revés de como se hizo la primera vez (se cambió a petición
+expresa: "la mayoría en vertical, alguna que otra escena en horizontal"). El desfase varía por clip
+(derivado de su `startSec`) para que no todos los clips del mismo vídeo "abran" al plano ancho a la
+vez.
 
 Detalle técnico importante si tocas esto: el recorte de zoom siempre es centrado (no hay detección
 de cara/sujeto), así que funciona bien cuando la acción está más o menos centrada pero puede

@@ -56,6 +56,11 @@ const customTextSchema = z.object({
 const editSchema = z.object({
   captionCues: z.array(cueSchema).optional(),
   customTexts: z.array(customTextSchema).optional(),
+  // Recorte (trim) del editor: nuevos límites absolutos sobre el vídeo fuente. El cliente ya
+  // manda captionCues/customTexts con los tiempos re-desplazados para seguir alineados con el
+  // nuevo inicio — este endpoint solo persiste los valores, no hace ningún cálculo de recorte.
+  effectiveStartSec: z.number().min(0).optional(),
+  endSec: z.number().min(0).optional(),
 });
 
 /** Guarda los subtítulos editados/borrados y los textos personalizados del editor (sin regenerar el vídeo todavía). */
@@ -71,11 +76,19 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     return NextResponse.json({ error: "Clip no encontrado" }, { status: 404 });
   }
 
+  const newStart = parsed.data.effectiveStartSec ?? clip.effectiveStartSec ?? clip.startSec;
+  const newEnd = parsed.data.endSec ?? clip.endSec;
+  if (newEnd - newStart < 0.5) {
+    return NextResponse.json({ error: "El recorte es demasiado corto (mínimo medio segundo)" }, { status: 400 });
+  }
+
   const updated = await db.clip.update({
     where: { id: params.id },
     data: {
       ...(parsed.data.captionCues !== undefined && { captionCues: JSON.stringify(parsed.data.captionCues) }),
       ...(parsed.data.customTexts !== undefined && { customTexts: JSON.stringify(parsed.data.customTexts) }),
+      ...(parsed.data.effectiveStartSec !== undefined && { effectiveStartSec: parsed.data.effectiveStartSec }),
+      ...(parsed.data.endSec !== undefined && { endSec: parsed.data.endSec }),
     },
   });
 

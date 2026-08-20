@@ -8,7 +8,6 @@ import {
   clipBodyPath,
   narrationAudioPath,
   candidateCardPath,
-  bigCaptionsPath,
   hookFramePath,
   clipCommentedPath,
   coverCardPath,
@@ -18,7 +17,7 @@ import { resolveSourceVideo } from "./download";
 import { extractAudio, transcribeAudio, type TranscriptSegment } from "./transcribe";
 import { analyzeTranscriptForClips } from "./analyze";
 import { cutVerticalClip, concatClips, extractThumbnail } from "./clip";
-import { cuesFromTranscript, buildBigCaptionsAssFromCues } from "./bigCaptions";
+import type { StoredCue } from "./bigCaptions";
 import { pickHookStartSec, hookVerifiedFrameSec } from "./hookFrame";
 import { probeVideo, pickVerticalResolution } from "./probe";
 import { processRankingJob } from "./rankingPipeline";
@@ -129,7 +128,6 @@ async function processSingleJob(jobId: string): Promise<void> {
       const outroNarrationPath = narrationAudioPath(jobId, clip.id, "outro");
       const introCardPath = candidateCardPath(jobId, clip.id, "intro");
       const outroCardPath = candidateCardPath(jobId, clip.id, "outro");
-      const bigCaptionsFilePath = bigCaptionsPath(jobId, clip.id);
       const commentedPath = clipCommentedPath(jobId, clip.id);
       const coverPath = coverCardPath(jobId, clip.id);
       try {
@@ -147,19 +145,12 @@ async function processSingleJob(jobId: string): Promise<void> {
           framePath: hookFramePath(jobId, clip.id),
         });
 
-        // Golpes de subtítulo derivados de la transcripción — se guardan en la base de datos (más
-        // abajo) en vez de borrarse al terminar, para que el editor pueda mostrarlos/editarlos/
-        // borrarlos y volver a generar el vídeo después sin perder el resaltado por palabra.
-        const captionCues = cuesFromTranscript(transcript.segments, hookStartSec, clip.endSec, 4, true);
-
-        let bigCaptionsFile: string | undefined;
-        if (config.bigCaptions.enabled && captionCues.length > 0) {
-          const ass = buildBigCaptionsAssFromCues(captionCues, resolution);
-          if (ass) {
-            fs.writeFileSync(bigCaptionsFilePath, ass, "utf-8");
-            bigCaptionsFile = bigCaptionsFilePath;
-          }
-        }
+        // Petición explícita: en esta sección (SINGLE, "vídeos virales") el short se queda siempre
+        // en el recorte vertical fijo, sin caption grande automático quemado — el usuario prefiere
+        // controlar el texto a mano desde el editor (recortar, añadir textos propios) en vez de que
+        // se le queme algo automático encima. No se calculan cues ni se activa el zoom dinámico
+        // aquí; el modo Ranking (rankingRender.ts) no cambia, sigue con ambos activados.
+        const captionCues: StoredCue[] = [];
 
         let commentaryIntro: string | null = null;
         let commentaryOutro: string | null = null;
@@ -172,8 +163,7 @@ async function processSingleJob(jobId: string): Promise<void> {
           startSec: hookStartSec,
           endSec: clip.endSec,
           resolution,
-          bigCaptionsPath: bigCaptionsFile,
-          dynamicZoom: config.dynamicZoom.enabled,
+          dynamicZoom: false,
         });
 
         let core = bodyPath;
@@ -257,7 +247,6 @@ async function processSingleJob(jobId: string): Promise<void> {
           outroNarrationPath,
           introCardPath,
           outroCardPath,
-          bigCaptionsFilePath,
         ]) {
           try {
             fs.rmSync(tmp, { force: true });
