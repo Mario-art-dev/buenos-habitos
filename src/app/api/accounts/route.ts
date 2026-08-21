@@ -22,6 +22,16 @@ export async function GET(req: NextRequest) {
       tiktokConfigured: !!(config.tiktok.clientKey && config.tiktok.clientSecret),
       youtubeCallbackUrl: `${origin}/api/auth/youtube/callback`,
       tiktokCallbackUrl: `${origin}/api/auth/tiktok/callback`,
+      // El Client ID/Key NO es secreto (Google/TikTok lo mandan en la propia URL al conectar), así
+      // que se puede enseñar tal cual para comparar carácter a carácter con el panel del proveedor
+      // — sirve para detectar espacios/saltos de línea colados al pegar el secreto de GitHub (bug
+      // real: "invalid_client" aunque el valor "parezca" igual a simple vista). El Secret sí es
+      // sensible, así que de ese solo se enseña la longitud (para detectar que quedó vacío o con
+      // caracteres de más/menos), nunca el valor.
+      youtubeClientId: config.google.clientId || null,
+      youtubeClientSecretLength: config.google.clientSecret.length || null,
+      tiktokClientKey: config.tiktok.clientKey || null,
+      tiktokClientSecretLength: config.tiktok.clientSecret.length || null,
     },
   });
 }

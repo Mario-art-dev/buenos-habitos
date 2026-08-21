@@ -16,6 +16,10 @@ interface OAuthInfo {
   tiktokConfigured: boolean;
   youtubeCallbackUrl: string;
   tiktokCallbackUrl: string;
+  youtubeClientId: string | null;
+  youtubeClientSecretLength: number | null;
+  tiktokClientKey: string | null;
+  tiktokClientSecretLength: number | null;
 }
 
 /** Botón "Copiar" para pegar directo en Google Cloud Console / TikTok for Developers. */
@@ -140,6 +144,23 @@ export default function SettingsClient() {
                   </code>
                   <CopyButton text={oauth.youtubeCallbackUrl} />
                 </div>
+                <p className="mt-3">
+                  Si te da <strong className="text-slate-300">"Error 401: invalid_client"</strong> al
+                  conectar, el Client ID guardado en GitHub no coincide con el de Google (a veces se
+                  cuela un espacio al pegarlo desde el móvil). Compara este que está leyendo el
+                  servidor AHORA MISMO, letra por letra, con el que ves en Google Cloud Console:
+                </p>
+                <div className="mt-2 flex items-center gap-2">
+                  <code className="flex-1 overflow-x-auto whitespace-nowrap rounded-lg bg-ink-900 px-2 py-1.5 text-slate-300">
+                    {oauth.youtubeClientId}
+                  </code>
+                  {oauth.youtubeClientId && <CopyButton text={oauth.youtubeClientId} />}
+                </div>
+                <p className="mt-2 text-slate-500">
+                  Client Secret guardado: {oauth.youtubeClientSecretLength} caracteres (no se enseña el
+                  valor por seguridad — si esperabas otra longitud, vuelve a generarlo y actualiza el
+                  secreto de GitHub).
+                </p>
               </>
             )}
           </div>
@@ -199,6 +220,20 @@ export default function SettingsClient() {
                   </code>
                   <CopyButton text={oauth.tiktokCallbackUrl} />
                 </div>
+                <p className="mt-3">
+                  Si te da un error de cliente inválido al conectar, compara este Client Key (lo que
+                  está leyendo el servidor ahora mismo) letra por letra con el de TikTok for Developers:
+                </p>
+                <div className="mt-2 flex items-center gap-2">
+                  <code className="flex-1 overflow-x-auto whitespace-nowrap rounded-lg bg-ink-900 px-2 py-1.5 text-slate-300">
+                    {oauth.tiktokClientKey}
+                  </code>
+                  {oauth.tiktokClientKey && <CopyButton text={oauth.tiktokClientKey} />}
+                </div>
+                <p className="mt-2 text-slate-500">
+                  Client Secret guardado: {oauth.tiktokClientSecretLength} caracteres (no se enseña el
+                  valor por seguridad).
+                </p>
               </>
             )}
           </div>

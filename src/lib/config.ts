@@ -1,5 +1,10 @@
+// GitHub Secrets (y pegar a mano desde el móvil en general) cuelan fácilmente un espacio o
+// salto de línea invisible al principio/final del valor — el Client ID/Secret "parece" igual a
+// simple vista pero ya no coincide byte a byte con lo que tiene Google/TikTok, y APIs como OAuth
+// lo rechazan sin más pista que "invalid_client". Recortarlo aquí, en el único punto por el que
+// pasan TODAS las variables de entorno, evita tener que perseguir este bug variable por variable.
 function required(name: string, fallback?: string): string {
-  const value = process.env[name] ?? fallback;
+  const value = (process.env[name] ?? fallback)?.trim();
   if (value === undefined) {
     throw new Error(`Falta la variable de entorno ${name}. Revisa tu archivo .env (mira .env.example).`);
   }
@@ -7,7 +12,7 @@ function required(name: string, fallback?: string): string {
 }
 
 function optional(name: string, fallback = ""): string {
-  return process.env[name] ?? fallback;
+  return (process.env[name] ?? fallback).trim();
 }
 
 const aiProvider = optional("AI_PROVIDER", "anthropic") as "anthropic" | "openai" | "gemini" | "groq";
