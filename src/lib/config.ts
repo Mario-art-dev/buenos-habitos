@@ -15,6 +15,16 @@ function optional(name: string, fallback = ""): string {
   return (process.env[name] ?? fallback).trim();
 }
 
+// Para valores tipo Client ID/Secret que NUNCA llevan espacios de verdad: en el móvil, copiar un
+// campo de texto largo que se ve partido en varias líneas a veces convierte esos saltos VISUALES
+// en saltos de línea reales dentro del valor copiado — no solo al principio/final (eso ya lo
+// arregla optional()/required() con trim()), sino también EN MEDIO, y ahí un simple trim() no
+// sirve. Quitar todo el espacio en blanco es seguro solo para este tipo de campo — para otros
+// (como CHANNEL_NAME, que sí puede llevar espacios reales) usar optional()/required() normal.
+function optionalCredential(name: string): string {
+  return optional(name).replace(/\s+/g, "");
+}
+
 const aiProvider = optional("AI_PROVIDER", "anthropic") as "anthropic" | "openai" | "gemini" | "groq";
 
 // La capa gratuita de Groq limita a 8.000 tokens por PETICIÓN y 200.000 tokens AL DÍA — ambos
@@ -56,18 +66,18 @@ export const config = {
 
   ai: {
     provider: aiProvider,
-    anthropicApiKey: optional("ANTHROPIC_API_KEY"),
+    anthropicApiKey: optionalCredential("ANTHROPIC_API_KEY"),
     anthropicModel: optional("ANTHROPIC_MODEL", "claude-sonnet-5"),
-    openaiApiKey: optional("OPENAI_API_KEY"),
+    openaiApiKey: optionalCredential("OPENAI_API_KEY"),
     openaiModel: optional("OPENAI_ANALYSIS_MODEL", "gpt-4o"),
-    geminiApiKey: optional("GEMINI_API_KEY"),
+    geminiApiKey: optionalCredential("GEMINI_API_KEY"),
     // "gemini-flash-latest" es un alias que Google mantiene apuntando siempre al último
     // Flash estable, así este valor por defecto no se queda obsoleto cuando lancen modelos nuevos.
     geminiModel: optional("GEMINI_MODEL", "gemini-flash-latest"),
     // Groq: alternativa gratuita a Gemini para quien esté en la UE/Reino Unido/Suiza, donde la
     // capa gratuita de Gemini no está disponible (Google exige tarjeta ahí por el RGPD/Reglamento
     // de IA). Groq no tiene esa restricción ni pide tarjeta.
-    groqApiKey: optional("GROQ_API_KEY"),
+    groqApiKey: optionalCredential("GROQ_API_KEY"),
     // gpt-oss-20b (no qwen3.6) para texto: es más pequeño/rápido y, sobre todo, Groq SÍ deja
     // controlarle el razonamiento con "reasoning_effort" (a "low" gasta muchos menos tokens
     // pensando de verdad, no solo lo esconde del resultado como pasaba con qwen3.6). Con la
@@ -95,7 +105,7 @@ export const config = {
   },
 
   whisper: {
-    apiKey: optional("OPENAI_API_KEY_WHISPER") || optional("OPENAI_API_KEY"),
+    apiKey: optionalCredential("OPENAI_API_KEY_WHISPER") || optionalCredential("OPENAI_API_KEY"),
     model: optional("WHISPER_MODEL", "whisper-1"),
   },
 
@@ -146,22 +156,22 @@ export const config = {
     // "local" = Piper (gratis, corre en el propio servidor) | "openai" = API de voz de OpenAI (de pago)
     provider: (optional("TTS_PROVIDER", "local") as "local" | "openai"),
     localVoice: optional("LOCAL_TTS_VOICE") || DEFAULT_TTS_VOICE_BY_LANGUAGE[channelLanguage] || "en_US-lessac-medium",
-    openaiApiKey: optional("OPENAI_API_KEY_TTS") || optional("OPENAI_API_KEY"),
+    openaiApiKey: optionalCredential("OPENAI_API_KEY_TTS") || optionalCredential("OPENAI_API_KEY"),
     openaiVoice: optional("OPENAI_TTS_VOICE", "alloy"),
     openaiModel: optional("OPENAI_TTS_MODEL", "tts-1"),
   },
 
   google: {
-    clientId: optional("GOOGLE_CLIENT_ID"),
-    clientSecret: optional("GOOGLE_CLIENT_SECRET"),
+    clientId: optionalCredential("GOOGLE_CLIENT_ID"),
+    clientSecret: optionalCredential("GOOGLE_CLIENT_SECRET"),
     // El redirect_uri de OAuth NO sale de aquí: la URL pública cambia cada vez que se reinicia
     // la sesión (túnel de Cloudflare), así que se calcula por petición a partir de la cabecera
     // Host real (ver src/lib/requestOrigin.ts) en vez de fiarse de una URL fija.
   },
 
   tiktok: {
-    clientKey: optional("TIKTOK_CLIENT_KEY"),
-    clientSecret: optional("TIKTOK_CLIENT_SECRET"),
+    clientKey: optionalCredential("TIKTOK_CLIENT_KEY"),
+    clientSecret: optionalCredential("TIKTOK_CLIENT_SECRET"),
   },
 
   ytdlpPath: optional("YTDLP_PATH", "yt-dlp"),
