@@ -459,7 +459,8 @@ Desde **Ajustes** dentro de la app, pulsa "Conectar YouTube" y autoriza tu cuent
    borradores (inbox), no publicarlos directamente en público. Esta app ya está montada así:
    cuando pulsas "Enviar a TikTok", el vídeo llega como borrador privado a tu cuenta y lo
    publicas tú con un toque desde la app de TikTok. En cuanto TikTok apruebe tu solicitud de
-   auditoría, cambia la URL en `src/lib/social/tiktok.ts`
+   auditoría, activa el scope `video.publish` en el panel de tu app (Scopes) y añádelo de vuelta a
+   `SCOPES` en `src/lib/social/tiktok.ts`, y cambia la URL
    (`INBOX_UPLOAD_INIT_URL` → el endpoint de publicación directa) para que se publique solo.
 
 ⚠️ **Si usas el modo "Servidor temporal" (sin servidor propio, ver más abajo): la URL de tu

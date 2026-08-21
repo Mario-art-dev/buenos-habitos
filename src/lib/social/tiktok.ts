@@ -11,7 +11,11 @@ const USERINFO_URL = "https://open.tiktokapis.com/v2/user/info/";
 // https://open.tiktokapis.com/v2/post/publish/video/init/  (y añade post_info con privacy_level)
 const INBOX_UPLOAD_INIT_URL = "https://open.tiktokapis.com/v2/post/publish/inbox/video/init/";
 
-const SCOPES = ["user.info.basic", "video.upload", "video.publish"];
+// "video.publish" es para publicación DIRECTA, que solo se concede a apps auditadas por TikTok
+// (ver INBOX_UPLOAD_INIT_URL arriba) — pedirlo aquí sin tenerlo habilitado en el panel de la app
+// hace que TikTok rechace el login entero con "Something went wrong / scope". El flujo de
+// borrador al inbox que usa esta app solo necesita subir el vídeo, no publicarlo.
+const SCOPES = ["user.info.basic", "video.upload"];
 
 function base64url(input: Buffer): string {
   return input.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
