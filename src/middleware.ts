@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { isValidSessionToken, sessionCookie } from "@/lib/auth";
 import { config } from "@/lib/config";
 
-const PUBLIC_PATHS = ["/login", "/api/auth/login"];
+// /terms y /privacy tienen que ser públicas: TikTok/Google las piden como URL de Términos y
+// Política de privacidad al configurar la app, y sus sistemas (y cualquier revisor humano) las
+// visitan sin conocer la contraseña de la app.
+const PUBLIC_PATHS = ["/login", "/api/auth/login", "/terms", "/privacy"];
 
 export async function middleware(req: NextRequest) {
   if (!config.appPassword) {
