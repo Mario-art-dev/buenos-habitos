@@ -4,15 +4,14 @@ import { config } from "@/lib/config";
 
 // /terms y /privacy tienen que ser públicas: TikTok/Google las piden como URL de Términos y
 // Política de privacidad al configurar la app, y sus sistemas (y cualquier revisor humano) las
-// visitan sin conocer la contraseña de la app. El archivo de verificación de TikTok (en public/)
-// es lo mismo: sus servidores lo comprueban sin pasar por el login.
-const PUBLIC_PATHS = [
-  "/login",
-  "/api/auth/login",
-  "/terms",
-  "/privacy",
-  "/tiktokH7BOJwutMnYaC50HXaWw4omyRyIfdTiv.txt",
-];
+// visitan sin conocer la contraseña de la app.
+const PUBLIC_PATHS = ["/login", "/api/auth/login", "/terms", "/privacy"];
+
+// El archivo de verificación de dominio de TikTok for Developers (en public/, nombre tipo
+// "tiktokXXXX.txt") hay que volver a generarlo cada vez que cambia la URL del túnel (cada
+// reinicio del "Servidor temporal") — en vez de acordarse de añadir cada nombre nuevo a mano al
+// middleware, se deja pasar cualquier archivo con ese patrón de nombre automáticamente.
+const TIKTOK_VERIFICATION_FILE = /^\/tiktok[A-Za-z0-9]+\.txt$/;
 
 export async function middleware(req: NextRequest) {
   if (!config.appPassword) {
@@ -20,7 +19,10 @@ export async function middleware(req: NextRequest) {
   }
 
   const { pathname } = req.nextUrl;
-  const isPublic = PUBLIC_PATHS.some((p) => pathname === p) || pathname.startsWith("/_next");
+  const isPublic =
+    PUBLIC_PATHS.some((p) => pathname === p) ||
+    pathname.startsWith("/_next") ||
+    TIKTOK_VERIFICATION_FILE.test(pathname);
   if (isPublic) {
     return NextResponse.next();
   }
