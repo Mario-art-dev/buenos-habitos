@@ -36,8 +36,11 @@ export async function suggestHashtags(params: {
   title: string;
   description: string;
   existing?: string[];
+  // Idioma en el que deben ir los hashtags (ya resuelto: el detectado del vídeo fuente, o el
+  // idioma configurado del canal si no aplica). Si no se pasa, se cae al idioma del canal.
+  contentLanguage?: string;
 }): Promise<HashtagSuggestion> {
-  const { platform, title, description, existing = [] } = params;
+  const { platform, title, description, existing = [], contentLanguage = contentLanguageName() } = params;
 
   const external = await fetchExternalTrendingTags(platform, `${title} ${description}`);
 
@@ -64,7 +67,7 @@ hashtags random ni genéricos que le sirvan a cualquier vídeo. Piensa como un e
    emoción que provoca, el tipo de momento) — para que a quien le guste justo esto, se lo encuentre.
 3. 1-2 hashtags de marca/canal.
 Cada hashtag debe justificar su hueco: si no ayuda a que ESTE clip llegue al público de comedia/
-entretenimiento, no va. Los hashtags deben estar en ${contentLanguageName()} salvo los que ya sean
+entretenimiento, no va. Los hashtags deben estar en ${contentLanguage} salvo los que ya sean
 universales en cualquier idioma (nombres propios, "fyp", "viral", etc.). No repitas, no uses el símbolo #,
 en minúsculas, sin espacios dentro de cada hashtag.
 

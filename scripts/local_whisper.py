@@ -38,9 +38,9 @@ def main() -> int:
     # word_timestamps=True: da la marca de tiempo de cada palabra suelta, no solo de la frase
     # entera — lo necesita src/lib/pipeline/bigCaptions.ts para resaltar palabra por palabra
     # en vez de bloques de frase completa.
-    segments, _info = model.transcribe(audio_path, vad_filter=True, word_timestamps=True)
+    segments, info = model.transcribe(audio_path, vad_filter=True, word_timestamps=True)
 
-    result = []
+    result_segments = []
     for s in segments:
         if not s.text or not s.text.strip():
             continue
@@ -49,9 +49,15 @@ def main() -> int:
             for w in (s.words or [])
             if w.word and w.word.strip()
         ]
-        result.append({"start": float(s.start), "end": float(s.end), "text": s.text.strip(), "words": words})
+        result_segments.append(
+            {"start": float(s.start), "end": float(s.end), "text": s.text.strip(), "words": words}
+        )
 
-    json.dump(result, sys.stdout, ensure_ascii=False)
+    # info.language: código ISO 639-1 (p.ej. "en", "es") detectado por faster-whisper — lo usa
+    # src/lib/lang.ts para generar título/descripción/subtítulos en el idioma REAL del vídeo en
+    # vez del idioma fijo configurado del canal.
+    output = {"segments": result_segments, "language": info.language if info else None}
+    json.dump(output, sys.stdout, ensure_ascii=False)
     return 0
 
 

@@ -1,6 +1,5 @@
 import { getAIProvider } from "@/lib/ai/provider";
 import { config } from "@/lib/config";
-import { contentLanguageName } from "@/lib/lang";
 import type { TranscriptSegment } from "./transcribe";
 
 export interface FixedSegment {
@@ -60,8 +59,13 @@ describes cada tramo tal cual) y para cada uno escribes un título, descripción
 una persona real enganchada al contenido — con gancho, nunca un resumen robótico ni relleno genérico.
 Respondes EXCLUSIVAMENTE con JSON válido, sin texto adicional, sin markdown, sin backticks.`;
 
-function buildPrompt(params: { segments: FixedSegment[]; excerpts: string[]; sourceTitle: string }): string {
-  const { segments, excerpts, sourceTitle } = params;
+function buildPrompt(params: {
+  segments: FixedSegment[];
+  excerpts: string[];
+  sourceTitle: string;
+  contentLanguage: string;
+}): string {
+  const { segments, excerpts, sourceTitle, contentLanguage } = params;
   const items = segments
     .map(
       (s, i) =>
@@ -74,7 +78,7 @@ function buildPrompt(params: { segments: FixedSegment[]; excerpts: string[]; sou
 
 ${items}
 
-Para cada tramo (usa el número de "Tramo" indicado, EN EL MISMO ORDEN), escribe en ${contentLanguageName()}:
+Para cada tramo (usa el número de "Tramo" indicado, EN EL MISMO ORDEN), escribe en ${contentLanguage}:
 - "title": título corto (máx 60 caracteres), con gancho/curiosidad/humor, nunca un titular plano.
 - "description": 1-2 frases, mismo tono humano y directo.
 - "hashtags": array de 6 a 10 hashtags sin el símbolo #.
@@ -102,7 +106,8 @@ function fallbackDescription(sourceTitle: string, position: number): SegmentDesc
 export async function describeFixedSegments(
   segments: FixedSegment[],
   transcriptSegments: TranscriptSegment[],
-  sourceTitle: string
+  sourceTitle: string,
+  contentLanguage: string
 ): Promise<Map<number, SegmentDescription>> {
   const provider = getAIProvider();
   const results = new Map<number, SegmentDescription>();
@@ -114,7 +119,7 @@ export async function describeFixedSegments(
     try {
       const raw = await provider.chatJson({
         system: SYSTEM_PROMPT,
-        prompt: buildPrompt({ segments: batch, excerpts, sourceTitle }),
+        prompt: buildPrompt({ segments: batch, excerpts, sourceTitle, contentLanguage }),
         maxTokens: Math.max(3_000, 1_200 + batch.length * 300),
       });
       const cleaned = raw.trim().replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/```\s*$/i, "");

@@ -28,6 +28,11 @@ model Job {
   error             String?
   transcript        String?
   sourceFilePath    String?
+  // Idioma detectado por Whisper en el audio del vídeo fuente (código ISO 639-1, p.ej. "en"/"es").
+  // SINGLE/RANKING/SPLIT lo rellenan tras transcribir y lo usan para que título/descripción/
+  // hashtags/subtítulos/comentario salgan en ESE idioma en vez del idioma fijo del canal. null si
+  // no se pudo detectar (o en PRODUCT/SONG, que no transcriben diálogo del vídeo fuente).
+  contentLanguage   String?
 
   // Solo modo PRODUCT
   productName    String?

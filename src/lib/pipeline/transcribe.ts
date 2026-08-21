@@ -21,6 +21,9 @@ export interface TranscriptSegment {
 export interface Transcript {
   text: string;
   segments: TranscriptSegment[];
+  /** Idioma detectado por Whisper (ISO 639-1 u otro formato según el proveedor), sin normalizar
+   * todavía — usar normalizeLanguageCode() de "@/lib/lang" antes de mostrarlo o compararlo. */
+  language: string | null;
 }
 
 const CHUNK_SECONDS = 18 * 60; // Whisper API limita a 25MB por archivo; ~18min mono a 64kbps entra holgado
@@ -77,7 +80,10 @@ async function splitAudio(audioPath: string, outDir: string): Promise<string[]> 
     .map((f) => path.join(outDir, f));
 }
 
-async function transcribeChunk(client: OpenAI, filePath: string): Promise<TranscriptSegment[]> {
+async function transcribeChunk(
+  client: OpenAI,
+  filePath: string
+): Promise<{ segments: TranscriptSegment[]; language: string | null }> {
   const result = await client.audio.transcriptions.create({
     file: fs.createReadStream(filePath),
     model: config.whisper.model,
@@ -90,20 +96,26 @@ async function transcribeChunk(client: OpenAI, filePath: string): Promise<Transc
   const raw = result as unknown as {
     segments?: { start: number; end: number; text: string }[];
     words?: { start: number; end: number; word: string }[];
+    // Idioma detectado por Whisper para este trozo de audio (nombre en inglés, p.ej. "english").
+    language?: string;
   };
   const words = raw.words ?? [];
+  const language = raw.language ?? null;
   if (raw.segments && raw.segments.length > 0) {
-    return raw.segments.map((s) => ({
-      start: s.start,
-      end: s.end,
-      text: s.text.trim(),
-      words: words
-        .filter((w) => w.start >= s.start && w.start < s.end)
-        .map((w) => ({ start: w.start, end: w.end, text: w.word.trim() })),
-    }));
+    return {
+      segments: raw.segments.map((s) => ({
+        start: s.start,
+        end: s.end,
+        text: s.text.trim(),
+        words: words
+          .filter((w) => w.start >= s.start && w.start < s.end)
+          .map((w) => ({ start: w.start, end: w.end, text: w.word.trim() })),
+      })),
+      language,
+    };
   }
   // fallback si el modelo no devuelve segmentos con timestamps
-  return [{ start: 0, end: 0, text: (result as { text: string }).text }];
+  return { segments: [{ start: 0, end: 0, text: (result as { text: string }).text }], language };
 }
 
 /**
@@ -118,16 +130,17 @@ async function transcribeLocally(audioFilePath: string): Promise<Transcript> {
     config.transcription.localModel,
   ]);
 
-  let segments: TranscriptSegment[];
+  let parsed: { segments: TranscriptSegment[]; language: string | null };
   try {
-    segments = JSON.parse(stdout) as TranscriptSegment[];
+    parsed = JSON.parse(stdout) as { segments: TranscriptSegment[]; language: string | null };
   } catch {
     throw new Error("La transcripción local no devolvió un JSON válido. Revisa que faster-whisper esté instalado.");
   }
 
   return {
-    text: segments.map((s) => s.text).join(" "),
-    segments,
+    text: parsed.segments.map((s) => s.text).join(" "),
+    segments: parsed.segments,
+    language: parsed.language ?? null,
   };
 }
 
@@ -146,17 +159,22 @@ export async function transcribeAudio(audioFilePath: string): Promise<Transcript
 
   const duration = await getDurationSec(audioFilePath);
   let allSegments: TranscriptSegment[] = [];
+  let language: string | null = null;
 
   if (duration <= CHUNK_SECONDS) {
-    allSegments = await transcribeChunk(client, audioFilePath);
+    const result = await transcribeChunk(client, audioFilePath);
+    allSegments = result.segments;
+    language = result.language;
   } else {
     const chunksDir = path.join(path.dirname(audioFilePath), "chunks");
     const chunkFiles = await splitAudio(audioFilePath, chunksDir);
     let offset = 0;
     for (const chunkFile of chunkFiles) {
-      const segments = await transcribeChunk(client, chunkFile);
+      const result = await transcribeChunk(client, chunkFile);
+      // El idioma es el mismo durante todo el vídeo: basta con el primer trozo que lo detecte.
+      if (!language) language = result.language;
       allSegments.push(
-        ...segments.map((s) => ({
+        ...result.segments.map((s) => ({
           start: s.start + offset,
           end: s.end + offset,
           text: s.text,
@@ -171,5 +189,6 @@ export async function transcribeAudio(audioFilePath: string): Promise<Transcript
   return {
     text: allSegments.map((s) => s.text).join(" "),
     segments: allSegments,
+    language,
   };
 }

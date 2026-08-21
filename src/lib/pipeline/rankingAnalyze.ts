@@ -1,7 +1,6 @@
 import fs from "fs";
 import { getAIProvider } from "@/lib/ai/provider";
 import { config } from "@/lib/config";
-import { contentLanguageName } from "@/lib/lang";
 import type { TranscriptSegment } from "./transcribe";
 import type { TimeSpan } from "./silence";
 import { extractFrameAt } from "./clip";
@@ -78,7 +77,7 @@ graciosos. Analizas fotogramas y transcripción de fragmentos de un vídeo largo
 usar en vídeos de ranking tipo "TOP 5" y en qué categoría temática encajan.
 Respondes EXCLUSIVAMENTE con JSON válido, sin texto adicional.`;
 
-function buildBatchPrompt(batch: CandidateMoment[]): string {
+function buildBatchPrompt(batch: CandidateMoment[], contentLanguage: string): string {
   const items = batch
     .map(
       (c, i) =>
@@ -98,16 +97,16 @@ Para cada candidato decide:
   emotivo, una buena jugada, una reacción, un momento con gancho... CUALQUIER cosa que un espectador pararía a
   ver, no solo caídas o momentos graciosos. false si es un tramo de transición, introducción, publicidad, o no
   pasa nada relevante.
-- "category": UNA sola palabra en ${contentLanguageName()} (excepcionalmente dos si de verdad hace falta) que
+- "category": UNA sola palabra en ${contentLanguage} (excepcionalmente dos si de verdad hace falta) que
   describa el tema del candidato, para agrupar los parecidos en un mismo vídeo de ranking Y para mostrarse en
   pantalla dentro de la plantilla fija "Ranking Funniest {category} Moments" — tiene que sonar bien ahí metida tal
   cual. Usa la categoría que MEJOR describa el contenido real (puede ser de cualquier tema: un juego concreto,
   un tipo de reacción, un deporte, una temática de streaming... no la fuerces a encajar en "fails" o "gracioso"
   si no es lo que es). Sé consistente para que candidatos del mismo tipo caigan en la MISMA categoría exacta
   (mismo singular/plural, misma capitalización).
-- "label": texto muy corto (máx 6 palabras) en ${contentLanguageName()} para mostrar en pantalla como título de ese
+- "label": texto muy corto (máx 6 palabras) en ${contentLanguage} para mostrar en pantalla como título de ese
   puesto del ranking.
-- "description": 1 frase en ${contentLanguageName()} describiendo qué pasa.
+- "description": 1 frase en ${contentLanguage} describiendo qué pasa.
 - "score": 0-100, qué tan viral/entretenido es este momento comparado con el resto (da igual si es gracioso,
   impactante, hábil o cualquier otra cosa — puntúa por lo interesante que es de ver, no por un tipo de contenido
   concreto).
@@ -116,7 +115,10 @@ Devuelve SOLO este JSON, con un elemento por candidato EN EL MISMO ORDEN (usa el
 {"moments": [{"index": number, "include": boolean, "category": "string", "label": "string", "description": "string", "score": number}]}`;
 }
 
-export async function classifyCandidates(candidates: CandidateMoment[]): Promise<ClassifiedMoment[]> {
+export async function classifyCandidates(
+  candidates: CandidateMoment[],
+  contentLanguage: string
+): Promise<ClassifiedMoment[]> {
   const provider = getAIProvider();
   const classified: ClassifiedMoment[] = [];
   // Cada fotograma cuesta bastantes tokens: en capas gratuitas con poco margen por minuto se
@@ -133,7 +135,7 @@ export async function classifyCandidates(candidates: CandidateMoment[]): Promise
     try {
       const raw = await provider.chatJson({
         system: SYSTEM_PROMPT,
-        prompt: buildBatchPrompt(batch),
+        prompt: buildBatchPrompt(batch, contentLanguage),
         images,
         // Margen extra: los modelos con razonamiento (p.ej. Qwen3 en Groq) gastan parte del
         // presupuesto de tokens en su razonamiento interno aunque se oculte del resultado final,

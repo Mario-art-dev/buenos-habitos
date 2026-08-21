@@ -5,6 +5,7 @@ import { downloadSourceVideo, downloadAudioOnly } from "./download";
 import { probeVideo, pickVerticalResolution } from "./probe";
 import { detectContentSegments } from "./silence";
 import { buildCandidateMoments, classifyCandidates } from "./rankingAnalyze";
+import { contentLanguageName } from "@/lib/lang";
 import { detectBeats, beatsToCutPoints } from "./beats";
 import { cutVerticalClip, concatClips, replaceAudioTrack, extractThumbnail } from "./clip";
 import { composeSongEdit } from "./songCompose";
@@ -74,7 +75,9 @@ export async function processSongJob(jobId: string): Promise<void> {
     await setStatus(jobId, "ANALYZING", "La IA está eligiendo los mejores momentos del vídeo…");
     const spans = await detectContentSegments(srcPath, sourceDurationSec);
     const candidates = await buildCandidateMoments(jobId, srcPath, spans, []);
-    const classified = await classifyCandidates(candidates);
+    // SONG no transcribe diálogo (solo detecta el ritmo de la canción elegida), así que no hay
+    // idioma de vídeo que detectar aquí: se usa el idioma configurado del canal.
+    const classified = await classifyCandidates(candidates, contentLanguageName());
 
     const included = classified.filter((c) => c.include).sort((a, b) => b.score - a.score);
     const usableCount = Math.min(segmentDurations.length, included.length);

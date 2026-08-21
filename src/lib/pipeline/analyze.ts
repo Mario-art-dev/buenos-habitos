@@ -1,6 +1,5 @@
 import { getAIProvider } from "@/lib/ai/provider";
 import { config } from "@/lib/config";
-import { contentLanguageName } from "@/lib/lang";
 import type { TranscriptSegment } from "./transcribe";
 
 export interface MomentCandidate {
@@ -67,10 +66,11 @@ function buildPrompt(params: {
   maxClips: number;
   partIndex: number;
   partCount: number;
+  contentLanguage: string;
 }): string {
   const minLen = config.pipeline.clipMinSeconds;
   const maxLen = config.pipeline.clipMaxSeconds;
-  const { segments, sourceTitle, durationSec, maxClips, partIndex, partCount } = params;
+  const { segments, sourceTitle, durationSec, maxClips, partIndex, partCount, contentLanguage } = params;
 
   const partNote =
     partCount > 1
@@ -93,8 +93,8 @@ número?" — si la respuesta no es un sí claro, descártalo, aunque eso signif
 Solo pasa a un momento distinto cuando el vídeo cambie de verdad de tema/situación/gracia — no trocees
 mecánicamente un mismo momento en varios clips ni fuerces un corte a media frase solo para llegar al número.
 Escribe TODO el texto que generes (título, descripción, gancho, razón de viralidad, hashtags) en
-${contentLanguageName()}, sea cual sea el idioma del vídeo fuente: el audio original del clip nunca se
-traduce ni se dobla, se usa tal cual; solo el texto que tú escribes va en ${contentLanguageName()}.
+${contentLanguage} — el mismo idioma en el que se habla en el vídeo fuente: el audio original del clip
+nunca se traduce ni se dobla, se usa tal cual; solo el texto que tú escribes va en ${contentLanguage}.
 IMPORTANTE — obligatorio, no orientativo: cada clip debe durar ENTRE ${minLen} Y ${maxLen} SEGUNDOS, sin
 excepción. Un clip de menos de ${minLen}s no cuenta como visualización monetizable en TikTok/YouTube, así
 que un candidato corto no vale nada aunque el momento sea buenísimo — si el mejor gancho dura poco, AMPLÍA
@@ -114,11 +114,11 @@ Devuelve SOLO este JSON (sin texto extra):
     {
       "startSec": number,
       "endSec": number,
-      "title": "título corto (máx 60 caracteres) en ${contentLanguageName()}, escrito como lo escribiría una
+      "title": "título corto (máx 60 caracteres) en ${contentLanguage}, escrito como lo escribiría una
         persona real enganchada al vídeo (curiosidad, tensión, humor o sorpresa) — NUNCA un resumen plano tipo
         titular de noticia ni relleno genérico; sin comillas ni emojis excesivos, pensado para YouTube
         Shorts/TikTok",
-      "description": "descripción corta (1-2 frases) en ${contentLanguageName()}, con el mismo tono humano y
+      "description": "descripción corta (1-2 frases) en ${contentLanguage}, con el mismo tono humano y
         directo que el título — que dé ganas de quedarse a ver qué pasa, adaptada al canal ${config.channel.name}",
       "hook": "la frase o momento exacto que engancha en el segundo 0-2",
       "viralityScore": number entre 0 y 100,
@@ -189,6 +189,7 @@ export async function analyzeTranscriptForClips(
   segments: TranscriptSegment[],
   sourceTitle: string,
   durationSec: number,
+  contentLanguage: string,
   onProgress?: (partIndex: number, partCount: number) => Promise<void> | void
 ): Promise<MomentCandidate[]> {
   const provider = getAIProvider();
@@ -226,6 +227,7 @@ export async function analyzeTranscriptForClips(
           maxClips: clipsPerChunk,
           partIndex: i,
           partCount: chunks.length,
+          contentLanguage,
         }),
         maxTokens: chunkMaxTokens,
       });

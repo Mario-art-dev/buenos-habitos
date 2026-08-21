@@ -30,6 +30,7 @@ import { generateSingleCommentary } from "./commentary";
 import { renderCommentaryCard } from "./commentaryCards";
 import { renderCoverCard } from "./coverCard";
 import { config } from "@/lib/config";
+import { normalizeLanguageCode, resolveContentLanguage } from "@/lib/lang";
 
 function transcriptExcerptFor(segments: TranscriptSegment[], startSec: number, endSec: number): string {
   return segments
@@ -80,7 +81,15 @@ async function processSingleJob(jobId: string): Promise<void> {
     const audioOut = audioPath(jobId);
     await extractAudio(srcPath, audioOut);
     const transcript = await transcribeAudio(audioOut);
-    await db.job.update({ where: { id: jobId }, data: { transcript: transcript.text } });
+    // El idioma REAL hablado en el vídeo (detectado por Whisper) manda sobre el idioma fijo del
+    // canal: así título/descripción/hashtags/subtítulos/comentario salen en inglés si el vídeo
+    // está en inglés, o en español si está en español, sea cual sea CHANNEL_LANGUAGE.
+    const languageCode = normalizeLanguageCode(transcript.language);
+    const contentLanguage = resolveContentLanguage(languageCode);
+    await db.job.update({
+      where: { id: jobId },
+      data: { transcript: transcript.text, contentLanguage: languageCode },
+    });
 
     // 3. Analizar con IA: elegir mejores momentos + títulos + descripciones + score + hashtags
     await setStatus(jobId, "ANALYZING", "La IA está buscando los mejores momentos…");
@@ -88,6 +97,7 @@ async function processSingleJob(jobId: string): Promise<void> {
       transcript.segments,
       title,
       durationSec,
+      contentLanguage,
       async (partIndex, partCount) => {
         if (partCount > 1) {
           await setStatus(
@@ -190,6 +200,7 @@ async function processSingleJob(jobId: string): Promise<void> {
             description: clip.description,
             transcriptExcerpt: excerpt,
             hook: clip.hook,
+            contentLanguage,
           });
           commentaryIntro = commentary.introText;
           commentaryOutro = commentary.outroText;

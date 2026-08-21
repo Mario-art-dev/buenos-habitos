@@ -19,6 +19,7 @@ import { probeVideo, pickVerticalResolution } from "./probe";
 import { renderCoverCard } from "./coverCard";
 import { setStatus } from "./status";
 import { config } from "@/lib/config";
+import { normalizeLanguageCode, resolveContentLanguage } from "@/lib/lang";
 
 const DEFAULT_SPLIT_DURATION_SEC = 60;
 
@@ -51,7 +52,15 @@ export async function processSplitJob(jobId: string): Promise<void> {
     const audioOut = audioPath(jobId);
     await extractAudio(srcPath, audioOut);
     const transcript = await transcribeAudio(audioOut);
-    await db.job.update({ where: { id: jobId }, data: { transcript: transcript.text } });
+    // El idioma REAL hablado en el vídeo (detectado por Whisper) manda sobre el idioma fijo del
+    // canal: así título/descripción/hashtags salen en inglés si el vídeo está en inglés, o en
+    // español si está en español, sea cual sea CHANNEL_LANGUAGE.
+    const languageCode = normalizeLanguageCode(transcript.language);
+    const contentLanguage = resolveContentLanguage(languageCode);
+    await db.job.update({
+      where: { id: jobId },
+      data: { transcript: transcript.text, contentLanguage: languageCode },
+    });
 
     await setStatus(jobId, "ANALYZING", "Cortando el vídeo en tramos y describiéndolos…");
     const splitDurationSec = job.splitDurationSec ?? DEFAULT_SPLIT_DURATION_SEC;
@@ -59,7 +68,7 @@ export async function processSplitJob(jobId: string): Promise<void> {
     if (fixedSegments.length === 0) {
       throw new Error("El vídeo es demasiado corto para cortarlo en tramos.");
     }
-    const descriptions = await describeFixedSegments(fixedSegments, transcript.segments, title);
+    const descriptions = await describeFixedSegments(fixedSegments, transcript.segments, title, contentLanguage);
 
     const clips = await Promise.all(
       fixedSegments.map((seg) => {

@@ -178,16 +178,23 @@ responsabilidad de qué contenido reutilizas y cómo lo presentas sigue siendo t
 
 ### Idioma del contenido generado
 
-`CHANNEL_LANGUAGE` controla el idioma de TODO el texto que escribe la IA: títulos,
-descripciones, hashtags, categorías de ranking y el comentario en off (tanto el guion como la
-voz de Piper, que se elige sola según este idioma). **Por defecto está en inglés** (`"en"`)
-porque suele dar más ingresos publicitarios (CPM más alto) que el español; ponlo en `"es"` (o
-cualquier otro código de idioma) en tu `.env` si prefieres otro idioma.
+En los modos SINGLE ("Clip viral"), RANKING y SPLIT ("Cortar en shorts"), el idioma de TODO el
+texto que escribe la IA (título, descripción, hashtags, subtítulos, categorías de ranking y el
+comentario en off, guion y voz de Piper incluidos) se detecta automáticamente a partir del
+propio audio del vídeo que subes o pegas: si en el vídeo se habla en inglés, todo sale en
+inglés; si se habla en español, todo sale en español — sea cual sea el idioma configurado del
+canal. La detección la hace Whisper al transcribir, así que no hace falta indicar nada a mano.
+
+`CHANNEL_LANGUAGE` sigue existiendo como idioma de reserva: se usa solo cuando no se pudo
+detectar ningún idioma (vídeo sin diálogo, transcripción vacía) y en los modos PRODUCT y SONG,
+que no transcriben diálogo del vídeo fuente. **Por defecto está en inglés** (`"en"`) porque
+suele dar más ingresos publicitarios (CPM más alto) que el español; ponlo en `"es"` (o
+cualquier otro código de idioma) en tu `.env` si prefieres otro idioma de reserva.
 
 Esto **no afecta al audio original de los vídeos fuente**: nunca se traduce ni se dobla, se usa
-tal cual venga. Si el vídeo que subes ya está en inglés, el diálogo del clip se queda en inglés
-igual; `CHANNEL_LANGUAGE` solo decide en qué idioma escribe la IA el título, la descripción, los
-hashtags y el comentario que TÚ añades por encima.
+tal cual venga. El idioma detectado (o `CHANNEL_LANGUAGE` de reserva) solo decide en qué idioma
+escribe la IA el título, la descripción, los hashtags, los subtítulos y el comentario que TÚ
+añades por encima.
 
 ### Modo Rankings (vídeos de cuenta atrás tipo "TOP 5...")
 

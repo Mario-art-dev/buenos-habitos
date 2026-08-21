@@ -10,6 +10,7 @@ import { composeRanking } from "./rankingCompose";
 import { assembleRankingVideo, finalizeWithoutMusic } from "./rankingRender";
 import { setStatus } from "./status";
 import { config } from "@/lib/config";
+import { normalizeLanguageCode, resolveContentLanguage } from "@/lib/lang";
 
 export async function processRankingJob(jobId: string): Promise<void> {
   const job = await db.job.findUniqueOrThrow({ where: { id: jobId } });
@@ -34,12 +35,20 @@ export async function processRankingJob(jobId: string): Promise<void> {
     const audioOut = audioPath(jobId);
     await extractAudio(srcPath, audioOut);
     const transcript = await transcribeAudio(audioOut);
-    await db.job.update({ where: { id: jobId }, data: { transcript: transcript.text } });
+    // El idioma REAL hablado en el vídeo (detectado por Whisper) manda sobre el idioma fijo del
+    // canal: así categoría/etiquetas/título/comentario salen en inglés si el vídeo está en inglés,
+    // o en español si está en español, sea cual sea CHANNEL_LANGUAGE.
+    const languageCode = normalizeLanguageCode(transcript.language);
+    const contentLanguage = resolveContentLanguage(languageCode);
+    await db.job.update({
+      where: { id: jobId },
+      data: { transcript: transcript.text, contentLanguage: languageCode },
+    });
 
     await setStatus(jobId, "ANALYZING", "Detectando momentos y clasificándolos por categoría…");
     const spans = await detectContentSegments(srcPath, durationSec);
     const candidates = await buildCandidateMoments(jobId, srcPath, spans, transcript.segments);
-    const classified = await classifyCandidates(candidates);
+    const classified = await classifyCandidates(candidates, contentLanguage);
     const groups = groupIntoRankings(classified);
 
     if (groups.length === 0) {
@@ -63,7 +72,7 @@ export async function processRankingJob(jobId: string): Promise<void> {
     for (const group of groups) {
       let clipId: string | null = null;
       try {
-        const composition = await composeRanking(group, title);
+        const composition = await composeRanking(group, title, contentLanguage);
         const commentaryOn = config.commentary.enabled;
         const created = await db.clip.create({
           data: {

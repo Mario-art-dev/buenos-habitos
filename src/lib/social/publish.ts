@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { suggestHashtags } from "@/lib/trends/hashtags";
+import { resolveContentLanguage } from "@/lib/lang";
 import { uploadShortToYouTube } from "./youtube";
 import { uploadShortToTikTok } from "./tiktok";
 import type { Platform } from "@/lib/types";
@@ -19,10 +20,11 @@ export interface PublishResult {
  * Usado tanto por la ruta manual de publicar como por el planificador automático.
  */
 export async function publishClip(clipId: string, platform: Platform): Promise<PublishResult> {
-  const clip = await db.clip.findUnique({ where: { id: clipId } });
+  const clip = await db.clip.findUnique({ where: { id: clipId }, include: { job: true } });
   if (!clip || !clip.filePath) {
     return { ok: false, publicationId: "", status: "FAILED", error: "El clip no está listo todavía" };
   }
+  const contentLanguage = resolveContentLanguage(clip.job.contentLanguage);
 
   const publication = await db.publication.create({
     data: { clipId: clip.id, platform, status: "UPLOADING" },
@@ -35,6 +37,7 @@ export async function publishClip(clipId: string, platform: Platform): Promise<P
       title: clip.title,
       description: clip.description,
       existing: existingHashtags,
+      contentLanguage,
     });
     await db.clip.update({ where: { id: clip.id }, data: { hashtags: JSON.stringify(fresh.hashtags) } });
 
