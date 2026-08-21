@@ -55,10 +55,11 @@ Y dos modos pensados para monetización con publicidad de terceros:
 - Hay un **login con contraseña** (`APP_PASSWORD`) porque esta app puede subir vídeos a tus
   cuentas: no la dejes accesible sin contraseña en internet.
 
-### Caption grande estilo "karaoke" en el centro — solo modo Rankings
+### Caption grande estilo "karaoke" en el centro
 
-`ENABLE_BIG_CAPTIONS="true"` (activado por defecto para Rankings; el modo SINGLE no lo usa nunca,
-ver "Zoom dinámico" más abajo): una única capa de subtítulo quemada sobre el
+`ENABLE_BIG_CAPTIONS="true"` (activado por defecto, en todos los modos que usan caption — Inicio y
+Rankings; ver "Zoom dinámico" más abajo para lo que SÍ sigue siendo solo de Rankings): una única
+capa de subtítulo quemada sobre el
 vídeo, algo por debajo del centro de la pantalla, con 2-4 palabras por golpe (el corte de cada
 golpe sigue las pausas reales al hablar, no un conteo fijo, para que el ritmo se sienta natural),
 fuente redondeada (`fonts-comic-neue`) con contorno + desenfoque que da un efecto de brillo — el
@@ -68,14 +69,16 @@ blanco y tamaño normal en cuanto termina — efecto "karaoke" para que la lectu
 Necesita marcas de tiempo por palabra (tanto `faster-whisper` local como la API de Whisper las
 dan); si el proveedor no las diera, cae automáticamente a un golpe por frase entera sin resaltado
 de palabra. Desactívalo con `ENABLE_BIG_CAPTIONS="false"` si prefieres el vídeo sin ningún
-subtítulo quemado.
+subtítulo quemado por defecto — o, clip a clip, con el interruptor "Mostrar subtítulos" del editor
+(ver más abajo), que no borra los subtítulos generados, solo deja de quemarlos.
 
 ### Editor de subtítulos y textos (una vez generado el clip)
 
 Cada clip listo tiene un botón "✏️ Editar" que lleva a `/clips/[id]/edit`, un editor tipo CapCut:
 
-- **Subtítulos automáticos**: se listan editables uno a uno (puedes cambiar el texto de cualquier
-  golpe) o borrarlos por completo si no quieres que aparezca ese trozo.
+- **Subtítulos automáticos**: activados por defecto (interruptor "Mostrar subtítulos" para
+  quitarlos sin perderlos, por si los reactivas luego); se listan editables uno a uno (puedes
+  cambiar el texto de cualquier golpe) o borrarlos por completo si no quieres que aparezca ese trozo.
 - **Textos nuevos**: añade los que quieras, cada uno con su propia fuente (Bebas Neue, Anton,
   Montserrat, Poppins, Oswald, Permanent Marker, Bangers, Lobster, Archivo Black, Caveat, Comic
   Neue…), color, tamaño y con qué segundo del clip aparece/desaparece. Se arrastran con el dedo (o
@@ -84,9 +87,10 @@ Cada clip listo tiene un botón "✏️ Editar" que lleva a `/clips/[id]/edit`, 
   quedarte solo con la parte del clip que quieras.
 - **Agrandar/encoger texto**: al seleccionar un texto añadido a mano aparece un tirador en su
   esquina — arrástralo hacia fuera para agrandarlo, hacia dentro para encogerlo.
-- **Portada** (solo modos Inicio/Cortar en shorts — Rankings tiene su propia tarjeta): elige de qué
-  fotograma del propio clip se saca la carátula (haz clic en una de las miniaturas) y cambia el
-  título que se quema encima, independiente del título del clip.
+- **Portada** (solo modos Inicio/Cortar en shorts — Rankings tiene su propia tarjeta, solo al
+  final del short): elige de qué fotograma del propio clip se saca la carátula (haz clic en una de
+  las miniaturas), sube tu propia foto desde la fototeca en vez de un fotograma del vídeo, y cambia
+  el título que se quema encima, independiente del título del clip.
 - Al pulsar "Guardar y regenerar vídeo", el clip se vuelve a cortar desde el vídeo original con
   esos cambios ya aplicados — no es una edición de los píxeles del vídeo ya hecho (eso no es
   posible sobre un archivo ya quemado), así que hace falta el vídeo fuente todavía disponible en el
@@ -112,17 +116,17 @@ defecto**, para que edites tú a mano desde el editor lo que quieras (recortar, 
 textos). Esto es así siempre, no depende de `ENABLE_DYNAMIC_ZOOM`/`ENABLE_BIG_CAPTIONS` (esos dos
 flags solo afectan a los vídeos de Rankings).
 
-### Portada de marca (sonido + carátula) al principio y al final
+### Portada de marca (sonido + carátula) al final
 
-`ENABLE_COVER_CARD="true"` (activado por defecto): cada short abre y cierra con la MISMA portada —
-un fotograma del propio vídeo a máxima calidad (donde ya se comprobó que se ve a una persona, ver
-"Gancho inicial" más abajo), con el título quemado encima estilo miniatura de creador de contenido
-(letra grande, en negrita, con contorno, sobre una franja oscura para que se lea bien), congelado
-mientras suena el sonido de marca (`assets/audio/brand_sting.wav`, un efecto de guitarra + golpe +
-cuerdas cálidas creado específicamente para este canal — sin copyright, no es una canción de
-terceros). Después de la portada del principio entra directo el vídeo; al terminar, vuelve a sonar
-el mismo sonido con la misma portada. Desactívalo con `ENABLE_COVER_CARD="false"` si prefieres el
-short sin portadas (entra y sale directo del vídeo).
+`ENABLE_COVER_CARD="true"` (activado por defecto): cada short empieza directo con el vídeo y
+termina con una portada — un fotograma del propio vídeo a máxima calidad (donde ya se comprobó que
+se ve a una persona, ver "Gancho inicial" más abajo), o una foto propia subida desde el editor si
+prefieres esa en vez del fotograma, con el título quemado encima estilo miniatura de creador de
+contenido (letra grande, en negrita, con contorno, sobre una franja oscura para que se lea bien),
+congelado mientras suena el sonido de marca (`assets/audio/brand_sting.wav`, un efecto de guitarra
++ golpe + cuerdas cálidas creado específicamente para este canal — sin copyright, no es una canción
+de terceros). Desactívalo con `ENABLE_COVER_CARD="false"` si prefieres el short sin portada final
+(entra y sale directo del vídeo).
 
 Para cambiar el sonido de marca, sustituye `assets/audio/brand_sting.wav` por otro archivo de audio
 corto (la duración de la portada se ajusta sola a la duración real de ese archivo).
@@ -221,7 +225,7 @@ de esa duración — útil para repartir una charla, un directo o un vídeo larg
 seguidas sin perderte nada del contenido. Cada trozo sí recibe título, descripción y hashtags
 generados por IA a partir de su propia transcripción (para que sea publicable), y el mismo
 tratamiento visual que Inicio: sin zoom dinámico, sin caption grande automático, con la portada de
-marca al principio/final (editable desde el editor). Si el último trozo queda muy corto para tener
+marca al final (editable desde el editor). Si el último trozo queda muy corto para tener
 sentido solo, se funde con el anterior en vez de dejarlo suelto.
 
 ### Modo Producto (vídeos publicitarios con enlace de afiliado)

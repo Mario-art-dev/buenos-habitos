@@ -118,7 +118,7 @@ export async function processSplitJob(jobId: string): Promise<void> {
             outPath: coverPath,
             resolution,
           });
-          await concatClips([coverPath, bodyPath, coverPath], outPath);
+          await concatClips([bodyPath, coverPath], outPath);
         } else {
           fs.copyFileSync(bodyPath, outPath);
         }

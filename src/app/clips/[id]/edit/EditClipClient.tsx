@@ -37,6 +37,8 @@ interface ClipData {
   jobMode: string | null;
   coverFrameSec: number | null;
   coverTitle: string | null;
+  coverImageUrl: string | null;
+  captionsEnabled: boolean;
 }
 
 // Reloj virtual de la composición de Remotion — no tiene por qué coincidir con el fps real del
@@ -177,6 +179,10 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
   // Portada (solo SINGLE/SPLIT): null = usar el fotograma/título automático de coverCard.ts.
   const [coverFrameSec, setCoverFrameSec] = useState<number | null>(null);
   const [coverTitle, setCoverTitle] = useState("");
+  const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const [captionsEnabled, setCaptionsEnabled] = useState(true);
+  const coverImageInputRef = useRef<HTMLInputElement | null>(null);
 
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const stripRef = useRef<HTMLDivElement | null>(null);
@@ -208,6 +214,8 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
       setTrimEnd(dur);
       setCoverFrameSec(data.clip.coverFrameSec);
       setCoverTitle(data.clip.coverTitle ?? data.clip.title);
+      setCoverImageUrl(data.clip.coverImageUrl);
+      setCaptionsEnabled(data.clip.captionsEnabled);
       setLoading(false);
     }
     load();
@@ -422,6 +430,37 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
     textDragRef.current = null;
   }
 
+  async function uploadCoverImage(file: File) {
+    setUploadingCover(true);
+    setError(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const res = await fetch(`/api/clips/${clipId}/cover-image`, { method: "POST", body: form });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "No se pudo subir la imagen");
+      setCoverImageUrl(data.coverImageUrl);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setUploadingCover(false);
+    }
+  }
+
+  async function removeCoverImage() {
+    setUploadingCover(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/clips/${clipId}/cover-image`, { method: "DELETE" });
+      if (!res.ok) throw new Error("No se pudo quitar la imagen");
+      setCoverImageUrl(null);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setUploadingCover(false);
+    }
+  }
+
   async function saveAndRegenerate() {
     if (!clip) return;
     setSaving(true);
@@ -450,6 +489,7 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
           endSec: nextEnd,
           coverFrameSec: nextCoverFrameSec,
           coverTitle,
+          captionsEnabled,
         }),
       });
       const putData = await putRes.json();
@@ -704,13 +744,69 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
                   Usar el fotograma automático
                 </button>
               )}
+
+              <p className="mb-1 mt-4 text-xs text-slate-400">O sube tu propia foto para la portada:</p>
+              <div className="flex items-center gap-3">
+                {coverImageUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={coverImageUrl}
+                    alt="Imagen de portada subida"
+                    className="h-24 w-14 shrink-0 rounded-lg border border-brand-500 object-cover"
+                  />
+                )}
+                <div className="flex flex-col gap-1">
+                  <input
+                    ref={coverImageInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) uploadCoverImage(file);
+                      e.target.value = "";
+                    }}
+                  />
+                  <button
+                    onClick={() => coverImageInputRef.current?.click()}
+                    disabled={uploadingCover}
+                    className="rounded-lg border border-ink-600 px-3 py-1.5 text-xs text-slate-200 hover:border-brand-500 disabled:opacity-40"
+                  >
+                    {uploadingCover ? "Subiendo…" : coverImageUrl ? "Cambiar foto" : "Subir foto de la fototeca"}
+                  </button>
+                  {coverImageUrl && (
+                    <button
+                      onClick={removeCoverImage}
+                      disabled={uploadingCover}
+                      className="text-xs text-slate-400 underline hover:text-slate-300"
+                    >
+                      Quitar y usar fotograma del vídeo
+                    </button>
+                  )}
+                </div>
+              </div>
+              <p className="mt-1 text-xs text-slate-600">
+                Si subes una foto, se usa esa en la portada en vez de un fotograma del vídeo (el sonido de marca
+                sigue igual). Dale a "Guardar y regenerar" abajo para aplicarla.
+              </p>
             </div>
           )}
 
           {/* Subtítulos automáticos */}
           <div>
-            <h2 className="mb-2 text-sm font-semibold text-slate-300">Subtítulos generados automáticamente</h2>
-            <div className="space-y-2">
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-slate-300">Subtítulos generados automáticamente</h2>
+              <label className="flex items-center gap-2 text-xs text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={captionsEnabled}
+                  onChange={(e) => setCaptionsEnabled(e.target.checked)}
+                  className="h-4 w-4 rounded border-ink-600 bg-ink-900"
+                />
+                Mostrar subtítulos
+              </label>
+            </div>
+            <div className={`space-y-2 ${captionsEnabled ? "" : "opacity-40"}`}>
               {cues.length === 0 && <p className="text-xs text-slate-500">Este clip no tiene subtítulos guardados.</p>}
               {cues.map((cue) => (
                 <div

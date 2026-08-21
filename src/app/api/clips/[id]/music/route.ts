@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { applyMusicFromYouTube } from "@/lib/pipeline/rankingRender";
+import { applyMusicToClip } from "@/lib/pipeline/musicApply";
 
 export const dynamic = "force-dynamic";
 
@@ -23,23 +23,24 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 
   try {
-    const { filePath, thumbnailPath } = await applyMusicFromYouTube({
-      jobId: clip.jobId,
-      clipId: clip.id,
+    await applyMusicToClip(clip.id, {
       musicSourceUrl: parsed.data.musicSourceUrl,
-      startSec: parsed.data.musicStartSec,
+      musicStartSec: parsed.data.musicStartSec,
     });
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    return NextResponse.json({ error: (err as Error).message }, { status: 502 });
+  }
+}
 
-    await db.clip.update({
-      where: { id: clip.id },
-      data: {
-        musicSourceUrl: parsed.data.musicSourceUrl,
-        musicStartSec: parsed.data.musicStartSec,
-        filePath,
-        thumbnailPath,
-      },
-    });
+export async function DELETE(_req: NextRequest, { params }: { params: { id: string } }) {
+  const clip = await db.clip.findUnique({ where: { id: params.id } });
+  if (!clip) {
+    return NextResponse.json({ error: "Clip no encontrado" }, { status: 404 });
+  }
 
+  try {
+    await applyMusicToClip(clip.id, null);
     return NextResponse.json({ ok: true });
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 502 });

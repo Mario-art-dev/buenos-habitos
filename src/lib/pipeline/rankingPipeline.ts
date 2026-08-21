@@ -53,6 +53,13 @@ export async function processRankingJob(jobId: string): Promise<void> {
     const resolution = pickVerticalResolution(sourceInfo);
 
     let rank = 1;
+    let succeeded = 0;
+    // Si TODOS los grupos fallan antes de crear su Clip (p.ej. la IA se queda sin cupo diario a
+    // mitad del trabajo: composeRanking() lanza para cada grupo restante antes de que exista
+    // clipId), el bucle terminaba sin errores visibles y el job se marcaba "DONE" con CERO clips
+    // — la web se quedaba en blanco sin ninguna pista de qué pasó. Se guarda el último error para
+    // poder fallar el job entero con un mensaje claro si al final no se generó ni un solo clip.
+    let lastGroupError: Error | null = null;
     for (const group of groups) {
       let clipId: string | null = null;
       try {
@@ -70,7 +77,9 @@ export async function processRankingJob(jobId: string): Promise<void> {
             viralityReason: composition.viralityReason,
             hashtags: JSON.stringify(composition.hashtags),
             category: group.category,
+            musicRecommended: composition.musicRecommended,
             musicQuery: composition.musicQuery,
+            musicSuggestedSection: composition.musicSuggestedSection,
             commentaryIntro: commentaryOn ? composition.commentaryIntro : null,
             commentaryOutro: commentaryOn ? composition.commentaryOutro : null,
             status: "RENDERING",
@@ -109,14 +118,25 @@ export async function processRankingJob(jobId: string): Promise<void> {
 
         const { filePath, thumbnailPath } = await finalizeWithoutMusic(jobId, created.id);
         await db.clip.update({ where: { id: created.id }, data: { status: "READY", filePath, thumbnailPath } });
+        succeeded++;
       } catch (err) {
+        const error = err as Error;
+        lastGroupError = error;
         if (clipId) {
           await db.clip.update({
             where: { id: clipId },
-            data: { status: "FAILED", error: (err as Error).message },
+            data: { status: "FAILED", error: error.message },
           });
         }
       }
+    }
+
+    if (succeeded === 0) {
+      throw new Error(
+        lastGroupError
+          ? `No se pudo generar ningún vídeo de ranking: ${lastGroupError.message}`
+          : "No se pudo generar ningún vídeo de ranking."
+      );
     }
 
     await setStatus(jobId, "DONE", "¡Listo! Revisa tus vídeos de ranking.");

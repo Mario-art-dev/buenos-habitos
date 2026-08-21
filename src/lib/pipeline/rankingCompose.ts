@@ -9,7 +9,9 @@ export interface RankingComposition {
   hashtags: string[];
   viralityScore: number;
   viralityReason: string;
+  musicRecommended: boolean;
   musicQuery: string;
+  musicSuggestedSection: string | null;
   commentaryIntro: string;
   commentaryOutro: string;
   itemCommentary: string[]; // mismo orden que group.items (mejor puesto primero)
@@ -44,9 +46,16 @@ Genera los metadatos de este vídeo de ranking:
 - "hashtags": 8 a 12 hashtags sin el símbolo #, relevantes para TikTok/YouTube Shorts y esta categoría.
 - "viralityScore": 0-100, probabilidad de que este vídeo se vuelva viral.
 - "viralityReason": 1 frase explicando por qué.
-- "musicQuery": el TÍTULO Y ARTISTA de UNA canción concreta que pegaría como música de fondo para este tipo de
-  vídeo (energética/divertida/dramática según el contenido). Sé específico (ej. "Thunderstruck - AC/DC" o una
-  canción de hype/meme conocida), para que el usuario pueda buscarla en YouTube.
+- "musicRecommended": boolean — true SOLO si este vídeo de ranking concreto mejoraría de verdad con música de
+  fondo (bastante habitual en rankings sin diálogo relevante entre momentos, pero no automático: si el propio
+  audio de los clips ya lleva el peso, false).
+- "musicQuery": si musicRecommended=true, el TÍTULO Y ARTISTA de UNA canción concreta que pegaría como música
+  de fondo para este tipo de vídeo (energética/divertida/dramática según el contenido). Sé específico (ej.
+  "Thunderstruck - AC/DC" o una canción de hype/meme conocida), para que el usuario pueda buscarla en YouTube.
+  Si musicRecommended=false, deja esto como cadena vacía.
+- "musicSuggestedSection": si musicRecommended=true, un texto corto tipo "1:15-2:00" con la parte aproximada
+  de ESA canción que mejor encajaría (el estribillo, el drop, etc. — orientativo, según tu conocimiento general
+  de la canción); si no, null.
 - "commentaryIntro": 1 frase corta (máx 15 palabras) que digas en off ANTES de empezar la cuenta atrás,
   presentando el ranking con tu propio gancho.
 - "commentaryOutro": 1 frase corta (máx 15 palabras) que digas en off AL FINAL, con tu conclusión u opinión
@@ -57,7 +66,8 @@ Genera los metadatos de este vídeo de ranking:
 
 Devuelve SOLO este JSON:
 {"title": "...", "description": "...", "hashtags": ["..."], "viralityScore": number, "viralityReason": "...",
-"musicQuery": "...", "commentaryIntro": "...", "commentaryOutro": "...", "itemCommentary": ["...", "..."]}`,
+"musicRecommended": boolean, "musicQuery": "...", "musicSuggestedSection": "..." o null,
+"commentaryIntro": "...", "commentaryOutro": "...", "itemCommentary": ["...", "..."]}`,
     // Los modelos con razonamiento (p.ej. Qwen3 en Groq) gastan una parte fija y considerable
     // del presupuesto de tokens "pensando" por dentro aunque se oculte del resultado final, y
     // aquí la salida ya crece con el número de puestos del ranking (hasta RANKING_MAX_ITEMS).
@@ -78,7 +88,9 @@ Devuelve SOLO este JSON:
     hashtags: parsed.hashtags ?? [],
     viralityScore: Math.max(0, Math.min(100, Math.round(parsed.viralityScore ?? 50))),
     viralityReason: parsed.viralityReason ?? "",
-    musicQuery: parsed.musicQuery ?? "",
+    musicRecommended: !!parsed.musicRecommended,
+    musicQuery: parsed.musicRecommended ? parsed.musicQuery ?? "" : "",
+    musicSuggestedSection: parsed.musicRecommended ? parsed.musicSuggestedSection ?? null : null,
     commentaryIntro: parsed.commentaryIntro?.trim() || `Aquí tienes el top ${group.items.length} de ${group.category}.`,
     commentaryOutro: parsed.commentaryOutro?.trim() || "Y hasta aquí el ranking de hoy.",
     itemCommentary: itemCommentary.slice(0, group.items.length),

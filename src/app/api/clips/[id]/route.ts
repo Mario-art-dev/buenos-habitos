@@ -22,6 +22,7 @@ function serialize(clip: {
     customTexts: JSON.parse(clip.customTexts || "[]"),
     videoUrl: toMediaUrl(clip.filePath),
     thumbnailUrl: toMediaUrl(clip.thumbnailPath),
+    coverImageUrl: toMediaUrl(clip.coverImagePath as string | null),
     // Vídeo fuente original (sin recortar/verticalizar) — lo usa el editor para la vista previa en
     // vivo con Remotion, recortando en el navegador el mismo tramo [effectiveStartSec, endSec] que
     // ya se usa para renderizar de verdad, sin gastar otro render de servidor solo para previsualizar.
@@ -74,6 +75,8 @@ const editSchema = z.object({
   // valor por defecto (ver coverCard.ts / regenerateClip.ts).
   coverFrameSec: z.number().min(0).nullable().optional(),
   coverTitle: z.string().max(200).nullable().optional(),
+  // Subtítulos grandes: se puede desactivar sin perder las cues guardadas (por si se reactivan).
+  captionsEnabled: z.boolean().optional(),
   // Metadatos de publicación: no están quemados en el vídeo (salvo coverTitle, que es aparte),
   // así que se guardan sin necesidad de regenerar nada.
   title: z.string().min(1).max(200).optional(),
@@ -116,6 +119,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
       ...(parsed.data.endSec !== undefined && { endSec: parsed.data.endSec }),
       ...(parsed.data.coverFrameSec !== undefined && { coverFrameSec: parsed.data.coverFrameSec }),
       ...(parsed.data.coverTitle !== undefined && { coverTitle: parsed.data.coverTitle }),
+      ...(parsed.data.captionsEnabled !== undefined && { captionsEnabled: parsed.data.captionsEnabled }),
       ...(parsed.data.title !== undefined && { title: parsed.data.title }),
       ...(parsed.data.description !== undefined && { description: parsed.data.description }),
       ...(parsed.data.hashtags !== undefined && { hashtags: JSON.stringify(parsed.data.hashtags) }),

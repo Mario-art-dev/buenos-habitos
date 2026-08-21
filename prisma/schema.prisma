@@ -89,10 +89,24 @@ model Clip {
   // fotograma/título por defecto (ver coverCard.ts) — RANKING/PRODUCT/SONG no usan portada.
   coverFrameSec Float?
   coverTitle    String?
+  // Imagen propia subida desde la fototeca para la portada, en vez de un fotograma del vídeo.
+  // Si está puesta, tiene prioridad sobre coverFrameSec.
+  coverImagePath String?
 
-  // Solo para clips generados en modo RANKING
+  // Subtítulos grandes estilo karaoke: activados por defecto, editable desde el editor. Si es
+  // false, no se queman aunque haya captionCues guardadas (se conservan por si se reactiva).
+  captionsEnabled Boolean @default(true)
+
   category       String?
-  musicQuery     String?
+  // Sugerencia de música de la IA (cualquier modo): si cree que el short mejoraría con canción,
+  // musicRecommended=true, musicQuery el título/artista sugerido, y musicSuggestedSection un
+  // texto libre tipo "1:15-2:00" con la parte de esa canción que mejor pegaría (orientativo, no
+  // se valida contra el audio real hasta que el usuario pega el link).
+  musicRecommended      Boolean @default(false)
+  musicQuery            String?
+  musicSuggestedSection String?
+  // El usuario decide si aplicar la música sugerida o no — nunca se quema sola.
+  musicEnabled   Boolean @default(false)
   musicSourceUrl String?
   musicStartSec  Float?
 

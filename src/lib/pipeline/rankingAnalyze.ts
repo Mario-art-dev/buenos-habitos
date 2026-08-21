@@ -28,7 +28,10 @@ export interface RankingGroup {
   items: ClassifiedMoment[]; // ordenados por score desc, item[0] = mejor (posición 1)
 }
 
-const MAX_CANDIDATES = 90;
+// Pedido explícito: "quiero los máximos short posibles con diferentes clips" — un vídeo de
+// recopilación largo (1h+) puede tener bastantes más de 90 segmentos por silencio; subirlo permite
+// clasificar más material y sacar más categorías (= más vídeos de ranking distintos) del mismo vídeo.
+const MAX_CANDIDATES = 200;
 
 function transcriptExcerptFor(segments: TranscriptSegment[], span: TimeSpan): string {
   return segments
@@ -68,9 +71,10 @@ export async function buildCandidateMoments(
   return candidates;
 }
 
-const SYSTEM_PROMPT = `Eres un editor experto en vídeos de recopilación viral (compilaciones de fails, momentos
-graciosos, hazañas, etc.) para el canal "${config.channel.name}" (${config.channel.niche}).
-Analizas fotogramas y transcripción de fragmentos de un vídeo largo para decidir cuáles merece la pena
+const SYSTEM_PROMPT = `Eres un editor experto en vídeos de recopilación viral para el canal "${config.channel.name}"
+(${config.channel.niche}). El contenido de origen puede ser CUALQUIER COSA — clips de un streamer, un directo,
+un vídeo de gaming, deporte, reacciones, entrevistas, lo que sea — no solo compilaciones de fails o momentos
+graciosos. Analizas fotogramas y transcripción de fragmentos de un vídeo largo para decidir cuáles merece la pena
 usar en vídeos de ranking tipo "TOP 5" y en qué categoría temática encajan.
 Respondes EXCLUSIVAMENTE con JSON válido, sin texto adicional.`;
 
@@ -90,18 +94,23 @@ representativo y la transcripción de ese tramo.
 ${items}
 
 Para cada candidato decide:
-- "include": true solo si es un momento claro y usable (algo ocurre: una caída, una acrobacia, un susto, algo
-  gracioso o impactante). false si es un tramo de transición, introducción, publicidad, o no pasa nada relevante.
+- "include": true si es un momento claro y usable, sea del tipo que sea — gracioso, impactante, tenso, hábil,
+  emotivo, una buena jugada, una reacción, un momento con gancho... CUALQUIER cosa que un espectador pararía a
+  ver, no solo caídas o momentos graciosos. false si es un tramo de transición, introducción, publicidad, o no
+  pasa nada relevante.
 - "category": UNA sola palabra en ${contentLanguageName()} (excepcionalmente dos si de verdad hace falta) que
   describa el tema del candidato, para agrupar los parecidos en un mismo vídeo de ranking Y para mostrarse en
   pantalla dentro de la plantilla fija "Ranking Funniest {category} Moments" — tiene que sonar bien ahí metida tal
-  cual (ejemplos: "Dogs", "Girls", "Flips", "Skate", "Fails", "Pranks", "Gym", "Cats", "Cars"...). Elige la que
-  mejor describa el contenido real del candidato, sé consistente para que candidatos del mismo tipo caigan en la
-  MISMA categoría exacta (mismo singular/plural, misma capitalización).
+  cual. Usa la categoría que MEJOR describa el contenido real (puede ser de cualquier tema: un juego concreto,
+  un tipo de reacción, un deporte, una temática de streaming... no la fuerces a encajar en "fails" o "gracioso"
+  si no es lo que es). Sé consistente para que candidatos del mismo tipo caigan en la MISMA categoría exacta
+  (mismo singular/plural, misma capitalización).
 - "label": texto muy corto (máx 6 palabras) en ${contentLanguageName()} para mostrar en pantalla como título de ese
   puesto del ranking.
 - "description": 1 frase en ${contentLanguageName()} describiendo qué pasa.
-- "score": 0-100, qué tan gracioso/impactante/viral es este momento comparado con el resto.
+- "score": 0-100, qué tan viral/entretenido es este momento comparado con el resto (da igual si es gracioso,
+  impactante, hábil o cualquier otra cosa — puntúa por lo interesante que es de ver, no por un tipo de contenido
+  concreto).
 
 Devuelve SOLO este JSON, con un elemento por candidato EN EL MISMO ORDEN (usa el "index" real indicado arriba):
 {"moments": [{"index": number, "include": boolean, "category": "string", "label": "string", "description": "string", "score": number}]}`;
@@ -142,7 +151,7 @@ export async function classifyCandidates(candidates: CandidateMoment[]): Promise
         classified.push({
           ...candidate,
           include: !!m.include,
-          category: (m.category || "otros fails").trim().toLowerCase(),
+          category: (m.category || "otros").trim().toLowerCase(),
           label: m.label || "Momento destacado",
           description: m.description || "",
           score: Math.max(0, Math.min(100, Math.round(m.score ?? 0))),

@@ -11,13 +11,14 @@ import {
   hookFramePath,
   clipCommentedPath,
   coverCardPath,
+  bigCaptionsPath,
   tmpDir,
 } from "@/lib/storagePaths";
 import { resolveSourceVideo } from "./download";
 import { extractAudio, transcribeAudio, type TranscriptSegment } from "./transcribe";
 import { analyzeTranscriptForClips } from "./analyze";
 import { cutVerticalClip, concatClips, extractThumbnail } from "./clip";
-import type { StoredCue } from "./bigCaptions";
+import { cuesFromTranscript, buildBigCaptionsAssFromCues, type StoredCue } from "./bigCaptions";
 import { pickHookStartSec, hookVerifiedFrameSec } from "./hookFrame";
 import { probeVideo, pickVerticalResolution } from "./probe";
 import { processRankingJob } from "./rankingPipeline";
@@ -116,6 +117,9 @@ async function processSingleJob(jobId: string): Promise<void> {
             viralityScore: Math.max(0, Math.min(100, Math.round(c.viralityScore))),
             viralityReason: c.viralityReason,
             hashtags: JSON.stringify(c.hashtags ?? []),
+            musicRecommended: c.musicRecommended,
+            musicQuery: c.musicQuery,
+            musicSuggestedSection: c.musicSuggestedSection,
             status: "PENDING",
           },
         })
@@ -149,12 +153,18 @@ async function processSingleJob(jobId: string): Promise<void> {
           framePath: hookFramePath(jobId, clip.id),
         });
 
-        // Petición explícita: en esta sección (SINGLE, "vídeos virales") el short se queda siempre
-        // en el recorte vertical fijo, sin caption grande automático quemado — el usuario prefiere
-        // controlar el texto a mano desde el editor (recortar, añadir textos propios) en vez de que
-        // se le queme algo automático encima. No se calculan cues ni se activa el zoom dinámico
-        // aquí; el modo Ranking (rankingRender.ts) no cambia, sigue con ambos activados.
-        const captionCues: StoredCue[] = [];
+        // Caption grande estilo karaoke: activado por defecto (se puede desactivar/editar luego
+        // desde el editor — clip.captionsEnabled). El zoom dinámico SÍ se queda fijo en "no" para
+        // esta sección (SINGLE, "vídeos virales"), pedido explícito aparte de esto.
+        const captionCues: StoredCue[] = cuesFromTranscript(transcript.segments, hookStartSec, clip.endSec, 4, true);
+        let bigCaptionsFile: string | undefined;
+        if (captionCues.length > 0) {
+          const assContent = buildBigCaptionsAssFromCues(captionCues, resolution);
+          if (assContent) {
+            bigCaptionsFile = bigCaptionsPath(jobId, clip.id);
+            fs.writeFileSync(bigCaptionsFile, assContent);
+          }
+        }
 
         let commentaryIntro: string | null = null;
         let commentaryOutro: string | null = null;
@@ -168,6 +178,7 @@ async function processSingleJob(jobId: string): Promise<void> {
           endSec: clip.endSec,
           resolution,
           dynamicZoom: false,
+          bigCaptionsPath: bigCaptionsFile,
         });
 
         let core = bodyPath;
@@ -201,9 +212,9 @@ async function processSingleJob(jobId: string): Promise<void> {
           core = commentedPath;
         }
 
-        // Portada de marca (fotograma del propio short + título + sonido de marca) al principio
-        // Y al final, la misma en los dos sitios — pedido explícito: "la pantalla en pausa con
-        // la portada mientras suena el sonido, y directo al vídeo después".
+        // Portada de marca (fotograma del propio short, o una imagen propia si el usuario la
+        // subió, + título + sonido de marca) solo AL FINAL — antes se ponía también al
+        // principio, se quitó porque no quedaba bien empezar con una pantalla estática.
         if (config.coverCard.enabled) {
           // La portada reutiliza el trabajo del gancho, pero tiene que extraer el fotograma del
           // instante que la IA REALMENTE verificó (hookStartSec + el margen de hookFrame.ts), no
@@ -216,7 +227,7 @@ async function processSingleJob(jobId: string): Promise<void> {
             outPath: coverPath,
             resolution,
           });
-          await concatClips([coverPath, core, coverPath], outPath);
+          await concatClips([core, coverPath], outPath);
         } else if (core !== outPath) {
           fs.copyFileSync(core, outPath);
         }

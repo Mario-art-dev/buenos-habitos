@@ -190,7 +190,10 @@ export const config = {
   },
 
   ranking: {
-    minItems: Number(optional("RANKING_MIN_ITEMS", "5")),
+    // Bajado de 5 a 3: pedido explícito de sacar el máximo de shorts distintos posibles de un
+    // mismo vídeo — con 5 de mínimo, muchas categorías con material real (pero menos abundante)
+    // se descartaban enteras. minDurationSec sigue siendo el filtro de calidad real (duración).
+    minItems: Number(optional("RANKING_MIN_ITEMS", "3")),
     maxItems: Number(optional("RANKING_MAX_ITEMS", "10")),
     minSegmentSeconds: Number(optional("RANKING_MIN_SEGMENT_SECONDS", "3")),
     // Duración total mínima (suma de los momentos, sin contar tarjetas/subtítulos) que tiene que

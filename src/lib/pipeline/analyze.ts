@@ -12,6 +12,12 @@ export interface MomentCandidate {
   viralityScore: number;
   viralityReason: string;
   hashtags: string[];
+  // Sugerencia de música opcional: el usuario decide si aplicarla o no desde el editor, nunca se
+  // quema sola. musicSuggestedSection es un texto libre tipo "1:15-2:00" (orientativo, la parte de
+  // ESA canción concreta que mejor pegaría, no se valida contra el audio real).
+  musicRecommended: boolean;
+  musicQuery: string | null;
+  musicSuggestedSection: string | null;
 }
 
 function formatTranscript(segments: TranscriptSegment[]): string {
@@ -117,7 +123,16 @@ Devuelve SOLO este JSON (sin texto extra):
       "hook": "la frase o momento exacto que engancha en el segundo 0-2",
       "viralityScore": number entre 0 y 100,
       "viralityReason": "explicación breve (1 frase) de por qué puede volverse viral",
-      "hashtags": ["array de 6 a 10 hashtags SIN el símbolo #, relevantes para el nicho y la plataforma"]
+      "hashtags": ["array de 6 a 10 hashtags SIN el símbolo #, relevantes para el nicho y la plataforma"],
+      "musicRecommended": boolean — true SOLO si este clip concreto mejoraría de verdad con música de fondo
+        (ej. un montaje sin diálogo relevante, un momento de tensión/hype que pide banda sonora). false si el
+        propio audio/diálogo del clip ya lleva el peso (la mayoría de los casos): NUNCA actives esto solo
+        porque sí, es la excepción, no la norma,
+      "musicQuery": si musicRecommended=true, el título y artista de UNA canción concreta que pegaría
+        (ej. "Thunderstruck - AC/DC"); si no, null,
+      "musicSuggestedSection": si musicRecommended=true, un texto corto tipo "1:15-2:00" con la parte
+        aproximada de ESA canción que mejor encajaría (el estribillo, el drop, etc. — orientativo, según tu
+        conocimiento general de la canción); si no, null
     }
   ]
 }
@@ -147,7 +162,14 @@ function parseClips(raw: string): MomentCandidate[] {
     if (!Number.isFinite(c.startSec) || !Number.isFinite(c.endSec) || c.endSec <= c.startSec) continue;
     const endSec = c.endSec - c.startSec > maxLen ? c.startSec + maxLen : c.endSec;
     if (endSec - c.startSec < minLen) continue;
-    clips.push({ ...c, endSec });
+    const musicRecommended = !!c.musicRecommended;
+    clips.push({
+      ...c,
+      endSec,
+      musicRecommended,
+      musicQuery: musicRecommended ? c.musicQuery ?? null : null,
+      musicSuggestedSection: musicRecommended ? c.musicSuggestedSection ?? null : null,
+    });
   }
 
   return clips;

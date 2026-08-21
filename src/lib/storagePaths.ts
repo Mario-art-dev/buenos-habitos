@@ -32,6 +32,12 @@ export function clipThumbnailPath(jobId: string, clipId: string): string {
   return path.join(clipsDir(jobId), `${clipId}.jpg`);
 }
 
+/** Imagen propia subida desde el editor para la portada — persistente (no en tmp/), sobrevive
+ *  a regenerar el clip cuantas veces haga falta. */
+export function coverImageUploadPath(jobId: string, clipId: string, ext: string): string {
+  return path.join(clipsDir(jobId), `${clipId}_cover_upload.${ext}`);
+}
+
 /** Vídeo del ranking ya montado (cortes + tarjetas + subtítulos) pero sin música mezclada todavía. */
 export function clipAssembledPath(jobId: string, clipId: string): string {
   return path.join(clipsDir(jobId), `${clipId}_assembled.mp4`);

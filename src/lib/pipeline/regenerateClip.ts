@@ -60,7 +60,7 @@ export async function regenerateClip(clipId: string): Promise<void> {
 
   try {
     let bigCaptionsFile: string | undefined;
-    if (config.bigCaptions.enabled && cues.length > 0) {
+    if (config.bigCaptions.enabled && clip.captionsEnabled && cues.length > 0) {
       const ass = buildBigCaptionsAssFromCues(cues, resolution);
       if (ass) {
         fs.writeFileSync(bigCaptionsFilePath, ass, "utf-8");
@@ -130,8 +130,9 @@ export async function regenerateClip(clipId: string): Promise<void> {
         title: clip.coverTitle ?? clip.title,
         outPath: coverPath,
         resolution,
+        customImagePath: clip.coverImagePath,
       });
-      await concatClips([coverPath, core, coverPath], outPath);
+      await concatClips([core, coverPath], outPath);
     } else if (core !== outPath) {
       fs.copyFileSync(core, outPath);
     }

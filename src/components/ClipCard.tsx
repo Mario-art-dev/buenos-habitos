@@ -27,7 +27,10 @@ export interface ClipData {
   videoUrl: string | null;
   thumbnailUrl: string | null;
   category?: string | null;
+  musicRecommended?: boolean;
   musicQuery?: string | null;
+  musicSuggestedSection?: string | null;
+  musicEnabled?: boolean;
   musicSourceUrl?: string | null;
   musicStartSec?: number | null;
   commentaryIntro?: string | null;
@@ -43,9 +46,18 @@ function formatTime(sec: number) {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
+// Convierte "1:15" o "1:15-2:00" (se coge solo el primer número) a segundos, para rellenar el
+// campo "empezar en" con la sección que la IA sugirió y ahorrarle el cálculo al usuario.
+function parseSuggestedStartSec(section: string | null | undefined): number {
+  if (!section) return 0;
+  const match = section.match(/(\d+):(\d{2})/);
+  if (!match) return 0;
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
 function MusicPanel({ clip, onApplied }: { clip: ClipData; onApplied: () => void }) {
   const [url, setUrl] = useState(clip.musicSourceUrl ?? "");
-  const [startSec, setStartSec] = useState(clip.musicStartSec ?? 0);
+  const [startSec, setStartSec] = useState(clip.musicStartSec ?? parseSuggestedStartSec(clip.musicSuggestedSection));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -70,15 +82,48 @@ function MusicPanel({ clip, onApplied }: { clip: ClipData; onApplied: () => void
     }
   }
 
+  async function remove() {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/clips/${clip.id}/music`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "No se pudo quitar la música");
+      onApplied();
+      setOpen(false);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <div className="mt-3 rounded-xl border border-ink-600 bg-ink-900/60 p-3">
-      <p className="text-xs text-slate-400">
-        🎵 Música sugerida por la IA: <span className="text-slate-200">{clip.musicQuery || "(sin sugerencia)"}</span>
-      </p>
+      {clip.musicRecommended && (
+        <p className="text-xs text-slate-400">
+          🎵 Recomendación de la IA: <span className="text-slate-200">{clip.musicQuery || "(sin sugerencia)"}</span>
+          {clip.musicSuggestedSection && (
+            <span className="text-slate-500"> · sección {clip.musicSuggestedSection}</span>
+          )}
+        </p>
+      )}
+      {clip.musicEnabled && (
+        <p className="mt-1 text-xs text-emerald-400">
+          ✓ Música activada{clip.musicSourceUrl ? ` · ${clip.musicSourceUrl}` : ""}
+        </p>
+      )}
       {!open ? (
-        <button onClick={() => setOpen(true)} className="mt-2 text-xs text-brand-400 underline">
-          {clip.musicSourceUrl ? "Cambiar música" : "Pegar link de YouTube con esta canción"}
-        </button>
+        <div className="mt-2 flex flex-wrap gap-3">
+          <button onClick={() => setOpen(true)} className="text-xs text-brand-400 underline">
+            {clip.musicEnabled ? "Cambiar música" : "Añadir música (pegar link de YouTube)"}
+          </button>
+          {clip.musicEnabled && (
+            <button disabled={loading} onClick={remove} className="text-xs text-red-400 underline disabled:opacity-40">
+              {loading ? "Quitando…" : "Quitar música"}
+            </button>
+          )}
+        </div>
       ) : (
         <div className="mt-2 space-y-2">
           <input
@@ -88,7 +133,7 @@ function MusicPanel({ clip, onApplied }: { clip: ClipData; onApplied: () => void
             placeholder="https://www.youtube.com/watch?v=..."
             className="w-full rounded-lg border border-ink-600 bg-ink-900 px-3 py-2 text-xs outline-none focus:border-brand-500"
           />
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <label className="text-xs text-slate-500">Empezar en (segundos):</label>
             <input
               type="number"
@@ -102,7 +147,14 @@ function MusicPanel({ clip, onApplied }: { clip: ClipData; onApplied: () => void
               onClick={apply}
               className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
             >
-              {loading ? "Aplicando…" : "Usar esta música"}
+              {loading ? "Aplicando…" : clip.musicEnabled ? "Actualizar vídeo" : "Añadir canción"}
+            </button>
+            <button
+              disabled={loading}
+              onClick={() => setOpen(false)}
+              className="rounded-lg border border-ink-600 px-3 py-1.5 text-xs text-slate-300 disabled:opacity-40"
+            >
+              Cancelar
             </button>
           </div>
           <p className="text-xs text-slate-600">
@@ -317,9 +369,7 @@ export default function ClipCard({ clip }: { clip: ClipData }) {
             </div>
           )}
 
-          {isRanking && clip.status === "READY" && (
-            <MusicPanel clip={clip} onApplied={() => setVideoVersion((v) => v + 1)} />
-          )}
+          {clip.status === "READY" && <MusicPanel clip={clip} onApplied={() => setVideoVersion((v) => v + 1)} />}
 
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <button

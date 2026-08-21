@@ -23,41 +23,38 @@ export interface RenderCoverCardParams {
   title: string;
   outPath: string;
   resolution: VerticalResolution;
+  // Si se indica, se usa esta imagen (subida a mano desde la fototeca) en vez de extraer un
+  // fotograma del vídeo — el resto (sonido de marca, título quemado encima) no cambia.
+  customImagePath?: string | null;
 }
 
 /**
  * Genera la "portada" del short: un fotograma del propio vídeo (a máxima calidad, no el pequeño
- * de clasificación por IA) con el título quemado encima al estilo de una miniatura real de
- * creador de contenido — texto grande en negrita con contorno, sobre una franja oscura abajo para
- * que se lea bien encima de cualquier imagen. Se congela ese fotograma durante lo que dure el
- * sonido de marca (assets/audio/brand_sting.wav), que es el audio de esta tarjeta.
+ * de clasificación por IA), o una imagen propia si el usuario la ha subido desde el editor, con
+ * el título quemado encima al estilo de una miniatura real de creador de contenido — texto grande
+ * en negrita con contorno, sobre una franja oscura abajo para que se lea bien encima de cualquier
+ * imagen. Se congela esa imagen durante lo que dure el sonido de marca
+ * (assets/audio/brand_sting.wav), que es el audio de esta tarjeta.
  *
- * Pedido explícito: la MISMA portada se usa al principio Y al final del short (solo se renderiza
- * una vez por clip; el llamador reutiliza el archivo de salida dos veces al montar el vídeo final).
+ * Pedido explícito: la portada solo va al FINAL del short (antes se ponía también al principio;
+ * se quitó porque no quedaba bien empezar el vídeo con una pantalla estática).
  */
 export async function renderCoverCard(params: RenderCoverCardParams): Promise<void> {
-  const { sourcePath, frameAtSec, title, outPath, resolution } = params;
+  const { sourcePath, frameAtSec, title, outPath, resolution, customImagePath } = params;
   const { width, height } = resolution;
 
   const framePath = `${outPath}.frame.jpg`;
-  await extractCoverFrameAt(sourcePath, frameAtSec, framePath);
+  if (customImagePath) {
+    fs.copyFileSync(customImagePath, framePath);
+  } else {
+    await extractCoverFrameAt(sourcePath, frameAtSec, framePath);
+  }
 
   try {
     const stingDuration = await getStingDurationSec();
     const fontSize = Math.round(width / 9);
     const wrapped = wrapText(title, 18);
     const bottomMargin = Math.round(height * 0.09);
-
-    // Insignia de marca (nombre del canal) cerca de arriba, para que la portada se identifique
-    // como de un creador de contenido real de un vistazo — pedido explícito y repetido.
-    const badgeText = config.channel.name.toUpperCase();
-    const badgeFontSize = Math.round(width / 26);
-    const badgePadX = Math.round(badgeFontSize * 0.7);
-    const badgePadY = Math.round(badgeFontSize * 0.45);
-    const badgeW = Math.round(badgeText.length * badgeFontSize * 0.62) + badgePadX * 2;
-    const badgeH = badgeFontSize + badgePadY * 2;
-    const badgeX = Math.round(width * 0.06);
-    const badgeY = Math.round(height * 0.06);
 
     const filter =
       `[0:v]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height}[bg];` +
@@ -68,10 +65,7 @@ export async function renderCoverCard(params: RenderCoverCardParams): Promise<vo
       `drawbox=x=0:y=ih*0.64:w=iw:h=ih*0.12:color=black@0.32:t=fill,` +
       `drawbox=x=0:y=ih*0.76:w=iw:h=ih*0.12:color=black@0.55:t=fill,` +
       `drawbox=x=0:y=ih*0.88:w=iw:h=ih*0.12:color=black@0.78:t=fill[dark];` +
-      `[dark]drawbox=x=${badgeX}:y=${badgeY}:w=${badgeW}:h=${badgeH}:color=0x00FF66@0.95:t=fill[badgebg];` +
-      `[badgebg]drawtext=text='${escapeDrawtext(badgeText)}':fontfile=${FONT_BOLD}:` +
-      `fontcolor=black:fontsize=${badgeFontSize}:x=${badgeX + badgePadX}:y=${badgeY + badgePadY}[tag];` +
-      `[tag]drawtext=text='${escapeDrawtext(wrapped)}':fontfile=${FONT_BOLD}:` +
+      `[dark]drawtext=text='${escapeDrawtext(wrapped)}':fontfile=${FONT_BOLD}:` +
       `fontcolor=white:fontsize=${fontSize}:borderw=9:bordercolor=black@0.95:` +
       `x=(w-text_w)/2:y=h-text_h-${bottomMargin}:line_spacing=14[v]`;
 
