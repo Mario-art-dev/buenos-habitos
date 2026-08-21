@@ -4,8 +4,15 @@ import { config } from "@/lib/config";
 
 // /terms y /privacy tienen que ser públicas: TikTok/Google las piden como URL de Términos y
 // Política de privacidad al configurar la app, y sus sistemas (y cualquier revisor humano) las
-// visitan sin conocer la contraseña de la app.
-const PUBLIC_PATHS = ["/login", "/api/auth/login", "/terms", "/privacy"];
+// visitan sin conocer la contraseña de la app. El archivo de verificación de TikTok (en public/)
+// es lo mismo: sus servidores lo comprueban sin pasar por el login.
+const PUBLIC_PATHS = [
+  "/login",
+  "/api/auth/login",
+  "/terms",
+  "/privacy",
+  "/tiktokH7BOJwutMnYaC50HXaWw4omyRyIfdTiv.txt",
+];
 
 export async function middleware(req: NextRequest) {
   if (!config.appPassword) {
