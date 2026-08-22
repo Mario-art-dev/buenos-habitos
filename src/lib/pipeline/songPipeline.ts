@@ -1,7 +1,7 @@
 import fs from "fs";
 import { db } from "@/lib/db";
 import { config } from "@/lib/config";
-import { downloadSourceVideo, downloadAudioOnly } from "./download";
+import { downloadSourceVideo, downloadAudioOnly, resolveSourceVideo } from "./download";
 import { probeVideo, pickVerticalResolution } from "./probe";
 import { detectContentSegments } from "./silence";
 import { buildCandidateMoments, classifyCandidates } from "./rankingAnalyze";
@@ -52,21 +52,30 @@ function computeSegmentDurations(beatTimes: number[], maxDurationSec: number): n
  */
 export async function processSongJob(jobId: string): Promise<void> {
   const job = await db.job.findUniqueOrThrow({ where: { id: jobId } });
-  if (!job.sourceUrl) throw new Error("Este trabajo no tiene una URL de vídeo fuente.");
-  if (!job.songUrl) throw new Error("Este trabajo no tiene el enlace de la canción.");
+  if (!job.sourceUrl && !job.sourceFilePath) {
+    throw new Error("Este trabajo no tiene ni URL ni archivo para el vídeo de recopilación.");
+  }
+  const songPath = songAudioPath(jobId);
+  if (!job.songUrl && !fs.existsSync(songPath)) {
+    throw new Error("Este trabajo no tiene ni enlace ni archivo para la canción.");
+  }
 
   try {
-    await setStatus(jobId, "DOWNLOADING", "Descargando el vídeo de recopilación…");
+    await setStatus(jobId, "DOWNLOADING", "Preparando el vídeo de recopilación…");
     const srcPath = sourceVideoPath(jobId);
-    const { title: sourceTitle, durationSec: sourceDurationSec } = await downloadSourceVideo(job.sourceUrl, srcPath);
+    const { title: sourceTitle, durationSec: sourceDurationSec } = await resolveSourceVideo(job, srcPath);
     await db.job.update({
       where: { id: jobId },
       data: { sourceTitle, sourceDurationSec, sourceFilePath: srcPath },
     });
 
-    await setStatus(jobId, "DOWNLOADING", "Descargando el audio de la canción…");
-    const songPath = songAudioPath(jobId);
-    const { title: songTitle } = await downloadAudioOnly(job.songUrl, songPath);
+    // Si songUrl no está (se subió un archivo directamente, ver /api/jobs/song), songAudioPath ya
+    // existe en disco de antes (lo dejó la ruta de subida) — no hace falta descargar nada.
+    let songTitle = "Canción subida";
+    if (job.songUrl) {
+      await setStatus(jobId, "DOWNLOADING", "Descargando el audio de la canción…");
+      songTitle = (await downloadAudioOnly(job.songUrl, songPath)).title;
+    }
 
     await setStatus(jobId, "ANALYZING", "Analizando el ritmo de la canción…");
     const { beatTimes } = await detectBeats(songPath);

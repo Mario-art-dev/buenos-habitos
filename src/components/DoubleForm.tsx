@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import VideoInput, { type VideoInputValue } from "./VideoInput";
 
 export default function DoubleForm() {
-  const [topUrl, setTopUrl] = useState("");
-  const [bottomUrl, setBottomUrl] = useState("");
+  const [top, setTop] = useState<VideoInputValue>({ url: "", uploadId: null });
+  const [bottom, setBottom] = useState<VideoInputValue>({ url: "", uploadId: null });
   const [partsCount, setPartsCount] = useState(4);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -19,7 +20,13 @@ export default function DoubleForm() {
       const res = await fetch("/api/jobs/double", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topUrl, bottomUrl, partsCount }),
+        body: JSON.stringify({
+          topUrl: top.url || undefined,
+          topUploadId: top.uploadId || undefined,
+          bottomUrl: bottom.url || undefined,
+          bottomUploadId: bottom.uploadId || undefined,
+          partsCount,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "No se pudo crear el trabajo");
@@ -34,28 +41,11 @@ export default function DoubleForm() {
 
   return (
     <form onSubmit={handleSubmit} className="rounded-2xl border border-ink-700 bg-ink-800 p-6">
-      <label className="mb-2 block text-sm font-medium text-slate-300">
-        Vídeo de ARRIBA (el que se corta en partes)
-      </label>
-      <input
-        type="url"
-        required
-        value={topUrl}
-        onChange={(e) => setTopUrl(e.target.value)}
-        placeholder="https://www.youtube.com/watch?v=..."
-        className="w-full rounded-xl border border-ink-600 bg-ink-900 px-4 py-3 text-sm outline-none focus:border-brand-500"
-      />
-
-      <label className="mb-2 mt-4 block text-sm font-medium text-slate-300">
-        Vídeo de ABAJO (fijo, p.ej. gameplay de coche — se repite a lo largo de todas las partes)
-      </label>
-      <input
-        type="url"
-        required
-        value={bottomUrl}
-        onChange={(e) => setBottomUrl(e.target.value)}
-        placeholder="https://www.youtube.com/watch?v=..."
-        className="w-full rounded-xl border border-ink-600 bg-ink-900 px-4 py-3 text-sm outline-none focus:border-brand-500"
+      <VideoInput label="Vídeo de ARRIBA (el que se corta en partes)" value={top} onChange={setTop} />
+      <VideoInput
+        label="Vídeo de ABAJO (fijo, p.ej. gameplay de coche — se repite a lo largo de todas las partes)"
+        value={bottom}
+        onChange={setBottom}
       />
 
       <label className="mb-2 mt-4 block text-sm font-medium text-slate-300">Número de partes</label>

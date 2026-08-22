@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import VideoInput, { type VideoInputValue } from "./VideoInput";
 
 export default function SongForm() {
-  const [sourceUrl, setSourceUrl] = useState("");
-  const [songUrl, setSongUrl] = useState("");
+  const [source, setSource] = useState<VideoInputValue>({ url: "", uploadId: null });
+  const [song, setSong] = useState<VideoInputValue>({ url: "", uploadId: null });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
@@ -18,7 +19,12 @@ export default function SongForm() {
       const res = await fetch("/api/jobs/song", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sourceUrl, songUrl }),
+        body: JSON.stringify({
+          sourceUrl: source.url || undefined,
+          sourceUploadId: source.uploadId || undefined,
+          songUrl: song.url || undefined,
+          songUploadId: song.uploadId || undefined,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "No se pudo crear el trabajo");
@@ -33,26 +39,12 @@ export default function SongForm() {
 
   return (
     <form onSubmit={handleSubmit} className="rounded-2xl border border-ink-700 bg-ink-800 p-6">
-      <label className="mb-2 block text-sm font-medium text-slate-300">Vídeo de recopilación a remontar</label>
-      <input
-        type="url"
-        required
-        value={sourceUrl}
-        onChange={(e) => setSourceUrl(e.target.value)}
-        placeholder="https://www.youtube.com/watch?v=..."
-        className="w-full rounded-xl border border-ink-600 bg-ink-900 px-4 py-3 text-sm outline-none focus:border-brand-500"
-      />
-
-      <label className="mb-2 mt-4 block text-sm font-medium text-slate-300">
-        Enlace de YouTube de la canción (Recomendado)
-      </label>
-      <input
-        type="url"
-        required
-        value={songUrl}
-        onChange={(e) => setSongUrl(e.target.value)}
-        placeholder="https://www.youtube.com/watch?v=..."
-        className="w-full rounded-xl border border-ink-600 bg-ink-900 px-4 py-3 text-sm outline-none focus:border-brand-500"
+      <VideoInput label="Vídeo de recopilación a remontar" value={source} onChange={setSource} />
+      <VideoInput
+        label="Canción (Recomendado)"
+        value={song}
+        onChange={setSong}
+        helpText="Si pegas un enlace de YouTube, solo se descarga el audio."
       />
 
       <button
