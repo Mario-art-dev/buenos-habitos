@@ -45,6 +45,23 @@ export function buildFixedSegments(durationSec: number, splitDurationSec: number
   return raw.map((s, index) => ({ index, ...s }));
 }
 
+/**
+ * Trocea el vídeo en un NÚMERO fijo de partes iguales (modo DOUBLE, "pantalla dividida") — a
+ * diferencia de buildFixedSegments (duración fija por trozo, nº de trozos variable), aquí el
+ * usuario pide un nº de partes concreto y cada una dura duration/count, sin fusionar restos.
+ */
+export function buildSegmentsByCount(durationSec: number, count: number): FixedSegment[] {
+  if (durationSec <= 0 || count <= 0) return [];
+  const partLen = durationSec / count;
+  const segments: FixedSegment[] = [];
+  for (let i = 0; i < count; i++) {
+    const startSec = i * partLen;
+    const endSec = i === count - 1 ? durationSec : (i + 1) * partLen;
+    segments.push({ index: i, startSec, endSec });
+  }
+  return segments;
+}
+
 function transcriptExcerptFor(segments: TranscriptSegment[], startSec: number, endSec: number): string {
   return segments
     .filter((s) => s.end > startSec && s.start < endSec)

@@ -235,6 +235,19 @@ tratamiento visual que Inicio: sin zoom dinámico, sin caption grande automátic
 marca al final (editable desde el editor). Si el último trozo queda muy corto para tener
 sentido solo, se funde con el anterior en vez de dejarlo suelto.
 
+### Modo Doble (pantalla dividida)
+
+Pegas DOS vídeos: uno de ARRIBA (el contenido, el que se corta en partes) y uno de ABAJO fijo
+(p.ej. gameplay de un coche/parkour), y eliges en cuántas partes quieres cortar el de arriba. Cada
+parte generada es un short en pantalla dividida vertical (mitad arriba = vídeo principal con su
+audio, mitad abajo = vídeo de fondo silenciado), con "Parte 1", "Parte 2"... fijo arriba de la
+pantalla durante TODO el vídeo, para saber el orden aunque se vean sueltas. El vídeo de abajo
+avanza de forma continua a lo largo de todas las partes (no se reinicia en cada una) y se repite en
+bucle si es más corto que la suma de todas. Cada parte recibe título, descripción y hashtags
+generados por IA a partir de la transcripción del vídeo de arriba. No lleva portada de marca ni
+subtítulos grandes automáticos (ni el editor de subtítulos/textos, que todavía no admite este
+modo, ya que compone dos vídeos fuente en vez de uno).
+
 ### Modo Producto (vídeos publicitarios con enlace de afiliado)
 
 1. Le das el nombre del producto, opcionalmente su enlace (afiliado o tienda) y opcionalmente

@@ -173,6 +173,96 @@ export async function cutVerticalClip(opts: CutClipOptions): Promise<void> {
   await run(config.ffmpegPath, args);
 }
 
+export interface SplitScreenOptions {
+  topSourcePath: string;
+  topStartSec: number;
+  topEndSec: number;
+  bottomSourcePath: string;
+  // Punto (en segundos) del vídeo de abajo donde empieza esta parte — normalmente el acumulado de
+  // las duraciones de las partes anteriores, para que el vídeo de fondo AVANCE de forma continua
+  // parte tras parte en vez de reiniciarse cada vez.
+  bottomStartSec: number;
+  label: string;
+  outPath: string;
+  resolution?: VerticalResolution;
+}
+
+/**
+ * Corta un tramo del vídeo de ARRIBA y lo compone en pantalla dividida vertical con un tramo del
+ * vídeo de ABAJO (p.ej. gameplay de coche) — mitad y mitad, sin recomponer a "formato short" con
+ * fondo desenfocado como cutVerticalClip, porque aquí cada mitad ya ocupa su propio hueco fijo.
+ * El vídeo de abajo se repite en bucle (-stream_loop -1) por si es más corto que la suma de todas
+ * las partes: al llegar al final, sigue desde el principio sin cortar la composición.
+ * El audio sale SOLO del vídeo de arriba (el de abajo es puramente decorativo/silencioso).
+ * El texto (p.ej. "Parte 2") se queda fijo arriba durante TODO el tramo, sin enable= — pedido
+ * explícito ("como si fuera un subtítulo permanente").
+ */
+export async function cutSplitScreenClip(opts: SplitScreenOptions): Promise<void> {
+  const { topSourcePath, topStartSec, topEndSec, bottomSourcePath, bottomStartSec, label, outPath, resolution = DEFAULT_RES } = opts;
+  const duration = Math.max(0.5, topEndSec - topStartSec);
+  const { width, height } = resolution;
+
+  // Alto de cada mitad, forzado a par (libx264 exige dimensiones pares con yuv420p).
+  let topHalfH = Math.round(height / 2);
+  if (topHalfH % 2 !== 0) topHalfH -= 1;
+  const bottomHalfH = height - topHalfH;
+
+  const fontSize = Math.round(width / 14);
+  const labelFilter =
+    `drawtext=text='${escapeDrawtext(label)}':fontcolor=white:fontsize=${fontSize}:` +
+    `fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:borderw=5:bordercolor=black@0.85:` +
+    `x=(w-text_w)/2:y=40`;
+
+  const filter =
+    `[0:v]scale=${width}:${topHalfH}:force_original_aspect_ratio=increase,crop=${width}:${topHalfH}[top];` +
+    `[1:v]scale=${width}:${bottomHalfH}:force_original_aspect_ratio=increase,crop=${width}:${bottomHalfH}[bottom];` +
+    `[top][bottom]vstack=inputs=2[stacked];` +
+    `[stacked]${labelFilter}[v]`;
+
+  await run(config.ffmpegPath, [
+    "-y",
+    "-ss",
+    String(topStartSec),
+    "-i",
+    topSourcePath,
+    "-stream_loop",
+    "-1",
+    "-ss",
+    String(Math.max(0, bottomStartSec)),
+    "-i",
+    bottomSourcePath,
+    "-filter_complex",
+    filter,
+    "-map",
+    "[v]",
+    "-map",
+    "0:a?",
+    "-t",
+    String(duration),
+    "-c:v",
+    "libx264",
+    "-preset",
+    "fast",
+    "-crf",
+    "18",
+    "-pix_fmt",
+    "yuv420p",
+    "-r",
+    String(CONCAT_FPS),
+    "-c:a",
+    "aac",
+    "-b:a",
+    "192k",
+    "-ar",
+    String(CONCAT_AUDIO_SAMPLE_RATE),
+    "-ac",
+    String(CONCAT_AUDIO_CHANNELS),
+    "-movflags",
+    "+faststart",
+    outPath,
+  ]);
+}
+
 /**
  * Genera una "tarjeta" de pocos segundos con texto sobre fondo negro, para transiciones de ranking.
  * Si se pasa `audioPath` (p.ej. una narración de IA), la tarjeta dura lo que dure ese audio y lo

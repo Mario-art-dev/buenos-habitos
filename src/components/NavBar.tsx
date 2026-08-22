@@ -8,6 +8,7 @@ const LINKS = [
   { href: "/", label: "Inicio" },
   { href: "/rankings", label: "Rankings" },
   { href: "/split", label: "Cortar en shorts" },
+  { href: "/double", label: "Modo doble" },
   { href: "/product", label: "Producto" },
   { href: "/song", label: "Canción" },
   { href: "/gallery", label: "Galería" },

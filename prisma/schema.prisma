@@ -9,7 +9,7 @@ datasource db {
 
 // SQLite no soporta enums nativos en Prisma: los estados se validan como
 // strings a nivel de aplicación (ver src/lib/types.ts).
-// Job.mode: SINGLE | RANKING | PRODUCT | SONG | SPLIT
+// Job.mode: SINGLE | RANKING | PRODUCT | SONG | SPLIT | DOUBLE
 // JobStatus: PENDING | DOWNLOADING | TRANSCRIBING | ANALYZING | CLIPPING | DONE | FAILED
 // ClipStatus: PENDING | RENDERING | READY | FAILED
 // Platform: YOUTUBE | TIKTOK
@@ -44,6 +44,15 @@ model Job {
 
   // Solo modo SPLIT: duración fija (segundos) de cada trozo al cortar el vídeo en shorts secuenciales
   splitDurationSec Int?
+
+  // Solo modo DOUBLE ("pantalla dividida"): sourceUrl/sourceFilePath es el vídeo de ARRIBA (el que
+  // se corta en partes), bottomVideoUrl/bottomVideoFilePath es el vídeo de ABAJO (p.ej. gameplay de
+  // coche) que se repite/continúa a lo largo de todas las partes, y doublePartsCount es en cuántas
+  // partes se corta el vídeo de arriba (a diferencia de SPLIT, aquí se pide un NÚMERO de partes, no
+  // una duración fija por trozo).
+  bottomVideoUrl      String?
+  bottomVideoFilePath String?
+  doublePartsCount    Int?
 
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt

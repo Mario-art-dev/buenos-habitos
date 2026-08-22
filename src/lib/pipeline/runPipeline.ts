@@ -25,6 +25,7 @@ import { processRankingJob } from "./rankingPipeline";
 import { processProductJob } from "./productPipeline";
 import { processSongJob } from "./songPipeline";
 import { processSplitJob } from "./splitPipeline";
+import { processDoubleJob } from "./doublePipeline";
 import { setStatus } from "./status";
 import { generateSingleCommentary } from "./commentary";
 import { renderCommentaryCard } from "./commentaryCards";
@@ -53,6 +54,9 @@ export async function processJob(jobId: string): Promise<void> {
   }
   if (job.mode === "SPLIT") {
     return processSplitJob(jobId);
+  }
+  if (job.mode === "DOUBLE") {
+    return processDoubleJob(jobId);
   }
   return processSingleJob(jobId);
 }

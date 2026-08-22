@@ -18,6 +18,11 @@ export function audioPath(jobId: string): string {
   return path.join(jobDir(jobId), "audio.mp3");
 }
 
+/** Vídeo de ABAJO del modo DOUBLE (pantalla dividida), p.ej. gameplay de coche. */
+export function bottomVideoPath(jobId: string): string {
+  return path.join(jobDir(jobId), "bottom.mp4");
+}
+
 export function clipsDir(jobId: string): string {
   const dir = path.join(jobDir(jobId), "clips");
   fs.mkdirSync(dir, { recursive: true });

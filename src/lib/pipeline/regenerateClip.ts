@@ -31,6 +31,14 @@ import { renderCommentaryCard } from "./commentaryCards";
  */
 export async function regenerateClip(clipId: string): Promise<void> {
   const clip = await db.clip.findUniqueOrThrow({ where: { id: clipId }, include: { job: true } });
+  // DOUBLE compone el vídeo en pantalla dividida (ver doublePipeline.ts/cutSplitScreenClip) a
+  // partir de DOS vídeos fuente distintos — esta función solo sabe reconstruir a partir de un
+  // único vídeo fuente con cutVerticalClip, así que "regenerar" un clip DOUBLE perdería la
+  // composición de pantalla dividida en vez de respetarla. El editor de subtítulos/textos/portada
+  // no está disponible todavía para este modo.
+  if (clip.job.mode === "DOUBLE") {
+    throw new Error("El editor todavía no admite el modo Doble (pantalla dividida).");
+  }
   const jobId = clip.jobId;
   const srcPath = clip.job.sourceFilePath ?? sourceVideoPath(jobId);
   if (!fs.existsSync(srcPath)) {
