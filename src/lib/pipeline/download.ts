@@ -22,12 +22,41 @@ function ytExtractorArgs(): string[] {
   ];
 }
 
+// YouTube devuelve 429 ("Too Many Requests") o el aviso de "Sign in to confirm you're not a bot"
+// cuando ve demasiadas peticiones seguidas desde la misma IP — normal en un runner compartido de
+// GitHub Actions, sobre todo tras mucho uso el mismo día. Casi siempre es temporal (segundos a
+// pocos minutos), así que merece la pena esperar y reintentar antes de rendirse, en vez de fallar
+// el trabajo entero a la primera. No se reintenta ningún otro tipo de error (URL inválida, vídeo
+// privado, etc. no se arreglan esperando).
+const RETRYABLE_PATTERN = /HTTP Error 429|Too Many Requests|Sign in to confirm you.?re not a bot/i;
+
+async function runYtdlpWithRetry(args: string[], maxAttempts = 3): Promise<{ stdout: string; stderr: string }> {
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      return await run(config.ytdlpPath, args);
+    } catch (err) {
+      const error = err as Error;
+      if (!RETRYABLE_PATTERN.test(error.message) || attempt === maxAttempts - 1) {
+        throw error;
+      }
+      lastError = error;
+      const waitMs = (attempt + 1) * 15_000;
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
+    }
+  }
+  throw lastError ?? new Error("yt-dlp falló sin detalle");
+}
+
 /**
- * Descarga el vídeo fuente (YouTube o cualquier URL soportada por yt-dlp) a
- * la ruta indicada, en mp4 <=1080p para acelerar el procesado posterior.
+ * Descarga el vídeo fuente (YouTube o cualquier URL soportada por yt-dlp) a la ruta indicada, en
+ * mp4 <=1080p para acelerar el procesado posterior. Una sola llamada a yt-dlp (descarga + imprime
+ * título/duración con --print after_move:..., que se ejecuta tras mover el archivo final a su
+ * sitio) en vez de dos separadas — la segunda llamada solo para metadatos era una petición extra
+ * a YouTube por cada vídeo, sin necesidad, que solo aumentaba el riesgo de toparse con el 429.
  */
 export async function downloadSourceVideo(url: string, outputPath: string): Promise<DownloadResult> {
-  await run(config.ytdlpPath, [
+  const { stdout } = await runYtdlpWithRetry([
     url,
     "-f",
     "bv*[height<=1080][ext=mp4]+ba[ext=m4a]/b[ext=mp4]/b",
@@ -37,15 +66,8 @@ export async function downloadSourceVideo(url: string, outputPath: string): Prom
     "--no-playlist",
     "-o",
     outputPath,
-  ]);
-
-  const { stdout } = await run(config.ytdlpPath, [
-    url,
-    ...ytExtractorArgs(),
-    "--no-playlist",
     "--print",
-    "%(title)s|||%(duration)s",
-    "--skip-download",
+    "after_move:%(title)s|||%(duration)s",
   ]);
 
   const [title, durationRaw] = stdout.trim().split("|||");
@@ -58,7 +80,7 @@ export async function downloadSourceVideo(url: string, outputPath: string): Prom
 /** Descarga solo el audio (mp3) de un vídeo de YouTube, p.ej. para usar una canción como banda sonora. */
 export async function downloadAudioOnly(url: string, outputPath: string): Promise<DownloadResult> {
   const outNoExt = outputPath.replace(/\.mp3$/i, "");
-  await run(config.ytdlpPath, [
+  const { stdout } = await runYtdlpWithRetry([
     url,
     "-x",
     "--audio-format",
@@ -67,15 +89,8 @@ export async function downloadAudioOnly(url: string, outputPath: string): Promis
     "--no-playlist",
     "-o",
     `${outNoExt}.%(ext)s`,
-  ]);
-
-  const { stdout } = await run(config.ytdlpPath, [
-    url,
-    ...ytExtractorArgs(),
-    "--no-playlist",
     "--print",
-    "%(title)s|||%(duration)s",
-    "--skip-download",
+    "after_move:%(title)s|||%(duration)s",
   ]);
 
   const [title, durationRaw] = stdout.trim().split("|||");
