@@ -124,6 +124,9 @@ export async function classifyCandidates(
   // Cada fotograma cuesta bastantes tokens: en capas gratuitas con poco margen por minuto se
   // mandan de dos en dos para no superar el límite (configurable con AI_VISION_BATCH_SIZE).
   const batchSize = Math.max(1, config.ai.visionBatchSize);
+  const totalBatches = Math.ceil(candidates.length / batchSize);
+  let failedBatches = 0;
+  let lastError: Error | null = null;
 
   for (let i = 0; i < candidates.length; i += batchSize) {
     const batch = candidates.slice(i, i + batchSize);
@@ -159,10 +162,26 @@ export async function classifyCandidates(
           score: Math.max(0, Math.min(100, Math.round(m.score ?? 0))),
         });
       }
-    } catch {
-      // si un lote falla, se descartan esos candidatos y se sigue con el resto
+    } catch (err) {
+      // Si un lote falla, se descartan esos candidatos y se sigue con el resto — PERO si TODOS
+      // los lotes fallan (p.ej. el modelo de visión configurado no existe/no responde, o se agotó
+      // el cupo diario en todos los proveedores), no puede quedar en silencio: eso es justo lo que
+      // dejaba "classified" vacío y el vídeo entero acababa con el mensaje engañoso de "no hay
+      // contenido aprovechable" aunque el vídeo tuviera de sobra material real (ver la conversación
+      // con un vídeo de 1h45 de IlloJuan que no era el problema real). Se guarda el último error
+      // para poder fallar el job con el motivo real de la IA en vez de uno genérico.
+      failedBatches++;
+      lastError = err as Error;
       continue;
     }
+  }
+
+  if (classified.length === 0 && totalBatches > 0 && failedBatches === totalBatches) {
+    throw new Error(
+      `La IA no pudo clasificar ningún momento del vídeo (fallaron los ${totalBatches} lotes): ${
+        lastError?.message ?? "fallo desconocido"
+      }`
+    );
   }
 
   return classified;
