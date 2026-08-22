@@ -122,7 +122,13 @@ export async function processDoubleJob(jobId: string): Promise<void> {
       const bottomStartSec = bottomCursorSec % bottomDurationSec;
       bottomCursorSec += clip.endSec - clip.startSec;
       try {
-        await db.clip.update({ where: { id: clip.id }, data: { status: "RENDERING" } });
+        // Se guarda el punto de arranque del vídeo de abajo usado para esta parte, para poder
+        // regenerarla (tras recortar el vídeo de arriba o añadir texto) sin romper la
+        // continuidad del vídeo de fondo entre partes — ver doubleRegenerateClip.ts.
+        await db.clip.update({
+          where: { id: clip.id },
+          data: { status: "RENDERING", doubleBottomStartSec: bottomStartSec },
+        });
         const outPath = clipVideoPath(jobId, clip.id);
         const thumbPath = clipThumbnailPath(jobId, clip.id);
 

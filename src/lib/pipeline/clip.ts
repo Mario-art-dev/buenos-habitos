@@ -336,6 +336,36 @@ export async function renderTitleCard(
   await run(config.ffmpegPath, args);
 }
 
+/**
+ * Quema una capa de texto personalizado (.ass, ver buildCustomTextAss) sobre un vídeo YA
+ * montado, como pasada final independiente — en vez de tener que reintegrar el texto dentro de
+ * cada modo de montaje (Rankings/Doble/Canción/Producto componen el vídeo de formas muy
+ * distintas entre sí), esto se aplica igual sea cual sea el modo, sobre el resultado ya
+ * terminado. El audio se copia tal cual (no se toca).
+ */
+export async function applyCustomTextOverlay(inputPath: string, outputPath: string, assPath: string): Promise<void> {
+  await run(config.ffmpegPath, [
+    "-y",
+    "-i",
+    inputPath,
+    "-vf",
+    `subtitles=${escapeSubtitlesPath(assPath)}`,
+    "-c:v",
+    "libx264",
+    "-preset",
+    "fast",
+    "-crf",
+    "18",
+    "-pix_fmt",
+    "yuv420p",
+    "-c:a",
+    "copy",
+    "-movflags",
+    "+faststart",
+    outputPath,
+  ]);
+}
+
 /** Concatena varios mp4 con el mismo códec/resolución en un único vídeo, en el orden dado. */
 export async function concatClips(clipPaths: string[], outPath: string): Promise<void> {
   const listPath = path.join(path.dirname(outPath), `concat_${Date.now()}.txt`);

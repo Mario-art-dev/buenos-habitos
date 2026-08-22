@@ -42,8 +42,13 @@ export async function assembleRankingVideo(params: {
   items: RenderRankingItem[]; // ya ordenados de mejor a peor (position 1..N)
   transcriptSegments: TranscriptSegment[];
   resolution: VerticalResolution;
+  // Subtítulos grandes por puesto: activados por defecto, editable desde el editor (regenerar).
+  captionsEnabled?: boolean;
+  // Imagen propia subida desde la fototeca para la tarjeta de intro, en vez del fondo negro.
+  coverImagePath?: string | null;
 }): Promise<string> {
   const { jobId, clipId, sourcePath, category, items, transcriptSegments, resolution } = params;
+  const captionsEnabled = params.captionsEnabled ?? true;
   const playOrder = [...items].sort((a, b) => b.position - a.position); // peor -> mejor
 
   const segmentPaths: string[] = [];
@@ -57,9 +62,9 @@ export async function assembleRankingVideo(params: {
   if (config.commentary.enabled && params.overallIntroCommentary) {
     const introAudioPath = narrationAudioPath(jobId, clipId, "intro");
     await getTTSProvider().synthesize(params.overallIntroCommentary, introAudioPath);
-    await renderRankingIntroCard(introPath, category, 2, resolution, introAudioPath);
+    await renderRankingIntroCard(introPath, category, 2, resolution, introAudioPath, params.coverImagePath);
   } else {
-    await renderRankingIntroCard(introPath, category, 2, resolution);
+    await renderRankingIntroCard(introPath, category, 2, resolution, undefined, params.coverImagePath);
   }
   segmentPaths.push(introPath);
 
@@ -76,7 +81,7 @@ export async function assembleRankingVideo(params: {
     segmentPaths.push(cardPath);
 
     const subPath = candidateSubClipPath(jobId, clipId, item.position);
-    const assContent = buildBigCaptionsAss(transcriptSegments, item.startSec, item.endSec, resolution);
+    const assContent = captionsEnabled ? buildBigCaptionsAss(transcriptSegments, item.startSec, item.endSec, resolution) : null;
     let bigCaptionsFile: string | undefined;
     if (assContent) {
       bigCaptionsFile = bigCaptionsPath(jobId, clipId, item.position);

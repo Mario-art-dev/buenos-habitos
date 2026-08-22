@@ -60,6 +60,10 @@ export async function processProductJob(jobId: string): Promise<void> {
         viralityReason: script.viralityReason,
         hashtags: JSON.stringify(script.hashtags),
         affiliateLink: job.productLink,
+        // Se guarda el guion (hook/narración por foto/CTA) para poder regenerar el vídeo desde el
+        // editor (tras añadir texto personalizado) sin volver a llamar a la IA — ver
+        // productRegenerateClip.ts.
+        productScript: JSON.stringify({ hook: script.hook, segmentScripts: script.segmentScripts, cta: script.cta }),
         status: "RENDERING",
       },
     });

@@ -18,27 +18,44 @@ import { hookVerifiedFrameSec } from "./hookFrame";
 import { probeVideo, pickVerticalResolution } from "./probe";
 import { renderCoverCard } from "./coverCard";
 import { renderCommentaryCard } from "./commentaryCards";
+import { regenerateRankingClip } from "./rankingRegenerateClip";
+import { regenerateDoubleClip } from "./doubleRegenerateClip";
+import { regenerateSongClip } from "./songRegenerateClip";
+import { regenerateProductClip } from "./productRegenerateClip";
 
 /**
- * Reconstruye el vídeo final de un clip ya generado a partir del vídeo fuente, con los subtítulos
- * y textos personalizados tal y como estén guardados en ese momento en la base de datos (tras
- * editar/borrar cues o añadir texto desde el editor de la página `/clips/[id]/edit`). No repite el
- * análisis de IA ni la comprobación de gancho (hookFrame.ts) — reutiliza `effectiveStartSec`, ya
- * calculado la primera vez que se generó el clip, para no gastar otra llamada de IA de visión.
+ * Reconstruye el vídeo final de un clip ya generado, con lo que esté guardado en ese momento en
+ * la base de datos (subtítulos, texto personalizado, recorte, portada...) tras editar desde
+ * `/clips/[id]/edit`. Cada modo compone su vídeo de una forma distinta, así que reparte al
+ * regenerador específico de cada uno.
+ */
+export async function regenerateClip(clipId: string): Promise<void> {
+  const clip = await db.clip.findUniqueOrThrow({ where: { id: clipId }, include: { job: true } });
+  switch (clip.job.mode) {
+    case "RANKING":
+      return regenerateRankingClip(clipId);
+    case "DOUBLE":
+      return regenerateDoubleClip(clipId);
+    case "SONG":
+      return regenerateSongClip(clipId);
+    case "PRODUCT":
+      return regenerateProductClip(clipId);
+    default:
+      return regenerateSingleOrSplitClip(clipId);
+  }
+}
+
+/**
+ * Reconstruye un clip de los modos SINGLE/SPLIT: un único vídeo fuente, cortado entre startSec y
+ * endSec, con subtítulos/texto personalizado/portada opcionales. No repite el análisis de IA ni
+ * la comprobación de gancho (hookFrame.ts) — reutiliza `effectiveStartSec`, ya calculado la
+ * primera vez que se generó el clip, para no gastar otra llamada de IA de visión.
  *
  * Solo actualiza la base de datos si el render termina bien: si algo falla, el vídeo/estado
  * anteriores se quedan tal cual (igual que el resto de acciones del editor, ver /api/clips/[id]/music).
  */
-export async function regenerateClip(clipId: string): Promise<void> {
+async function regenerateSingleOrSplitClip(clipId: string): Promise<void> {
   const clip = await db.clip.findUniqueOrThrow({ where: { id: clipId }, include: { job: true } });
-  // DOUBLE compone el vídeo en pantalla dividida (ver doublePipeline.ts/cutSplitScreenClip) a
-  // partir de DOS vídeos fuente distintos — esta función solo sabe reconstruir a partir de un
-  // único vídeo fuente con cutVerticalClip, así que "regenerar" un clip DOUBLE perdería la
-  // composición de pantalla dividida en vez de respetarla. El editor de subtítulos/textos/portada
-  // no está disponible todavía para este modo.
-  if (clip.job.mode === "DOUBLE") {
-    throw new Error("El editor todavía no admite el modo Doble (pantalla dividida).");
-  }
   const jobId = clip.jobId;
   const srcPath = clip.job.sourceFilePath ?? sourceVideoPath(jobId);
   if (!fs.existsSync(srcPath)) {
@@ -88,8 +105,7 @@ export async function regenerateClip(clipId: string): Promise<void> {
     // Modo SINGLE/SPLIT ("vídeos virales" y "cortes"): sin zoom dinámico, por la misma petición
     // explícita que ya aplica en la generación inicial (ver runPipeline.ts/splitPipeline.ts) — se
     // mantiene igual al regenerar.
-    const noZoomModes = clip.job.mode === "SINGLE" || clip.job.mode === "SPLIT";
-    const dynamicZoom = noZoomModes ? false : config.dynamicZoom.enabled;
+    const dynamicZoom = false;
 
     await cutVerticalClip({
       sourcePath: srcPath,
@@ -128,10 +144,7 @@ export async function regenerateClip(clipId: string): Promise<void> {
       fs.rmSync(outroCard, { force: true });
     }
 
-    // La portada (coverCard.ts) solo la usan los modos SINGLE/SPLIT — RANKING tiene su propia
-    // tarjeta de ranking (rankingIntroCard.ts) y PRODUCT/SONG nunca la usaron; envolverla aquí
-    // para esos modos añadiría una portada que el clip original nunca tuvo.
-    if (config.coverCard.enabled && noZoomModes) {
+    if (config.coverCard.enabled) {
       await renderCoverCard({
         sourcePath: srcPath,
         frameAtSec: clip.coverFrameSec ?? hookVerifiedFrameSec(startSec, endSec),

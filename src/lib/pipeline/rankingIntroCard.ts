@@ -83,7 +83,10 @@ export async function renderRankingIntroCard(
   category: string,
   durationSec: number,
   resolution: VerticalResolution,
-  audioPath?: string
+  audioPath?: string,
+  // Imagen propia subida desde la fototeca del editor, en vez del fondo negro por defecto — se
+  // recorta/escala a pantalla completa como fondo detrás del texto de la plantilla.
+  backgroundImagePath?: string | null
 ): Promise<void> {
   let finalDuration = durationSec;
   if (audioPath) {
@@ -94,13 +97,12 @@ export async function renderRankingIntroCard(
   const assPath = `${outPath}.ass`;
   fs.writeFileSync(assPath, buildRankingIntroAss(category, finalDuration, resolution), "utf-8");
 
-  const args = [
-    "-y",
-    "-f",
-    "lavfi",
-    "-i",
-    `color=c=black:s=${resolution.width}x${resolution.height}:d=${finalDuration}`,
-  ];
+  const args = ["-y"];
+  if (backgroundImagePath) {
+    args.push("-loop", "1", "-t", String(finalDuration), "-i", backgroundImagePath);
+  } else {
+    args.push("-f", "lavfi", "-i", `color=c=black:s=${resolution.width}x${resolution.height}:d=${finalDuration}`);
+  }
 
   if (audioPath) {
     args.push("-i", audioPath);
@@ -108,9 +110,16 @@ export async function renderRankingIntroCard(
     args.push("-f", "lavfi", "-i", `anullsrc=channel_layout=stereo:sample_rate=44100:d=${finalDuration}`);
   }
 
+  // Una imagen propia puede venir en cualquier tamaño/proporción: se recorta a pantalla completa
+  // (igual que la portada de marca) antes de quemar el texto encima — el fondo negro por defecto
+  // ya sale a la resolución exacta y no necesita este paso.
+  const videoFilter = backgroundImagePath
+    ? `scale=${resolution.width}:${resolution.height}:force_original_aspect_ratio=increase,crop=${resolution.width}:${resolution.height},subtitles=${escapeSubtitlesPath(assPath)}`
+    : `subtitles=${escapeSubtitlesPath(assPath)}`;
+
   args.push(
     "-vf",
-    `subtitles=${escapeSubtitlesPath(assPath)}`,
+    videoFilter,
     "-map",
     "0:v",
     "-map",

@@ -96,6 +96,13 @@ export async function processSongJob(jobId: string): Promise<void> {
 
     const chosen = included.slice(0, usableCount).sort((a, b) => a.startSec - b.startSec);
     const durations = segmentDurations.slice(0, usableCount);
+    // Los tramos elegidos se guardan (startSec/endSec ya recortados a la duración real del vídeo)
+    // para poder regenerar el clip desde el editor sin repetir la detección de momentos ni el
+    // análisis de ritmo — ver songRegenerateClip.ts.
+    const segments = chosen.map((moment, i) => {
+      const duration = Math.min(durations[i], Math.max(0.5, sourceDurationSec - moment.startSec));
+      return { startSec: moment.startSec, endSec: moment.startSec + duration };
+    });
 
     await setStatus(jobId, "CLIPPING", "Montando los cortes al ritmo de la canción…");
     const sourceInfo = await probeVideo(srcPath);
@@ -113,21 +120,20 @@ export async function processSongJob(jobId: string): Promise<void> {
         viralityReason: "",
         hashtags: "[]",
         musicQuery: songTitle,
+        songSegments: JSON.stringify(segments),
         status: "RENDERING",
       },
     });
 
     try {
       const segmentPaths: string[] = [];
-      for (let i = 0; i < chosen.length; i++) {
-        const moment = chosen[i];
-        const duration = Math.min(durations[i], Math.max(0.5, sourceDurationSec - moment.startSec));
+      for (let i = 0; i < segments.length; i++) {
         const outPath = songSegmentPath(jobId, clip.id, i);
         await cutVerticalClip({
           sourcePath: srcPath,
           outPath,
-          startSec: moment.startSec,
-          endSec: moment.startSec + duration,
+          startSec: segments[i].startSec,
+          endSec: segments[i].endSec,
           resolution,
           muted: true,
         });

@@ -529,6 +529,12 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
   if (!clip) return <p className="text-sm text-red-400">{error ?? "Clip no encontrado"}</p>;
 
   const videoSrc = clip.videoUrl ? `${clip.videoUrl}?v=${videoVersion}` : null;
+  // El recorte solo tiene efecto de verdad en estos modos: SINGLE/SPLIT cortan un único tramo de
+  // un vídeo fuente, y DOUBLE recorta el vídeo de arriba de esa parte concreta (ver
+  // doubleRegenerateClip.ts). RANKING (varios puestos ya montados) y SONG (tramos sincronizados al
+  // ritmo de la canción) ignoran effectiveStartSec/endSec al regenerar, así que mostrar el tirador
+  // de recorte ahí solo confundiría (parecería funcionar pero no cambiaría nada).
+  const trimEditable = clip.jobMode === "SINGLE" || clip.jobMode === "SPLIT" || clip.jobMode === "DOUBLE";
 
   return (
     <div>
@@ -604,17 +610,19 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
             Arrastra un texto para moverlo, y el punto de su esquina para agrandarlo o encogerlo.
           </p>
 
-          {/* Línea de tiempo: miniaturas + recorte */}
+          {/* Línea de tiempo: miniaturas + recorte (el recorte solo en los modos donde tiene efecto) */}
           <div className="mt-4">
             <p className="mb-1 text-xs text-slate-400">
-              Recorte: {formatTime(trimStart)} – {formatTime(trimEnd)} (de {formatTime(duration)})
+              {trimEditable
+                ? `Recorte: ${formatTime(trimStart)} – ${formatTime(trimEnd)} (de ${formatTime(duration)})`
+                : `Duración: ${formatTime(duration)}`}
             </p>
             <div
               ref={stripRef}
               className="relative h-16 w-full cursor-pointer overflow-hidden rounded-lg bg-ink-900"
-              onPointerDown={onPointerDownStripBackground}
-              onPointerMove={onPointerMoveStrip}
-              onPointerUp={onPointerUpStrip}
+              onPointerDown={trimEditable ? onPointerDownStripBackground : undefined}
+              onPointerMove={trimEditable ? onPointerMoveStrip : undefined}
+              onPointerUp={trimEditable ? onPointerUpStrip : undefined}
             >
               <div className="flex h-full w-full">
                 {thumbnails.length > 0 ? (
@@ -626,28 +634,32 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
                   <p className="flex h-full w-full items-center justify-center text-xs text-slate-600">Generando miniaturas…</p>
                 )}
               </div>
-              <div
-                className="pointer-events-none absolute top-0 h-full bg-black/60"
-                style={{ left: 0, width: `${duration > 0 ? (trimStart / duration) * 100 : 0}%` }}
-              />
-              <div
-                className="pointer-events-none absolute top-0 h-full bg-black/60"
-                style={{ right: 0, width: `${duration > 0 ? 100 - (trimEnd / duration) * 100 : 0}%` }}
-              />
-              <div
-                className="pointer-events-none absolute top-0 h-full w-0.5 bg-white"
-                style={{ left: `${duration > 0 ? (playheadSec / duration) * 100 : 0}%` }}
-              />
-              <div
-                onPointerDown={(e) => onPointerDownTrimHandle(e, "start")}
-                className="absolute top-0 h-full w-2.5 -translate-x-1/2 cursor-ew-resize rounded bg-brand-400"
-                style={{ left: `${duration > 0 ? (trimStart / duration) * 100 : 0}%` }}
-              />
-              <div
-                onPointerDown={(e) => onPointerDownTrimHandle(e, "end")}
-                className="absolute top-0 h-full w-2.5 -translate-x-1/2 cursor-ew-resize rounded bg-brand-400"
-                style={{ left: `${duration > 0 ? (trimEnd / duration) * 100 : 0}%` }}
-              />
+              {trimEditable && (
+                <>
+                  <div
+                    className="pointer-events-none absolute top-0 h-full bg-black/60"
+                    style={{ left: 0, width: `${duration > 0 ? (trimStart / duration) * 100 : 0}%` }}
+                  />
+                  <div
+                    className="pointer-events-none absolute top-0 h-full bg-black/60"
+                    style={{ right: 0, width: `${duration > 0 ? 100 - (trimEnd / duration) * 100 : 0}%` }}
+                  />
+                  <div
+                    className="pointer-events-none absolute top-0 h-full w-0.5 bg-white"
+                    style={{ left: `${duration > 0 ? (playheadSec / duration) * 100 : 0}%` }}
+                  />
+                  <div
+                    onPointerDown={(e) => onPointerDownTrimHandle(e, "start")}
+                    className="absolute top-0 h-full w-2.5 -translate-x-1/2 cursor-ew-resize rounded bg-brand-400"
+                    style={{ left: `${duration > 0 ? (trimStart / duration) * 100 : 0}%` }}
+                  />
+                  <div
+                    onPointerDown={(e) => onPointerDownTrimHandle(e, "end")}
+                    className="absolute top-0 h-full w-2.5 -translate-x-1/2 cursor-ew-resize rounded bg-brand-400"
+                    style={{ left: `${duration > 0 ? (trimEnd / duration) * 100 : 0}%` }}
+                  />
+                </>
+              )}
             </div>
 
             {/* Pista de textos: arrastra un bloque para moverlo en el tiempo, sus bordes para acortarlo/alargarlo */}
@@ -689,63 +701,71 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
         </div>
 
         <div className="flex-1 space-y-6">
-          {/* Portada (solo SINGLE/SPLIT: RANKING usa su propia tarjeta de ranking) */}
-          {(clip.jobMode === "SINGLE" || clip.jobMode === "SPLIT") && (
+          {/* Portada: SINGLE/SPLIT tienen fotograma+título editables; RANKING solo puede cambiar
+              el fondo de su propia tarjeta de intro (plantilla fija, sin título propio). PRODUCT/
+              SONG/DOUBLE nunca han tenido portada. */}
+          {(clip.jobMode === "SINGLE" || clip.jobMode === "SPLIT" || clip.jobMode === "RANKING") && (
             <div>
               <h2 className="mb-2 text-sm font-semibold text-slate-300">Portada</h2>
-              <div className="flex gap-4">
-                {clip.thumbnailUrl && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={clip.thumbnailUrl}
-                    alt="Portada actual"
-                    className="h-24 w-14 shrink-0 rounded-lg border border-ink-600 object-cover"
-                  />
-                )}
-                <div className="flex-1">
-                  <label className="mb-1 block text-xs text-slate-400">Título de la portada</label>
-                  <input
-                    type="text"
-                    value={coverTitle}
-                    onChange={(e) => setCoverTitle(e.target.value)}
-                    className="w-full rounded-lg border border-ink-600 bg-ink-900 px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-brand-500"
-                  />
-                </div>
-              </div>
-              <p className="mb-1 mt-3 text-xs text-slate-400">Elige el fotograma de portada:</p>
-              <div className="flex gap-1 overflow-x-auto rounded-lg bg-ink-900 p-1">
-                {thumbnails.length > 0 ? (
-                  thumbnails.map((src, i) => {
-                    const t = clipStart + (duration * i) / (THUMBNAIL_COUNT - 1);
-                    const isSelected = coverFrameSec != null && Math.abs(coverFrameSec - t) < 0.01;
-                    return (
+              {(clip.jobMode === "SINGLE" || clip.jobMode === "SPLIT") && (
+                <>
+                  <div className="flex gap-4">
+                    {clip.thumbnailUrl && (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
-                        key={i}
-                        src={src}
-                        alt=""
-                        onClick={() => setCoverFrameSec(t)}
-                        draggable={false}
-                        className={`h-14 w-9 shrink-0 cursor-pointer rounded object-cover ${
-                          isSelected ? "outline outline-2 outline-brand-500" : "opacity-70 hover:opacity-100"
-                        }`}
+                        src={clip.thumbnailUrl}
+                        alt="Portada actual"
+                        className="h-24 w-14 shrink-0 rounded-lg border border-ink-600 object-cover"
                       />
-                    );
-                  })
-                ) : (
-                  <p className="p-2 text-xs text-slate-600">Generando miniaturas…</p>
-                )}
-              </div>
-              {coverFrameSec != null && (
-                <button
-                  onClick={() => setCoverFrameSec(null)}
-                  className="mt-1 text-xs text-slate-400 underline hover:text-slate-300"
-                >
-                  Usar el fotograma automático
-                </button>
+                    )}
+                    <div className="flex-1">
+                      <label className="mb-1 block text-xs text-slate-400">Título de la portada</label>
+                      <input
+                        type="text"
+                        value={coverTitle}
+                        onChange={(e) => setCoverTitle(e.target.value)}
+                        className="w-full rounded-lg border border-ink-600 bg-ink-900 px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-brand-500"
+                      />
+                    </div>
+                  </div>
+                  <p className="mb-1 mt-3 text-xs text-slate-400">Elige el fotograma de portada:</p>
+                  <div className="flex gap-1 overflow-x-auto rounded-lg bg-ink-900 p-1">
+                    {thumbnails.length > 0 ? (
+                      thumbnails.map((src, i) => {
+                        const t = clipStart + (duration * i) / (THUMBNAIL_COUNT - 1);
+                        const isSelected = coverFrameSec != null && Math.abs(coverFrameSec - t) < 0.01;
+                        return (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            key={i}
+                            src={src}
+                            alt=""
+                            onClick={() => setCoverFrameSec(t)}
+                            draggable={false}
+                            className={`h-14 w-9 shrink-0 cursor-pointer rounded object-cover ${
+                              isSelected ? "outline outline-2 outline-brand-500" : "opacity-70 hover:opacity-100"
+                            }`}
+                          />
+                        );
+                      })
+                    ) : (
+                      <p className="p-2 text-xs text-slate-600">Generando miniaturas…</p>
+                    )}
+                  </div>
+                  {coverFrameSec != null && (
+                    <button
+                      onClick={() => setCoverFrameSec(null)}
+                      className="mt-1 text-xs text-slate-400 underline hover:text-slate-300"
+                    >
+                      Usar el fotograma automático
+                    </button>
+                  )}
+                </>
               )}
 
-              <p className="mb-1 mt-4 text-xs text-slate-400">O sube tu propia foto para la portada:</p>
+              <p className="mb-1 mt-4 text-xs text-slate-400">
+                {clip.jobMode === "RANKING" ? "Sube tu propia foto para el fondo de la tarjeta de intro:" : "O sube tu propia foto para la portada:"}
+              </p>
               <div className="flex items-center gap-3">
                 {coverImageUrl && (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -780,19 +800,22 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
                       disabled={uploadingCover}
                       className="text-xs text-slate-400 underline hover:text-slate-300"
                     >
-                      Quitar y usar fotograma del vídeo
+                      {clip.jobMode === "RANKING" ? "Quitar y usar fondo negro" : "Quitar y usar fotograma del vídeo"}
                     </button>
                   )}
                 </div>
               </div>
               <p className="mt-1 text-xs text-slate-600">
-                Si subes una foto, se usa esa en la portada en vez de un fotograma del vídeo (el sonido de marca
-                sigue igual). Dale a "Guardar y regenerar" abajo para aplicarla.
+                {clip.jobMode === "RANKING"
+                  ? "Si subes una foto, se usa de fondo en la tarjeta de intro en vez del negro por defecto."
+                  : 'Si subes una foto, se usa esa en la portada en vez de un fotograma del vídeo (el sonido de marca sigue igual).'}{" "}
+                Dale a "Guardar y regenerar" abajo para aplicarla.
               </p>
             </div>
           )}
 
-          {/* Subtítulos automáticos */}
+          {/* Subtítulos automáticos: solo en los modos que los generan/regeneran de verdad */}
+          {(clip.jobMode === "SINGLE" || clip.jobMode === "SPLIT" || clip.jobMode === "RANKING") && (
           <div>
             <div className="mb-2 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-slate-300">Subtítulos generados automáticamente</h2>
@@ -832,6 +855,7 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
               ))}
             </div>
           </div>
+          )}
 
           {/* Textos personalizados */}
           <div>

@@ -33,6 +33,10 @@ model Job {
   // hashtags/subtítulos/comentario salgan en ESE idioma en vez del idioma fijo del canal. null si
   // no se pudo detectar (o en PRODUCT/SONG, que no transcriben diálogo del vídeo fuente).
   contentLanguage   String?
+  // Segmentos de la transcripción (con marcas por palabra) tal y como los devolvió Whisper, en
+  // JSON — solo RANKING los necesita guardados (para poder volver a quemar los subtítulos de cada
+  // puesto al regenerar un clip desde el editor sin tener que retranscribir el vídeo entero).
+  transcriptSegments String?
 
   // Solo modo PRODUCT
   productName    String?
@@ -130,6 +134,23 @@ model Clip {
 
   // Solo modo PRODUCT: enlace de afiliado/producto a mostrar en la descripción
   affiliateLink String?
+  // Solo modo PRODUCT: guion generado por IA (hook, un texto narrado por cada foto/vídeo, y CTA
+  // final), en JSON — se guarda para poder regenerar el vídeo desde el editor (tras añadir texto
+  // personalizado) sin tener que volver a llamar a la IA ni cambiar el guion ya aprobado.
+  // Formato: { hook: string, segmentScripts: string[], cta: string }
+  productScript String?
+
+  // Solo modo DOUBLE: punto (segundos) del vídeo de ABAJO donde empieza esta parte — se guarda
+  // para poder regenerar el clip (tras recortar el vídeo de arriba o añadir texto) sin romper la
+  // continuidad del vídeo de fondo entre partes.
+  doubleBottomStartSec Float?
+
+  // Solo modo SONG: los tramos del vídeo de recopilación elegidos por la IA que forman este clip,
+  // en el mismo orden en que se cortaron y unieron (JSON) — se guardan para poder regenerar el
+  // vídeo (tras añadir texto personalizado) sin repetir la detección de momentos ni el análisis
+  // de ritmo, y sin romper la sincronía con los golpes de la canción.
+  // Formato: [{ startSec: number, endSec: number }]
+  songSegments String?
 
   autoPublishedAt DateTime?
   createdAt       DateTime      @default(now())

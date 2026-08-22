@@ -42,7 +42,13 @@ export async function processRankingJob(jobId: string): Promise<void> {
     const contentLanguage = resolveContentLanguage(languageCode);
     await db.job.update({
       where: { id: jobId },
-      data: { transcript: transcript.text, contentLanguage: languageCode },
+      // transcriptSegments (con marcas por palabra) se guarda para poder regenerar los
+      // subtítulos de cada puesto desde el editor sin tener que retranscribir el vídeo entero.
+      data: {
+        transcript: transcript.text,
+        contentLanguage: languageCode,
+        transcriptSegments: JSON.stringify(transcript.segments),
+      },
     });
 
     await setStatus(jobId, "ANALYZING", "Detectando momentos y clasificándolos por categoría…");
