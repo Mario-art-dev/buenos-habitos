@@ -136,10 +136,17 @@ Devuelve SOLO este JSON, con un elemento por candidato EN EL MISMO ORDEN (usa el
 {"moments": [{"index": number, "include": boolean, "category": "string", "label": "string", "description": "string", "score": number}]}`;
 }
 
+export interface ClassifyResult {
+  items: ClassifiedMoment[];
+  totalBatches: number;
+  failedBatches: number;
+  lastErrorMessage: string | null;
+}
+
 export async function classifyCandidates(
   candidates: CandidateMoment[],
   contentLanguage: string
-): Promise<ClassifiedMoment[]> {
+): Promise<ClassifyResult> {
   const provider = getAIProvider();
   const classified: ClassifiedMoment[] = [];
   // Cada fotograma cuesta bastantes tokens: en capas gratuitas con poco margen por minuto se
@@ -205,7 +212,7 @@ export async function classifyCandidates(
     );
   }
 
-  return classified;
+  return { items: classified, totalBatches, failedBatches, lastErrorMessage: lastError?.message ?? null };
 }
 
 // Etiqueta genérica para el ranking "de sobras" (ver más abajo) cuando no hay ninguna categoría

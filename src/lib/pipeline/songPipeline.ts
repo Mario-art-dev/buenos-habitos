@@ -77,7 +77,7 @@ export async function processSongJob(jobId: string): Promise<void> {
     const candidates = await buildCandidateMoments(jobId, srcPath, spans, []);
     // SONG no transcribe diálogo (solo detecta el ritmo de la canción elegida), así que no hay
     // idioma de vídeo que detectar aquí: se usa el idioma configurado del canal.
-    const classified = await classifyCandidates(candidates, contentLanguageName());
+    const classified = (await classifyCandidates(candidates, contentLanguageName())).items;
 
     const included = classified.filter((c) => c.include).sort((a, b) => b.score - a.score);
     const usableCount = Math.min(segmentDurations.length, included.length);
