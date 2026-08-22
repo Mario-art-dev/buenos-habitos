@@ -49,11 +49,12 @@ export async function processRankingJob(jobId: string): Promise<void> {
     const spans = await detectContentSegments(srcPath, durationSec);
     const candidates = await buildCandidateMoments(jobId, srcPath, spans, transcript.segments);
     const classified = await classifyCandidates(candidates, contentLanguage);
-    const groups = groupIntoRankings(classified);
+    const groups = groupIntoRankings(classified, languageCode);
 
     if (groups.length === 0) {
       throw new Error(
-        "No se encontraron suficientes momentos de una misma categoría (mínimo configurado) para montar un ranking."
+        "No se encontraron suficientes momentos aprovechables en este vídeo para montar ni un solo ranking " +
+          "(ni siquiera juntando categorías distintas)."
       );
     }
 

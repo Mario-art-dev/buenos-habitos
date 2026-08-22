@@ -168,7 +168,14 @@ export async function classifyCandidates(
   return classified;
 }
 
-export function groupIntoRankings(classified: ClassifiedMoment[]): RankingGroup[] {
+// Etiqueta genérica para el ranking "de sobras" (ver más abajo) cuando no hay ninguna categoría
+// concreta que agrupe lo que queda — en el idioma REAL detectado del vídeo (o inglés por
+// defecto, igual que CHANNEL_LANGUAGE), nunca en un idioma fijo distinto al del contenido.
+function genericCategoryLabel(languageCode: string | null): string {
+  return languageCode === "es" ? "Mejores Momentos" : "Best Moments";
+}
+
+export function groupIntoRankings(classified: ClassifiedMoment[], languageCode: string | null): RankingGroup[] {
   const included = classified.filter((c) => c.include);
   const byCategory = new Map<string, ClassifiedMoment[]>();
 
@@ -179,6 +186,8 @@ export function groupIntoRankings(classified: ClassifiedMoment[]): RankingGroup[
   }
 
   const groups: RankingGroup[] = [];
+  const usedIndexes = new Set<number>();
+
   for (const [category, items] of byCategory) {
     if (items.length < config.ranking.minItems) continue;
     const sorted = items.sort((a, b) => b.score - a.score);
@@ -197,6 +206,33 @@ export function groupIntoRankings(classified: ClassifiedMoment[]): RankingGroup[
     if (totalDuration < config.ranking.minDurationSec) continue;
 
     groups.push({ category, items: picked });
+    for (const p of picked) usedIndexes.add(p.index);
+  }
+
+  // Pedido explícito: bajo ninguna circunstancia un vídeo con momentos usables debe acabar sin
+  // NINGÚN ranking solo porque la IA los repartió en demasiadas categorías pequeñas (p.ej.
+  // "Fortnite", "sustos", "rage" con 1-2 clips cada una, ninguna llega al mínimo por sí sola).
+  // En vez de fallar, se juntan TODOS los momentos que se quedaron sueltos — de categorías que no
+  // llegaron al mínimo, y sobrantes de categorías que sí formaron grupo pero no cupieron por
+  // maxItems — en una categoría genérica "inventada", y se monta el máximo de ranking(s) extra
+  // posible con ellos. Mismo criterio de duración mínima que arriba; nunca menos de 2 momentos
+  // (una cuenta atrás no tiene sentido con solo uno).
+  let leftover = included.filter((i) => !usedIndexes.has(i.index)).sort((a, b) => b.score - a.score);
+  const genericLabel = genericCategoryLabel(languageCode);
+  while (leftover.length >= 2) {
+    let picked = leftover.slice(0, config.ranking.maxItems);
+    let totalDuration = picked.reduce((sum, i) => sum + (i.endSec - i.startSec), 0);
+    let extra = picked.length;
+    while (totalDuration < config.ranking.minDurationSec && extra < leftover.length) {
+      picked = leftover.slice(0, extra + 1);
+      totalDuration += leftover[extra].endSec - leftover[extra].startSec;
+      extra++;
+    }
+    if (totalDuration < config.ranking.minDurationSec || picked.length < 2) break;
+
+    groups.push({ category: genericLabel, items: picked });
+    const pickedIndexes = new Set(picked.map((p) => p.index));
+    leftover = leftover.filter((i) => !pickedIndexes.has(i.index));
   }
 
   return groups.sort((a, b) => b.items.length - a.items.length);
