@@ -36,11 +36,17 @@ const aiProvider = optional("AI_PROVIDER", "anthropic") as "anthropic" | "openai
 // vídeo de 1 hora, esto reduce el gasto de la fase de análisis de ~142% del cupo diario (con
 // trozos más pequeños) a ~55%, dejando margen real para el resto del trabajo (comentario,
 // hashtags, subidas). Comprobado con números reales, no es una estimación al azar.
+// visionCandidates: cuántos fotogramas como máximo se clasifican con IA en modo Rankings (ver
+// rankingAnalyze.ts). Cada fotograma cuesta ~1.600 tokens solo de imagen — con el tope DIARIO
+// (no solo por minuto) de Groq en 200.000 tokens, clasificar 200 fotogramas (~320.000 tokens)
+// agota el cupo entero del día solo en esta fase, antes de llegar siquiera a componer los
+// títulos. Comprobado con un vídeo real de 1h45 que fallaba por esto exacto. Gemini/Anthropic/
+// OpenAI tienen presupuesto real mucho mayor, así que ahí se mantiene alto.
 const FREE_TIER_DEFAULTS = {
-  groq: { tokensPerMinute: "8000", transcriptChars: "8000", visionBatch: "1" },
-  gemini: { tokensPerMinute: "0", transcriptChars: "40000", visionBatch: "6" },
-  anthropic: { tokensPerMinute: "0", transcriptChars: "60000", visionBatch: "6" },
-  openai: { tokensPerMinute: "0", transcriptChars: "60000", visionBatch: "6" },
+  groq: { tokensPerMinute: "8000", transcriptChars: "8000", visionBatch: "1", visionCandidates: "40" },
+  gemini: { tokensPerMinute: "0", transcriptChars: "40000", visionBatch: "6", visionCandidates: "200" },
+  anthropic: { tokensPerMinute: "0", transcriptChars: "60000", visionBatch: "6", visionCandidates: "200" },
+  openai: { tokensPerMinute: "0", transcriptChars: "60000", visionBatch: "6", visionCandidates: "200" },
 } as const;
 
 const aiDefaults = FREE_TIER_DEFAULTS[aiProvider] ?? FREE_TIER_DEFAULTS.anthropic;
@@ -95,6 +101,9 @@ export const config = {
     maxTranscriptChars: Number(optional("AI_MAX_TRANSCRIPT_CHARS", aiDefaults.transcriptChars)),
     // Cuántos fotogramas se mandan juntos al clasificar momentos con visión (modo Rankings).
     visionBatchSize: Number(optional("AI_VISION_BATCH_SIZE", aiDefaults.visionBatch)),
+    // Cuántos fotogramas como máximo se clasifican en total en modo Rankings (ver comentario en
+    // FREE_TIER_DEFAULTS más arriba) — repartidos por todo el vídeo, no solo el principio.
+    maxVisionCandidates: Number(optional("AI_MAX_VISION_CANDIDATES", aiDefaults.visionCandidates)),
   },
 
   transcription: {

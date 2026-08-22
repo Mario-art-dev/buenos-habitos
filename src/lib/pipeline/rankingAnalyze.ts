@@ -28,9 +28,13 @@ export interface RankingGroup {
 }
 
 // Pedido explícito: "quiero los máximos short posibles con diferentes clips" — un vídeo de
-// recopilación largo (1h+) puede tener bastantes más de 90 segmentos por silencio; subirlo permite
-// clasificar más material y sacar más categorías (= más vídeos de ranking distintos) del mismo vídeo.
-const MAX_CANDIDATES = 200;
+// recopilación largo (1h+) puede tener bastantes más de 90 segmentos por silencio. Cuántos se
+// clasifican de verdad depende del proveedor de IA activo (config.ai.maxVisionCandidates): la capa
+// gratuita de Groq limita a 200.000 tokens AL DÍA en total y cada fotograma cuesta ~1.600 tokens
+// solo de imagen, así que clasificar 200 fotogramas (~320.000 tokens) agota el cupo diario ENTERO
+// solo en esta fase — un vídeo real de 1h45 (IlloJuan) lo confirmó: la clasificación se quedaba sin
+// cupo a mitad y TODOS los lotes restantes fallaban con el mismo error de cupo diario agotado.
+// Gemini/Anthropic/OpenAI tienen presupuesto real mucho mayor, así que ahí se mantiene alto.
 
 function transcriptExcerptFor(segments: TranscriptSegment[], span: TimeSpan): string {
   return segments
@@ -40,13 +44,30 @@ function transcriptExcerptFor(segments: TranscriptSegment[], span: TimeSpan): st
     .trim();
 }
 
+/**
+ * Si hay más tramos de los que se pueden clasificar, se toma una muestra REPARTIDA a lo largo de
+ * todo el vídeo (no los primeros N) — coger siempre los primeros dejaba fuera la mayor parte de un
+ * vídeo largo (con cortes frecuentes, un vídeo de 1h45 puede tener 400-800+ tramos: los primeros
+ * 200 solo cubrían los primeros 25-35 minutos), lo que explica candidatos "insuficientes" en
+ * categorías que en realidad son abundantes pero aparecen sobre todo en la segunda mitad del vídeo.
+ */
+function sampleEvenly<T>(items: T[], max: number): T[] {
+  if (items.length <= max || max <= 0) return items;
+  const step = items.length / max;
+  const picked: T[] = [];
+  for (let i = 0; i < max; i++) {
+    picked.push(items[Math.floor(i * step)]);
+  }
+  return picked;
+}
+
 export async function buildCandidateMoments(
   jobId: string,
   sourcePath: string,
   spans: TimeSpan[],
   segments: TranscriptSegment[]
 ): Promise<CandidateMoment[]> {
-  const limited = spans.slice(0, MAX_CANDIDATES);
+  const limited = sampleEvenly(spans, config.ai.maxVisionCandidates);
   const candidates: CandidateMoment[] = [];
 
   for (let i = 0; i < limited.length; i++) {
