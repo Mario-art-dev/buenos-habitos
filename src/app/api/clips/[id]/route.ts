@@ -41,6 +41,13 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 }
 
 const cueWordSchema = z.object({ start: z.number(), end: z.number(), text: z.string() });
+const cueStyleSchema = z.object({
+  fontName: z.string().optional(),
+  fontSize: z.number().positive().optional(),
+  colorHex: z.string().regex(/^[0-9a-fA-F]{6}$/, "Color inválido, usa formato RRGGBB").optional(),
+  xPct: z.number().min(0).max(100).optional(),
+  yPct: z.number().min(0).max(100).optional(),
+});
 const cueSchema = z.object({
   id: z.string(),
   start: z.number(),
@@ -48,6 +55,7 @@ const cueSchema = z.object({
   words: z.array(cueWordSchema),
   editedText: z.string().nullable().optional(),
   deleted: z.boolean().optional(),
+  style: cueStyleSchema.nullable().optional(),
 });
 const customTextSchema = z.object({
   id: z.string(),

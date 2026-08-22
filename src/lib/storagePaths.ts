@@ -43,6 +43,12 @@ export function coverImageUploadPath(jobId: string, clipId: string, ext: string)
   return path.join(clipsDir(jobId), `${clipId}_cover_upload.${ext}`);
 }
 
+/** Foto propia subida al crear el trabajo (antes de que existan los clips): se hereda como portada
+ *  por defecto de todos los shorts que se generen a partir de este vídeo (ver Job.coverImagePath). */
+export function jobCoverImagePath(jobId: string, ext: string): string {
+  return path.join(jobDir(jobId), `cover_upload.${ext}`);
+}
+
 /** Vídeo del ranking ya montado (cortes + tarjetas + subtítulos) pero sin música mezclada todavía. */
 export function clipAssembledPath(jobId: string, clipId: string): string {
   return path.join(clipsDir(jobId), `${clipId}_assembled.mp4`);

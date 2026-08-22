@@ -12,7 +12,7 @@ import {
   customTextPath as customTextAssPath,
   narrationAudioPath,
 } from "@/lib/storagePaths";
-import { cutVerticalClip, concatClips, extractThumbnail } from "./clip";
+import { cutVerticalClip, concatClips, extractThumbnail, burnTopLabel } from "./clip";
 import { buildBigCaptionsAssFromCues, buildCustomTextAss, type StoredCue, type CustomTextElement } from "./bigCaptions";
 import { hookVerifiedFrameSec } from "./hookFrame";
 import { probeVideo, pickVerticalResolution } from "./probe";
@@ -75,6 +75,7 @@ async function regenerateSingleOrSplitClip(clipId: string): Promise<void> {
 
   const bodyPath = clipBodyPath(jobId, clip.id);
   const commentedPath = clipCommentedPath(jobId, clip.id);
+  const labeledPath = `${clipBodyPath(jobId, clip.id)}.labeled.mp4`;
   const coverPath = coverCardPath(jobId, clip.id);
   const bigCaptionsFilePath = bigCaptionsPath(jobId, clip.id);
   const customTextFilePath = customTextAssPath(jobId, clip.id);
@@ -144,6 +145,14 @@ async function regenerateSingleOrSplitClip(clipId: string): Promise<void> {
       fs.rmSync(outroCard, { force: true });
     }
 
+    // Modo SPLIT ("cortar en shorts"): mismo texto permanente "Parte N" en la parte superior que
+    // lleva el modo Doble, para que se sepa qué short es cuál — se quema sobre el cuerpo del vídeo
+    // (no sobre la portada, que es una imagen fija aparte al final).
+    if (clip.job.mode === "SPLIT") {
+      await burnTopLabel(core, labeledPath, `Parte ${clip.rank}`, resolution);
+      core = labeledPath;
+    }
+
     if (config.coverCard.enabled) {
       await renderCoverCard({
         sourcePath: srcPath,
@@ -168,6 +177,7 @@ async function regenerateSingleOrSplitClip(clipId: string): Promise<void> {
     for (const tmp of [
       bodyPath,
       commentedPath,
+      labeledPath,
       coverPath,
       bigCaptionsFilePath,
       customTextFilePath,

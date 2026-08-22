@@ -58,6 +58,13 @@ model Job {
   bottomVideoFilePath String?
   doublePartsCount    Int?
 
+  // Foto propia subida al crear el trabajo (horizontal con fondo desenfocado, o vertical) que se
+  // usa como portada de marca (con el sonido de marca) en TODOS los shorts que salgan de este
+  // vídeo — solo aplica en SINGLE/SPLIT/RANKING, los únicos modos con portada de marca (ver
+  // coverCard.ts). Cada Clip hereda esta ruta en su propio coverImagePath al generarse, así el
+  // editor (que ya sabe editar/quitar la portada por clip) sigue funcionando igual encima.
+  coverImagePath String?
+
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
   clips        Clip[]

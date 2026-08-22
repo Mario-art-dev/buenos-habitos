@@ -1,7 +1,7 @@
 import fs from "fs";
 import type { TranscriptSegment } from "./transcribe";
 import { probeVideo, type VerticalResolution } from "./probe";
-import { cutVerticalClip, renderTitleCard, concatClips, mixBackgroundMusic, extractThumbnail, extractAudioSegment } from "./clip";
+import { cutVerticalClip, renderTitleCard, concatClips, mixBackgroundMusic, extractThumbnail, extractAudioSegment, burnTopLabel } from "./clip";
 import { renderRankingIntroCard } from "./rankingIntroCard";
 import { renderCommentaryCard } from "./commentaryCards";
 import { buildBigCaptionsAss } from "./bigCaptions";
@@ -46,6 +46,9 @@ export async function assembleRankingVideo(params: {
   captionsEnabled?: boolean;
   // Imagen propia subida desde la fototeca para la tarjeta de intro, en vez del fondo negro.
   coverImagePath?: string | null;
+  // Texto permanente "Parte N" en la parte superior durante todo el vídeo, igual que en el modo
+  // Doble y en el modo Cortar en shorts — para saber qué vídeo de ranking es cuál.
+  partLabel?: string | null;
 }): Promise<string> {
   const { jobId, clipId, sourcePath, category, items, transcriptSegments, resolution } = params;
   const captionsEnabled = params.captionsEnabled ?? true;
@@ -120,6 +123,12 @@ export async function assembleRankingVideo(params: {
   // limpieza de archivos temporales de este clip
   for (const p of segmentPaths) {
     fs.rmSync(p, { force: true });
+  }
+
+  if (params.partLabel) {
+    const labeledPath = `${assembledPath}.labeled.mp4`;
+    await burnTopLabel(assembledPath, labeledPath, params.partLabel, resolution);
+    fs.renameSync(labeledPath, assembledPath);
   }
 
   return assembledPath;

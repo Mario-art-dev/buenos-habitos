@@ -30,6 +30,26 @@ function escapeSubtitlesPath(p: string): string {
   return p.replace(/\\/g, "/").replace(/:/g, "\\:");
 }
 
+/**
+ * `drawtext=text='...'` con el texto escapado a mano (escapeDrawtext) se ha visto fallar de verdad
+ * con texto real generado por IA que lleva apóstrofes — no por apóstrofes "raros" (probado con
+ * comillas tipográficas Unicode: esas pasan sin problema, ffmpeg las trata como carácter normal),
+ * sino con un simple apóstrofe recto YA escapado correctamente como `\'`: el parser de filtergraph
+ * de esta versión de ffmpeg pierde la cuenta de las comillas después de ese punto y el resto del
+ * filtro (incluida la etiqueta de salida final, p.ej. "[capped]") deja de reconocerse — visto en
+ * real con el guion de un vídeo de Producto ("...it's clean, minimal...") que rompía SIEMPRE que
+ * el texto llevaba un apóstrofe, quedando "Output with label '...' does not exist". En vez de
+ * perseguir la combinación exacta de escapado que ffmpeg acepte (ya se ha roto así antes con otros
+ * caracteres), esto evita el problema de raíz: el texto va a un archivo aparte y drawtext lo lee
+ * de ahí (`textfile=`), sin tener que embeber el contenido dentro de la propia cadena del filtro.
+ * Solo hace falta escapar la RUTA del archivo (mucho más simple y predecible que texto arbitrario).
+ */
+export function writeDrawtextFile(text: string, tmpPath: string): string {
+  fs.writeFileSync(tmpPath, text, "utf-8");
+  const escapedPath = tmpPath.replace(/\\/g, "/").replace(/:/g, "\\:").replace(/'/g, "\\'");
+  return `textfile='${escapedPath}'`;
+}
+
 /** Reparte un texto en varias líneas para que quepa en el ancho del vídeo (drawtext no envuelve solo). */
 export function wrapText(text: string, maxCharsPerLine: number): string {
   const words = text.trim().split(/\s+/);
@@ -197,6 +217,16 @@ export interface SplitScreenOptions {
  * El texto (p.ej. "Parte 2") se queda fijo arriba durante TODO el tramo, sin enable= — pedido
  * explícito ("como si fuera un subtítulo permanente").
  */
+/** Filtro drawtext para un texto fijo pegado arriba de la pantalla durante TODO el vídeo (p.ej. "Parte N"). */
+function topLabelDrawtextFilter(textFileArg: string, width: number): string {
+  const fontSize = Math.round(width / 14);
+  return (
+    `drawtext=${textFileArg}:fontcolor=white:fontsize=${fontSize}:` +
+    `fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:borderw=5:bordercolor=black@0.85:` +
+    `x=(w-text_w)/2:y=40`
+  );
+}
+
 export async function cutSplitScreenClip(opts: SplitScreenOptions): Promise<void> {
   const { topSourcePath, topStartSec, topEndSec, bottomSourcePath, bottomStartSec, label, outPath, resolution = DEFAULT_RES } = opts;
   const duration = Math.max(0.5, topEndSec - topStartSec);
@@ -207,11 +237,8 @@ export async function cutSplitScreenClip(opts: SplitScreenOptions): Promise<void
   if (topHalfH % 2 !== 0) topHalfH -= 1;
   const bottomHalfH = height - topHalfH;
 
-  const fontSize = Math.round(width / 14);
-  const labelFilter =
-    `drawtext=text='${escapeDrawtext(label)}':fontcolor=white:fontsize=${fontSize}:` +
-    `fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:borderw=5:bordercolor=black@0.85:` +
-    `x=(w-text_w)/2:y=40`;
+  const labelFilePath = `${outPath}.label.txt`;
+  const labelFilter = topLabelDrawtextFilter(writeDrawtextFile(label, labelFilePath), width);
 
   const filter =
     `[0:v]scale=${width}:${topHalfH}:force_original_aspect_ratio=increase,crop=${width}:${topHalfH}[top];` +
@@ -219,48 +246,93 @@ export async function cutSplitScreenClip(opts: SplitScreenOptions): Promise<void
     `[top][bottom]vstack=inputs=2[stacked];` +
     `[stacked]${labelFilter}[v]`;
 
-  await run(config.ffmpegPath, [
-    "-y",
-    "-ss",
-    String(topStartSec),
-    "-i",
-    topSourcePath,
-    "-stream_loop",
-    "-1",
-    "-ss",
-    String(Math.max(0, bottomStartSec)),
-    "-i",
-    bottomSourcePath,
-    "-filter_complex",
-    filter,
-    "-map",
-    "[v]",
-    "-map",
-    "0:a?",
-    "-t",
-    String(duration),
-    "-c:v",
-    "libx264",
-    "-preset",
-    "fast",
-    "-crf",
-    "18",
-    "-pix_fmt",
-    "yuv420p",
-    "-r",
-    String(CONCAT_FPS),
-    "-c:a",
-    "aac",
-    "-b:a",
-    "192k",
-    "-ar",
-    String(CONCAT_AUDIO_SAMPLE_RATE),
-    "-ac",
-    String(CONCAT_AUDIO_CHANNELS),
-    "-movflags",
-    "+faststart",
-    outPath,
-  ]);
+  try {
+    await run(config.ffmpegPath, [
+      "-y",
+      "-ss",
+      String(topStartSec),
+      "-i",
+      topSourcePath,
+      "-stream_loop",
+      "-1",
+      "-ss",
+      String(Math.max(0, bottomStartSec)),
+      "-i",
+      bottomSourcePath,
+      "-filter_complex",
+      filter,
+      "-map",
+      "[v]",
+      "-map",
+      "0:a?",
+      "-t",
+      String(duration),
+      "-c:v",
+      "libx264",
+      "-preset",
+      "fast",
+      "-crf",
+      "18",
+      "-pix_fmt",
+      "yuv420p",
+      "-r",
+      String(CONCAT_FPS),
+      "-c:a",
+      "aac",
+      "-b:a",
+      "192k",
+      "-ar",
+      String(CONCAT_AUDIO_SAMPLE_RATE),
+      "-ac",
+      String(CONCAT_AUDIO_CHANNELS),
+      "-movflags",
+      "+faststart",
+      outPath,
+    ]);
+  } finally {
+    fs.rmSync(labelFilePath, { force: true });
+  }
+}
+
+/**
+ * Quema un texto fijo pegado arriba de la pantalla durante TODO el vídeo (p.ej. "Parte 3"), como
+ * pasada final sobre un vídeo YA montado — usado por los modos SPLIT y RANKING para numerar sus
+ * shorts igual que ya hace DOUBLE (ahí va integrado en la propia composición porque de todas
+ * formas hace falta una pasada de ffmpeg; aquí se separa para no reintegrar la numeración dentro
+ * de cada montaje, que ya es bastante distinto entre un modo y otro).
+ */
+export async function burnTopLabel(
+  inputPath: string,
+  outputPath: string,
+  label: string,
+  resolution: VerticalResolution = DEFAULT_RES
+): Promise<void> {
+  const labelFilePath = `${outputPath}.label.txt`;
+  const filter = topLabelDrawtextFilter(writeDrawtextFile(label, labelFilePath), resolution.width);
+  try {
+    await run(config.ffmpegPath, [
+      "-y",
+      "-i",
+      inputPath,
+      "-vf",
+      filter,
+      "-c:v",
+      "libx264",
+      "-preset",
+      "fast",
+      "-crf",
+      "18",
+      "-pix_fmt",
+      "yuv420p",
+      "-c:a",
+      "copy",
+      "-movflags",
+      "+faststart",
+      outputPath,
+    ]);
+  } finally {
+    fs.rmSync(labelFilePath, { force: true });
+  }
 }
 
 /**
@@ -286,9 +358,11 @@ export async function renderTitleCard(
   }
 
   const fontSize = Math.round(resolution.width / fontDivisor);
-  const drawtextFilter = `drawtext=text='${escapeDrawtext(
-    text
-  )}':fontcolor=white:fontsize=${fontSize}:fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:borderw=6:bordercolor=black@0.8:x=(w-text_w)/2:y=(h-text_h)/2`;
+  const textFilePath = `${outPath}.text.txt`;
+  const drawtextFilter = `drawtext=${writeDrawtextFile(
+    text,
+    textFilePath
+  )}:fontcolor=white:fontsize=${fontSize}:fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:borderw=6:bordercolor=black@0.8:x=(w-text_w)/2:y=(h-text_h)/2`;
 
   const args = [
     "-y",
@@ -333,7 +407,11 @@ export async function renderTitleCard(
     outPath
   );
 
-  await run(config.ffmpegPath, args);
+  try {
+    await run(config.ffmpegPath, args);
+  } finally {
+    fs.rmSync(textFilePath, { force: true });
+  }
 }
 
 /**
@@ -519,12 +597,16 @@ export async function renderImageSegment(opts: ImageSegmentOptions): Promise<voi
     `format=yuv420p[zoomed]`;
 
   let lastLabel = "zoomed";
+  const captionFilePath = `${outPath}.caption.txt`;
+  let hasCaptionFile = false;
   if (caption) {
     const fontSize = Math.round(resolution.width / 14);
     const wrapped = wrapText(caption, 28);
-    filter += `;[${lastLabel}]drawtext=text='${escapeDrawtext(
-      wrapped
-    )}':fontcolor=white:fontsize=${fontSize}:fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:borderw=5:bordercolor=black@0.8:x=(w-text_w)/2:y=h-text_h-${Math.round(
+    hasCaptionFile = true;
+    filter += `;[${lastLabel}]drawtext=${writeDrawtextFile(
+      wrapped,
+      captionFilePath
+    )}:fontcolor=white:fontsize=${fontSize}:fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:borderw=5:bordercolor=black@0.8:x=(w-text_w)/2:y=h-text_h-${Math.round(
       resolution.height * 0.1
     )}:line_spacing=10[capped]`;
     lastLabel = "capped";
@@ -562,7 +644,11 @@ export async function renderImageSegment(opts: ImageSegmentOptions): Promise<voi
     outPath
   );
 
-  await run(config.ffmpegPath, args);
+  try {
+    await run(config.ffmpegPath, args);
+  } finally {
+    if (hasCaptionFile) fs.rmSync(captionFilePath, { force: true });
+  }
 }
 
 export interface ProductVideoSegmentOptions {

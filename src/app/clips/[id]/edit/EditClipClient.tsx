@@ -4,11 +4,21 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Player, type PlayerRef } from "@remotion/player";
 import { EditorComposition, type CompositionCustomText } from "./EditorComposition";
+import { fetchWithRetry } from "@/lib/fetchWithRetry";
+import { toUploadableJpeg } from "@/lib/toUploadableJpeg";
 
 interface CueWord {
   start: number;
   end: number;
   text: string;
+}
+
+interface CueStyle {
+  fontName?: string;
+  fontSize?: number;
+  colorHex?: string;
+  xPct?: number;
+  yPct?: number;
 }
 
 interface StoredCue {
@@ -18,6 +28,16 @@ interface StoredCue {
   words: CueWord[];
   editedText?: string | null;
   deleted?: boolean;
+  style?: CueStyle | null;
+}
+
+// Estilo por defecto del caption grande (ver defaultBigCaptionsStyle en bigCaptions.ts) — se usa
+// para que los controles de la fila de un golpe SIN estilo propio arranquen con estos valores en
+// vez de vacíos.
+const DEFAULT_CUE_FONT = "Comic Neue";
+const DEFAULT_CUE_COLOR = "FFFFFF";
+function defaultCueFontSize(resolution: { width: number } | null): number {
+  return resolution ? Math.round(resolution.width / 14) : 77;
 }
 
 type CustomTextElement = CompositionCustomText;
@@ -172,6 +192,7 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [videoVersion, setVideoVersion] = useState(0);
   const [selectedTextId, setSelectedTextId] = useState<string | null>(null);
+  const [expandedCueStyleId, setExpandedCueStyleId] = useState<string | null>(null);
   const [trimStart, setTrimStart] = useState(0);
   const [trimEnd, setTrimEnd] = useState(0);
   const [resolution, setResolution] = useState<{ width: number; height: number } | null>(null);
@@ -306,6 +327,14 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
     setCues((prev) => prev.map((c) => (c.id === id ? { ...c, deleted: !c.deleted } : c)));
   }
 
+  function updateCueStyle(id: string, patch: Partial<CueStyle>) {
+    setCues((prev) => prev.map((c) => (c.id === id ? { ...c, style: { ...c.style, ...patch } } : c)));
+  }
+
+  function resetCueStyle(id: string) {
+    setCues((prev) => prev.map((c) => (c.id === id ? { ...c, style: null } : c)));
+  }
+
   function addText() {
     const el = newCustomText(duration);
     setTexts((prev) => [...prev, el]);
@@ -434,14 +463,22 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
     setUploadingCover(true);
     setError(null);
     try {
+      // Las fotos de la fototeca del iPhone se guardan en HEIC/HEIF por defecto (formato que el
+      // servidor no puede procesar) y a veces pesan varios MB — se convierten a JPEG y se
+      // redimensionan aquí mismo, en el navegador, antes de subir: así funciona con cualquier foto
+      // de la fototeca y el archivo sube más rápido (menos probable que falle la subida por una
+      // conexión móvil lenta). Si el navegador no puede leer el formato (createImageBitmap falla),
+      // se sube el archivo original tal cual y el servidor da un error claro si no lo admite.
+      const uploadFile = await toUploadableJpeg(file).catch(() => file);
       const form = new FormData();
-      form.append("file", file);
-      const res = await fetch(`/api/clips/${clipId}/cover-image`, { method: "POST", body: form });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "No se pudo subir la imagen");
+      form.append("file", uploadFile);
+      const res = await fetchWithRetry(`/api/clips/${clipId}/cover-image`, { method: "POST", body: form });
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.error ?? "No se pudo subir la imagen");
       setCoverImageUrl(data.coverImageUrl);
     } catch (err) {
-      setError((err as Error).message);
+      const message = err instanceof Error ? err.message : "No se pudo subir la imagen (fallo de conexión, inténtalo otra vez)";
+      setError(message);
     } finally {
       setUploadingCover(false);
     }
@@ -451,7 +488,7 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
     setUploadingCover(true);
     setError(null);
     try {
-      const res = await fetch(`/api/clips/${clipId}/cover-image`, { method: "DELETE" });
+      const res = await fetchWithRetry(`/api/clips/${clipId}/cover-image`, { method: "DELETE" });
       if (!res.ok) throw new Error("No se pudo quitar la imagen");
       setCoverImageUrl(null);
     } catch (err) {
@@ -479,7 +516,7 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
       const nextCoverFrameSec =
         coverFrameSec == null ? null : Math.min(Math.max(coverFrameSec, nextEffectiveStart), nextEnd);
 
-      const putRes = await fetch(`/api/clips/${clipId}`, {
+      const putRes = await fetchWithRetry(`/api/clips/${clipId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -492,12 +529,12 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
           captionsEnabled,
         }),
       });
-      const putData = await putRes.json();
-      if (!putRes.ok) throw new Error(putData.error ?? "No se pudieron guardar los cambios");
+      const putData = await putRes.json().catch(() => null);
+      if (!putRes.ok) throw new Error(putData?.error ?? "No se pudieron guardar los cambios");
 
-      const regenRes = await fetch(`/api/clips/${clipId}/regenerate`, { method: "POST" });
-      const regenData = await regenRes.json();
-      if (!regenRes.ok) throw new Error(regenData.error ?? "No se pudo regenerar el vídeo");
+      const regenRes = await fetchWithRetry(`/api/clips/${clipId}/regenerate`, { method: "POST" }, 1);
+      const regenData = await regenRes.json().catch(() => null);
+      if (!regenRes.ok) throw new Error(regenData?.error ?? "No se pudo regenerar el vídeo");
 
       setCues(nextCues);
       setTexts(nextTexts);
@@ -519,7 +556,8 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
       );
       setVideoVersion((v) => v + 1);
     } catch (err) {
-      setError((err as Error).message);
+      const message = err instanceof Error ? err.message : "No se pudo guardar (fallo de conexión, inténtalo otra vez)";
+      setError(message);
     } finally {
       setSaving(false);
     }
@@ -831,28 +869,114 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
             </div>
             <div className={`space-y-2 ${captionsEnabled ? "" : "opacity-40"}`}>
               {cues.length === 0 && <p className="text-xs text-slate-500">Este clip no tiene subtítulos guardados.</p>}
-              {cues.map((cue) => (
-                <div
-                  key={cue.id}
-                  className={`flex items-center gap-2 rounded-xl border border-ink-600 bg-ink-900/50 p-2 ${
-                    cue.deleted ? "opacity-40" : ""
-                  }`}
-                >
-                  <input
-                    type="text"
-                    value={cueText(cue)}
-                    disabled={cue.deleted}
-                    onChange={(e) => updateCueText(cue.id, e.target.value)}
-                    className="flex-1 rounded-lg border border-ink-600 bg-ink-900 px-2 py-1 text-xs text-slate-200 outline-none focus:border-brand-500 disabled:opacity-50"
-                  />
-                  <button
-                    onClick={() => toggleCueDeleted(cue.id)}
-                    className="rounded-lg border border-ink-600 px-2 py-1 text-xs text-slate-300 hover:border-red-500 hover:text-red-400"
+              {cues.map((cue) => {
+                const styleOpen = expandedCueStyleId === cue.id;
+                const effFont = cue.style?.fontName || DEFAULT_CUE_FONT;
+                const effSize = cue.style?.fontSize || defaultCueFontSize(resolution);
+                const effColor = cue.style?.colorHex || DEFAULT_CUE_COLOR;
+                const effX = cue.style?.xPct ?? 50;
+                const effY = cue.style?.yPct ?? 62;
+                return (
+                  <div
+                    key={cue.id}
+                    className={`rounded-xl border border-ink-600 bg-ink-900/50 p-2 ${cue.deleted ? "opacity-40" : ""}`}
                   >
-                    {cue.deleted ? "Restaurar" : "🗑 Borrar"}
-                  </button>
-                </div>
-              ))}
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={cueText(cue)}
+                        disabled={cue.deleted}
+                        onChange={(e) => updateCueText(cue.id, e.target.value)}
+                        className="flex-1 rounded-lg border border-ink-600 bg-ink-900 px-2 py-1 text-xs text-slate-200 outline-none focus:border-brand-500 disabled:opacity-50"
+                      />
+                      <button
+                        onClick={() => setExpandedCueStyleId(styleOpen ? null : cue.id)}
+                        disabled={cue.deleted}
+                        className={`rounded-lg border px-2 py-1 text-xs disabled:opacity-50 ${
+                          cue.style ? "border-brand-500 text-brand-400" : "border-ink-600 text-slate-300"
+                        }`}
+                      >
+                        🎨 Estilo
+                      </button>
+                      <button
+                        onClick={() => toggleCueDeleted(cue.id)}
+                        className="rounded-lg border border-ink-600 px-2 py-1 text-xs text-slate-300 hover:border-red-500 hover:text-red-400"
+                      >
+                        {cue.deleted ? "Restaurar" : "🗑 Borrar"}
+                      </button>
+                    </div>
+                    {styleOpen && !cue.deleted && (
+                      <div className="mt-2 grid grid-cols-2 gap-2 rounded-lg border border-ink-700 bg-ink-900 p-2 sm:grid-cols-4">
+                        <label className="text-xs text-slate-400">
+                          Fuente
+                          <select
+                            value={effFont}
+                            onChange={(e) => updateCueStyle(cue.id, { fontName: e.target.value })}
+                            className="mt-1 w-full rounded-lg border border-ink-600 bg-ink-900 px-2 py-1 text-xs text-slate-200"
+                          >
+                            {FONT_OPTIONS.map((f) => (
+                              <option key={f} value={f}>
+                                {f}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="text-xs text-slate-400">
+                          Tamaño
+                          <input
+                            type="number"
+                            min={10}
+                            max={300}
+                            value={effSize}
+                            onChange={(e) => updateCueStyle(cue.id, { fontSize: Number(e.target.value) })}
+                            className="mt-1 w-full rounded-lg border border-ink-600 bg-ink-900 px-2 py-1 text-xs text-slate-200"
+                          />
+                        </label>
+                        <label className="text-xs text-slate-400">
+                          Color
+                          <input
+                            type="color"
+                            value={`#${effColor}`}
+                            onChange={(e) => updateCueStyle(cue.id, { colorHex: e.target.value.replace("#", "") })}
+                            className="mt-1 h-7 w-full rounded-lg border border-ink-600 bg-ink-900"
+                          />
+                        </label>
+                        <div className="flex items-end gap-1">
+                          <button
+                            type="button"
+                            onClick={() => resetCueStyle(cue.id)}
+                            className="w-full rounded-lg border border-ink-600 px-2 py-1 text-xs text-slate-400 hover:border-red-500 hover:text-red-400"
+                          >
+                            Quitar estilo
+                          </button>
+                        </div>
+                        <label className="col-span-2 text-xs text-slate-400">
+                          Posición horizontal ({Math.round(effX)}%)
+                          <input
+                            type="range"
+                            min={0}
+                            max={100}
+                            value={effX}
+                            onChange={(e) => updateCueStyle(cue.id, { xPct: Number(e.target.value) })}
+                            className="mt-1 w-full"
+                          />
+                        </label>
+                        <label className="col-span-2 text-xs text-slate-400">
+                          Posición vertical ({Math.round(effY)}%)
+                          <input
+                            type="range"
+                            min={0}
+                            max={100}
+                            value={effY}
+                            onChange={(e) => updateCueStyle(cue.id, { yPct: Number(e.target.value) })}
+                            className="mt-1 w-full"
+                          />
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
           )}

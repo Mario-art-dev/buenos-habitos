@@ -2,8 +2,8 @@ import fs from "fs";
 import path from "path";
 import { config } from "@/lib/config";
 import { run } from "./exec";
-import { extractCoverFrameAt, escapeDrawtext, wrapText, CONCAT_FPS, CONCAT_AUDIO_SAMPLE_RATE, CONCAT_AUDIO_CHANNELS } from "./clip";
-import { probeAudioDurationSec, type VerticalResolution } from "./probe";
+import { extractCoverFrameAt, writeDrawtextFile, wrapText, CONCAT_FPS, CONCAT_AUDIO_SAMPLE_RATE, CONCAT_AUDIO_CHANNELS } from "./clip";
+import { probeAudioDurationSec, probeVideo, type VerticalResolution } from "./probe";
 
 const FONT_BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf";
 
@@ -44,6 +44,7 @@ export async function renderCoverCard(params: RenderCoverCardParams): Promise<vo
   const { width, height } = resolution;
 
   const framePath = `${outPath}.frame.jpg`;
+  const titleFilePath = `${outPath}.title.txt`;
   if (customImagePath) {
     fs.copyFileSync(customImagePath, framePath);
   } else {
@@ -56,8 +57,24 @@ export async function renderCoverCard(params: RenderCoverCardParams): Promise<vo
     const wrapped = wrapText(title, 18);
     const bottomMargin = Math.round(height * 0.09);
 
+    // La foto propia subida por el usuario puede venir en horizontal — pedido explícito: en ese
+    // caso se ve ENTERA con el fondo desenfocado a los lados/arriba-abajo (mismo tratamiento que
+    // ya usa cutVerticalClip/buildVerticalFilter para vídeo horizontal), en vez de recortarla para
+    // rellenar la pantalla. Un fotograma extraído del propio vídeo (el caso de siempre, sin foto
+    // propia) sigue recortándose como hasta ahora — ya es parte de un short vertical.
+    let bgChain = `[0:v]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height}[bg]`;
+    if (customImagePath) {
+      const imgInfo = await probeVideo(framePath);
+      if (imgInfo.width > imgInfo.height) {
+        bgChain =
+          `[0:v]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},gblur=sigma=20[blurbg];` +
+          `[0:v]scale=${width}:${height}:force_original_aspect_ratio=decrease[fg];` +
+          `[blurbg][fg]overlay=(W-w)/2:(H-h)/2:format=auto[bg]`;
+      }
+    }
+
     const filter =
-      `[0:v]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height}[bg];` +
+      `${bgChain};` +
       // Degradado inferior a base de varias bandas semitransparentes apiladas (drawbox no hace
       // gradiente real, es la aproximación más cercana con un filtro estándar ya probado en el
       // resto del pipeline) para que el texto se lea bien sin tapar la imagen de golpe.
@@ -65,7 +82,7 @@ export async function renderCoverCard(params: RenderCoverCardParams): Promise<vo
       `drawbox=x=0:y=ih*0.64:w=iw:h=ih*0.12:color=black@0.32:t=fill,` +
       `drawbox=x=0:y=ih*0.76:w=iw:h=ih*0.12:color=black@0.55:t=fill,` +
       `drawbox=x=0:y=ih*0.88:w=iw:h=ih*0.12:color=black@0.78:t=fill[dark];` +
-      `[dark]drawtext=text='${escapeDrawtext(wrapped)}':fontfile=${FONT_BOLD}:` +
+      `[dark]drawtext=${writeDrawtextFile(wrapped, titleFilePath)}:fontfile=${FONT_BOLD}:` +
       `fontcolor=white:fontsize=${fontSize}:borderw=9:bordercolor=black@0.95:` +
       `x=(w-text_w)/2:y=h-text_h-${bottomMargin}:line_spacing=14[v]`;
 
@@ -111,5 +128,6 @@ export async function renderCoverCard(params: RenderCoverCardParams): Promise<vo
     ]);
   } finally {
     fs.rmSync(framePath, { force: true });
+    fs.rmSync(titleFilePath, { force: true });
   }
 }

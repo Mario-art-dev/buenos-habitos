@@ -65,6 +65,7 @@ export async function regenerateRankingClip(clipId: string): Promise<void> {
       resolution,
       captionsEnabled: clip.captionsEnabled,
       coverImagePath: clip.coverImagePath,
+      partLabel: `Parte ${clip.rank}`,
     });
 
     // Texto personalizado: pasada final sobre el vídeo YA montado (no tiene sentido reintegrarlo

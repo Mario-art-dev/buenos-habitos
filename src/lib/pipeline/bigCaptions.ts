@@ -36,12 +36,23 @@ export interface CueWord {
   text: string;
 }
 
+/** Estilo propio de un golpe de subtítulo, editable desde el editor — cualquier campo que no se
+ *  indique usa el valor por defecto de todo el clip (ver `defaultBigCaptionsStyle`). */
+export interface CueStyle {
+  fontName?: string;
+  fontSize?: number;
+  colorHex?: string; // "RRGGBB", sin # ni &H — color base (sin resaltar) de este golpe
+  xPct?: number; // 0-100, centro horizontal
+  yPct?: number; // 0-100, centro vertical
+}
+
 /**
  * Un golpe de subtítulo tal y como se guarda en la base de datos (`Clip.captionCues`), para poder
  * editarlo/borrarlo desde el editor y volver a generar el vídeo después. `words` conserva el
  * timestamp por palabra original (para el resaltado "karaoke"); si el usuario edita el texto del
  * golpe, `editedText` manda y ese golpe se renderiza en blanco fijo, sin resaltado por palabra
- * (los timestamps originales ya no se corresponden con el texto nuevo).
+ * (los timestamps originales ya no se corresponden con el texto nuevo). `style` permite cambiar el
+ * tamaño/posición/color/tipo de letra de ESE golpe en concreto, sin afectar al resto del clip.
  */
 export interface StoredCue {
   id: string;
@@ -50,6 +61,7 @@ export interface StoredCue {
   words: CueWord[];
   editedText?: string | null;
   deleted?: boolean;
+  style?: CueStyle;
 }
 
 /**
@@ -156,7 +168,6 @@ export function buildBigCaptionsAssFromCues(
   if (visible.length === 0) return null;
 
   const { width, height } = resolution;
-  const baseFill = rgbToAssColor(BASE_COLOR_HEX);
   const highlightFill = rgbToAssColor(HIGHLIGHT_COLOR_HEX);
 
   const header = `[Script Info]
@@ -173,15 +184,33 @@ Style: Big,${style.fontName},${style.fontSize},&H00FFFFFF,&H000000FF,&H00000000,
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 `;
 
-  const posAndLook = `\\an5\\pos(${style.posX},${style.posY})\\3c&H${style.outlineColorHex}&\\bord${style.outline}\\blur${style.blur}`;
+  // Cada golpe puede llevar su propio tamaño/posición/color/tipo de letra (editable desde el
+  // editor) — si no lo indica, usa el estilo por defecto de todo el clip. Se calcula tag por tag
+  // en vez de compartir un único Style de ASS, porque cada golpe puede necesitar valores distintos.
+  function tagsFor(cue: StoredCue): { tags: string; baseFill: string } {
+    const s = cue.style;
+    const fontName = s?.fontName || style.fontName;
+    const fontSize = s?.fontSize || style.fontSize;
+    const outline = Math.max(1, Math.round(fontSize / 13));
+    const xPct = s?.xPct ?? (style.posX / width) * 100;
+    const yPct = s?.yPct ?? (style.posY / height) * 100;
+    const x = Math.round((xPct / 100) * width);
+    const y = Math.round((yPct / 100) * height);
+    const baseFill = rgbToAssColor(s?.colorHex || BASE_COLOR_HEX);
+    const tags =
+      `\\an5\\pos(${x},${y})\\fn${fontName}\\fs${fontSize}\\3c&H${style.outlineColorHex}&\\bord${outline}\\blur${style.blur}`;
+    return { tags, baseFill };
+  }
 
   const lines: string[] = [];
 
   for (const cue of visible) {
+    const { tags, baseFill } = tagsFor(cue);
+
     if (cue.editedText != null) {
       const text = escapeAssText(cue.editedText);
       if (!text) continue;
-      lines.push(`Dialogue: 0,${assTime(cue.start)},${assTime(cue.end)},Big,,0,0,0,,{${posAndLook}}${text}`);
+      lines.push(`Dialogue: 0,${assTime(cue.start)},${assTime(cue.end)},Big,,0,0,0,,{${tags}\\c${baseFill}}${text}`);
       continue;
     }
 
@@ -207,7 +236,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
           return w.text;
         })
         .join(" ");
-      lines.push(`Dialogue: 0,${assTime(win.start)},${assTime(win.end)},Big,,0,0,0,,{${posAndLook}}${text}`);
+      lines.push(`Dialogue: 0,${assTime(win.start)},${assTime(win.end)},Big,,0,0,0,,{${tags}\\c${baseFill}}${text}`);
     }
   }
 

@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { fetchWithRetry } from "@/lib/fetchWithRetry";
+import { toUploadableJpeg } from "@/lib/toUploadableJpeg";
 
 interface UrlFormProps {
   mode?: "SINGLE" | "RANKING" | "SPLIT";
@@ -11,28 +13,6 @@ interface UrlFormProps {
 }
 
 const CHUNK_SIZE = 20 * 1024 * 1024; // 20MB por trozo, con margen de sobra bajo el límite del túnel
-
-/**
- * El túnel gratuito (Cloudflare Quick Tunnel) a veces tarda en "despertar" la conexión en la
- * primera petición tras un rato inactivo, y eso hace que fetch() falle a bajo nivel ("Load
- * failed" en Safari/iOS). Reintentamos solos esos fallos de red y los 5xx (no los 4xx, que no
- * se arreglan reintentando) en vez de obligar al usuario a volver a darle al botón.
- */
-async function fetchWithRetry(input: string, init: RequestInit, retries = 3): Promise<Response> {
-  for (let attempt = 0; ; attempt++) {
-    try {
-      const res = await fetch(input, init);
-      if (!res.ok && res.status >= 500 && attempt < retries) {
-        await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
-        continue;
-      }
-      return res;
-    } catch (err) {
-      if (attempt >= retries) throw err;
-      await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
-    }
-  }
-}
 
 async function uploadInChunks(
   file: File,
@@ -67,6 +47,21 @@ async function uploadInChunks(
   return data.job;
 }
 
+/** Sube la foto de portada elegida al crear el trabajo — igual que en el editor, se convierte a
+ *  JPEG en el navegador (funciona con HEIC del iPhone y pesa menos) antes de subirla. Si falla, no
+ *  se corta la creación del trabajo por esto: se avisa aparte y el trabajo sigue con la portada
+ *  normal (fotograma del vídeo). */
+async function uploadJobCoverImage(jobId: string, file: File): Promise<void> {
+  const uploadFile = await toUploadableJpeg(file).catch(() => file);
+  const form = new FormData();
+  form.append("file", uploadFile);
+  const res = await fetchWithRetry(`/api/jobs/${jobId}/cover-image`, { method: "POST", body: form });
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    throw new Error(data?.error ?? "No se pudo subir la foto de portada");
+  }
+}
+
 export default function UrlForm({
   mode = "SINGLE",
   label = "Pega el enlace del vídeo (YouTube o cualquier vídeo compatible)",
@@ -76,12 +71,16 @@ export default function UrlForm({
   const [tab, setTab] = useState<"url" | "upload">("url");
   const [url, setUrl] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [coverImage, setCoverImage] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [splitMinutes, setSplitMinutes] = useState(1);
   const router = useRouter();
   const splitDurationSec = mode === "SPLIT" ? Math.round(splitMinutes * 60) : undefined;
+  // La portada de marca solo existe en estos tres modos (ver coverCard.ts) — en los demás no tiene
+  // sentido ofrecer la foto porque nunca se llegaría a usar.
+  const supportsCoverPhoto = mode === "SINGLE" || mode === "RANKING" || mode === "SPLIT";
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -103,8 +102,15 @@ export default function UrlForm({
         if (!file) throw new Error("Elige un archivo de vídeo");
         job = await uploadInChunks(file, mode, setProgress, splitDurationSec);
       }
+      if (coverImage) {
+        // No bloquea la creación del trabajo si falla: la portada por defecto (fotograma del
+        // vídeo) sigue funcionando igual, así que merece la pena seguir en vez de perder todo el
+        // trabajo de descarga/subida ya hecho por un fallo solo de la foto.
+        await uploadJobCoverImage(job.id, coverImage).catch(() => {});
+      }
       setUrl("");
       setFile(null);
+      setCoverImage(null);
       router.push(`/jobs/${job.id}`);
       router.refresh();
     } catch (err) {
@@ -156,6 +162,25 @@ export default function UrlForm({
           </div>
           <p className="mt-1 text-xs text-slate-500">
             El vídeo se corta entero, de principio a fin, en shorts consecutivos de esta duración.
+          </p>
+        </div>
+      )}
+
+      {supportsCoverPhoto && (
+        <div className="mb-4">
+          <label className="mb-2 block text-sm font-medium text-slate-300">
+            Foto para la portada (opcional)
+          </label>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => setCoverImage(e.target.files?.[0] ?? null)}
+            className="w-full rounded-xl border border-ink-600 bg-ink-900 px-4 py-3 text-sm text-slate-300 outline-none focus:border-brand-500"
+          />
+          <p className="mt-1 text-xs text-slate-500">
+            {coverImage
+              ? `${coverImage.name} — se usará como portada (con el sonido de marca) al final de TODOS los shorts que salgan de este vídeo, en vez de un fotograma. Vale en horizontal (se ve entera con el fondo desenfocado) o en vertical.`
+              : "Si no subes ninguna, cada short usa un fotograma del propio vídeo como portada (se puede cambiar luego por clip desde el editor)."}
           </p>
         </div>
       )}

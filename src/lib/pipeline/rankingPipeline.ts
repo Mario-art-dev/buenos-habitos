@@ -111,6 +111,7 @@ export async function processRankingJob(jobId: string): Promise<void> {
             musicSuggestedSection: composition.musicSuggestedSection,
             commentaryIntro: commentaryOn ? composition.commentaryIntro : null,
             commentaryOutro: commentaryOn ? composition.commentaryOutro : null,
+            coverImagePath: job.coverImagePath,
             status: "RENDERING",
             rankingItems: {
               create: group.items.map((item, idx) => ({
@@ -143,6 +144,8 @@ export async function processRankingJob(jobId: string): Promise<void> {
           })),
           transcriptSegments: transcript.segments,
           resolution,
+          partLabel: `Parte ${created.rank}`,
+          coverImagePath: job.coverImagePath,
         });
 
         const { filePath, thumbnailPath } = await finalizeWithoutMusic(jobId, created.id);

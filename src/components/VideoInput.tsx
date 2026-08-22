@@ -1,24 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { fetchWithRetry } from "@/lib/fetchWithRetry";
 
 const CHUNK_SIZE = 20 * 1024 * 1024; // 20MB por trozo, con margen de sobra bajo el límite del túnel
-
-async function fetchWithRetry(input: string, init: RequestInit, retries = 3): Promise<Response> {
-  for (let attempt = 0; ; attempt++) {
-    try {
-      const res = await fetch(input, init);
-      if (!res.ok && res.status >= 500 && attempt < retries) {
-        await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
-        continue;
-      }
-      return res;
-    } catch (err) {
-      if (attempt >= retries) throw err;
-      await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
-    }
-  }
-}
 
 export interface VideoInputValue {
   url: string;

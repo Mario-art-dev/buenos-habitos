@@ -241,6 +241,7 @@ async function processSingleJob(jobId: string): Promise<void> {
             title: clip.title,
             outPath: coverPath,
             resolution,
+            customImagePath: job.coverImagePath,
           });
           await concatClips([core, coverPath], outPath);
         } else if (core !== outPath) {
@@ -252,6 +253,7 @@ async function processSingleJob(jobId: string): Promise<void> {
           where: { id: clip.id },
           data: {
             status: "READY",
+            coverImagePath: job.coverImagePath,
             filePath: outPath,
             thumbnailPath: thumbPath,
             commentaryIntro,

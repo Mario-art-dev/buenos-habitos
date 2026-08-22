@@ -8,12 +8,14 @@ import {
   clipBodyPath,
   hookFramePath,
   coverCardPath,
+  bigCaptionsPath,
   tmpDir,
 } from "@/lib/storagePaths";
 import { resolveSourceVideo } from "./download";
 import { extractAudio, transcribeAudio } from "./transcribe";
 import { buildFixedSegments, describeFixedSegments } from "./splitAnalyze";
-import { cutVerticalClip, extractThumbnail, concatClips } from "./clip";
+import { cutVerticalClip, extractThumbnail, concatClips, burnTopLabel } from "./clip";
+import { cuesFromTranscript, buildBigCaptionsAssFromCues, type StoredCue } from "./bigCaptions";
 import { pickHookStartSec, hookVerifiedFrameSec } from "./hookFrame";
 import { probeVideo, pickVerticalResolution } from "./probe";
 import { renderCoverCard } from "./coverCard";
@@ -95,7 +97,9 @@ export async function processSplitJob(jobId: string): Promise<void> {
     const resolution = pickVerticalResolution(sourceInfo);
     for (const clip of clips) {
       const bodyPath = clipBodyPath(jobId, clip.id);
+      const labeledPath = `${bodyPath}.labeled.mp4`;
       const coverPath = coverCardPath(jobId, clip.id);
+      const bigCaptionsFilePath = bigCaptionsPath(jobId, clip.id);
       try {
         await db.clip.update({ where: { id: clip.id }, data: { status: "RENDERING" } });
         const outPath = clipVideoPath(jobId, clip.id);
@@ -110,6 +114,18 @@ export async function processSplitJob(jobId: string): Promise<void> {
           framePath: hookFramePath(jobId, clip.id),
         });
 
+        // Caption grande estilo karaoke: mismo tratamiento que el modo SINGLE ("vídeos virales"),
+        // activado por defecto y editable/desactivable luego desde el editor.
+        const captionCues: StoredCue[] = cuesFromTranscript(transcript.segments, hookStartSec, clip.endSec, 4, true);
+        let bigCaptionsFile: string | undefined;
+        if (captionCues.length > 0) {
+          const assContent = buildBigCaptionsAssFromCues(captionCues, resolution);
+          if (assContent) {
+            fs.writeFileSync(bigCaptionsFilePath, assContent, "utf-8");
+            bigCaptionsFile = bigCaptionsFilePath;
+          }
+        }
+
         await cutVerticalClip({
           sourcePath: srcPath,
           outPath: bodyPath,
@@ -117,7 +133,12 @@ export async function processSplitJob(jobId: string): Promise<void> {
           endSec: clip.endSec,
           resolution,
           dynamicZoom: false,
+          bigCaptionsPath: bigCaptionsFile,
         });
+
+        // Mismo texto permanente "Parte N" en la parte superior que el modo Doble, para saber qué
+        // short es cuál — se quema sobre el cuerpo del vídeo, nunca sobre la portada.
+        await burnTopLabel(bodyPath, labeledPath, `Parte ${clip.rank}`, resolution);
 
         if (config.coverCard.enabled) {
           await renderCoverCard({
@@ -126,10 +147,11 @@ export async function processSplitJob(jobId: string): Promise<void> {
             title: clip.title,
             outPath: coverPath,
             resolution,
+            customImagePath: job.coverImagePath,
           });
-          await concatClips([bodyPath, coverPath], outPath);
+          await concatClips([labeledPath, coverPath], outPath);
         } else {
-          fs.copyFileSync(bodyPath, outPath);
+          fs.copyFileSync(labeledPath, outPath);
         }
 
         await extractThumbnail(outPath, thumbPath);
@@ -140,7 +162,8 @@ export async function processSplitJob(jobId: string): Promise<void> {
             filePath: outPath,
             thumbnailPath: thumbPath,
             effectiveStartSec: hookStartSec,
-            captionCues: "[]",
+            captionCues: JSON.stringify(captionCues),
+            coverImagePath: job.coverImagePath,
           },
         });
       } catch (err) {
@@ -149,7 +172,7 @@ export async function processSplitJob(jobId: string): Promise<void> {
           data: { status: "FAILED", error: (err as Error).message },
         });
       } finally {
-        for (const tmp of [bodyPath, coverPath]) {
+        for (const tmp of [bodyPath, labeledPath, coverPath, bigCaptionsFilePath]) {
           try {
             fs.rmSync(tmp, { force: true });
           } catch {
