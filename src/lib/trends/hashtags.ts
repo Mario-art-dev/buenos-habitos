@@ -44,7 +44,7 @@ export async function suggestHashtags(params: {
 
   const external = await fetchExternalTrendingTags(platform, `${title} ${description}`);
 
-  const provider = getAIProvider();
+  const provider = await getAIProvider();
   const raw = await provider.chatJson({
     system: `Eres un experto en crecimiento orgánico y SEO de ${platform === "TIKTOK" ? "TikTok" : "YouTube Shorts"},
 especializado en canales de comedia y entretenimiento — sabes exactamente qué hashtags sigue y busca ESE

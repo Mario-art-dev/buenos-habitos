@@ -14,9 +14,9 @@ import type { AIChatOptions, AIProvider } from "./provider";
 export class GroqProvider implements AIProvider {
   private client: OpenAI;
 
-  constructor() {
+  constructor(apiKey: string = config.ai.groqApiKey) {
     this.client = new OpenAI({
-      apiKey: config.ai.groqApiKey,
+      apiKey,
       baseURL: "https://api.groq.com/openai/v1",
     });
   }

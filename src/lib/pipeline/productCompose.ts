@@ -62,7 +62,7 @@ export async function generateProductScript(params: {
   referenceAdUrl: string | null;
   assets: ProductAssetInput[];
 }): Promise<ProductScript> {
-  const provider = getAIProvider();
+  const provider = await getAIProvider();
   // Con presupuesto de tokens limitado (capas gratuitas como Groq) cada foto ya cuesta ~1600
   // tokens de por sí, así que mandar todas las fotos de un producto con muchas revienta el
   // límite por petición antes incluso de dejar sitio para la respuesta. Se limitan a las 2

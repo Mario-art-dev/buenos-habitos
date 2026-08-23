@@ -24,7 +24,7 @@ export async function composeSongEdit(params: {
   songTitle: string;
   clipCount: number;
 }): Promise<SongComposition> {
-  const provider = getAIProvider();
+  const provider = await getAIProvider();
   const raw = await provider.chatJson({
     system: SYSTEM_PROMPT,
     prompt: `Has montado un vídeo corto vertical con ${params.clipCount} cortes de la recopilación

@@ -5,8 +5,8 @@ import type { AIChatOptions, AIProvider } from "./provider";
 export class AnthropicProvider implements AIProvider {
   private client: Anthropic;
 
-  constructor() {
-    this.client = new Anthropic({ apiKey: config.ai.anthropicApiKey });
+  constructor(apiKey: string = config.ai.anthropicApiKey) {
+    this.client = new Anthropic({ apiKey });
   }
 
   async chatJson({ system, prompt, images = [], maxTokens = 4096 }: AIChatOptions): Promise<string> {

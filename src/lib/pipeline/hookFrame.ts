@@ -40,7 +40,7 @@ export async function pickHookStartSec(params: {
     const checkAt = hookVerifiedFrameSec(startSec, endSec);
     await extractFrameAt(sourcePath, checkAt, framePath);
 
-    const provider = getAIProvider();
+    const provider = await getAIProvider();
     const raw = await provider.chatJson({
       system: "Respondes EXCLUSIVAMENTE con JSON válido, sin texto adicional, sin markdown.",
       prompt:

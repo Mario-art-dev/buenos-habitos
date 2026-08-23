@@ -15,9 +15,9 @@ import type { AIChatOptions, AIProvider } from "./provider";
 export class CerebrasProvider implements AIProvider {
   private client: OpenAI;
 
-  constructor() {
+  constructor(apiKey: string = config.ai.cerebrasApiKey) {
     this.client = new OpenAI({
-      apiKey: config.ai.cerebrasApiKey,
+      apiKey,
       baseURL: "https://api.cerebras.ai/v1",
     });
   }

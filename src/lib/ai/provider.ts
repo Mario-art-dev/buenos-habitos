@@ -15,7 +15,7 @@ export interface AIProvider {
   chatJson(options: AIChatOptions): Promise<string>;
 }
 
-import { config, requireAiKey } from "@/lib/config";
+import { config } from "@/lib/config";
 import { AnthropicProvider } from "./anthropic";
 import { OpenAIProvider } from "./openai";
 import { GeminiProvider } from "./gemini";
@@ -23,40 +23,24 @@ import { GroqProvider } from "./groq";
 import { CerebrasProvider } from "./cerebras";
 import { MistralProvider } from "./mistral";
 import { RateLimitedProvider, TokenRateLimiter } from "./rateLimit";
+import { resolvedAiKeys, type AiProviderName } from "./credentials";
 
-type ProviderName = "anthropic" | "openai" | "gemini" | "groq" | "cerebras" | "mistral";
+type ProviderName = AiProviderName;
 
-function buildProvider(name: ProviderName): AIProvider {
+function buildProvider(name: ProviderName, apiKey: string): AIProvider {
   switch (name) {
     case "openai":
-      return new OpenAIProvider();
+      return new OpenAIProvider(apiKey);
     case "gemini":
-      return new GeminiProvider();
+      return new GeminiProvider(apiKey);
     case "groq":
-      return new GroqProvider();
+      return new GroqProvider(apiKey);
     case "cerebras":
-      return new CerebrasProvider();
+      return new CerebrasProvider(apiKey);
     case "mistral":
-      return new MistralProvider();
+      return new MistralProvider(apiKey);
     default:
-      return new AnthropicProvider();
-  }
-}
-
-function hasKey(name: ProviderName): boolean {
-  switch (name) {
-    case "openai":
-      return !!config.ai.openaiApiKey;
-    case "gemini":
-      return !!config.ai.geminiApiKey;
-    case "groq":
-      return !!config.ai.groqApiKey;
-    case "cerebras":
-      return !!config.ai.cerebrasApiKey;
-    case "mistral":
-      return !!config.ai.mistralApiKey;
-    default:
-      return !!config.ai.anthropicApiKey;
+      return new AnthropicProvider(apiKey);
   }
 }
 
@@ -98,28 +82,43 @@ class FallbackAIProvider implements AIProvider {
 }
 
 let cached: AIProvider | null = null;
+// Huella de qué claves se usaron para construir "cached" — si cambian (se guarda/quita una clave
+// desde Ajustes), se reconstruye la cadena; si no, se reutiliza la misma instancia (importa: cada
+// RateLimitedProvider recuerda en memoria si ese proveedor ya agotó su cupo diario, y esa memoria
+// se perdería sin necesidad si se reconstruyera en cada llamada).
+let cachedFingerprint = "";
 
-export function getAIProvider(): AIProvider {
-  requireAiKey();
-  if (cached) return cached;
-
+export async function getAIProvider(): Promise<AIProvider> {
+  const keys = await resolvedAiKeys();
   // El orden real de uso es SIEMPRE el de FALLBACK_ORDER (de mejor a peor, gratuitas primero),
-  // filtrado a los proveedores que de verdad tienen clave configurada — AI_PROVIDER ya no fuerza
-  // cuál va primero (antes sí, y si esa clave concreta faltaba pero otras sí estaban puestas, el
-  // arranque entero fallaba solo por eso). Así, en cuanto se añade la clave de un proveedor mejor
-  // (p.ej. Gemini), empieza a usarse el primero automáticamente sin tocar nada más.
-  const chain = FALLBACK_ORDER.filter(hasKey);
+  // filtrado a los proveedores que de verdad tienen clave configurada (desde Ajustes o como
+  // variable de entorno/secreto de GitHub, indistintamente) — AI_PROVIDER ya no fuerza cuál va
+  // primero. Así, en cuanto hay clave de un proveedor mejor (p.ej. Gemini), empieza a usarse el
+  // primero automáticamente sin tocar nada más ni reiniciar el servidor.
+  const chain = FALLBACK_ORDER.filter((name) => !!keys[name]);
+
+  if (chain.length === 0) {
+    throw new Error(
+      "No hay ninguna clave de IA configurada: añade una desde Ajustes → Proveedores de IA, o como " +
+        "variable de entorno (GEMINI_API_KEY, GROQ_API_KEY, CEREBRAS_API_KEY, MISTRAL_API_KEY, " +
+        "ANTHROPIC_API_KEY u OPENAI_API_KEY)."
+    );
+  }
+
+  const fingerprint = chain.map((name) => `${name}:${keys[name]}`).join("|");
+  if (cached && fingerprint === cachedFingerprint) return cached;
 
   // Un limitador de tokens por minuto POR PROVEEDOR: cada uno tiene su propio presupuesto (son
   // cuentas distintas), así que comparten limitador no tendría sentido — pero dentro de un mismo
   // proveedor sí es una única cuenta para todo el proceso.
   const wrapped = chain.map((name) => {
-    const provider = buildProvider(name);
+    const provider = buildProvider(name, keys[name]);
     return config.ai.tokensPerMinute > 0
       ? new RateLimitedProvider(provider, new TokenRateLimiter(config.ai.tokensPerMinute))
       : provider;
   });
 
   cached = wrapped.length > 1 ? new FallbackAIProvider(wrapped, chain) : wrapped[0];
+  cachedFingerprint = fingerprint;
   return cached;
 }

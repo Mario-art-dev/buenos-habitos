@@ -24,8 +24,8 @@ export class GeminiProvider implements AIProvider {
   private apiKey: string;
   private model: string;
 
-  constructor() {
-    this.apiKey = config.ai.geminiApiKey;
+  constructor(apiKey: string = config.ai.geminiApiKey) {
+    this.apiKey = apiKey;
     this.model = config.ai.geminiModel;
   }
 

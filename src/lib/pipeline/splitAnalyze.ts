@@ -126,7 +126,7 @@ export async function describeFixedSegments(
   sourceTitle: string,
   contentLanguage: string
 ): Promise<Map<number, SegmentDescription>> {
-  const provider = getAIProvider();
+  const provider = await getAIProvider();
   const results = new Map<number, SegmentDescription>();
   const BATCH_SIZE = 8;
 

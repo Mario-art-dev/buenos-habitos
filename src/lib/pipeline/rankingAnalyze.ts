@@ -147,7 +147,7 @@ export async function classifyCandidates(
   candidates: CandidateMoment[],
   contentLanguage: string
 ): Promise<ClassifyResult> {
-  const provider = getAIProvider();
+  const provider = await getAIProvider();
   const classified: ClassifiedMoment[] = [];
   // Cada fotograma cuesta bastantes tokens: en capas gratuitas con poco margen por minuto se
   // mandan de dos en dos para no superar el límite (configurable con AI_VISION_BATCH_SIZE).

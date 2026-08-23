@@ -44,7 +44,7 @@ export async function composeRanking(
   contentLanguage: string,
   commentaryEnabled: boolean = config.commentary.enabled
 ): Promise<RankingComposition> {
-  const provider = getAIProvider();
+  const provider = await getAIProvider();
   const itemsList = group.items
     .map((item, i) => `${i + 1}. ${item.label} — ${item.description} (impacto ${item.score}/100)`)
     .join("\n");

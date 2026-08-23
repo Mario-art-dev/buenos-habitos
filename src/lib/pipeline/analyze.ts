@@ -192,7 +192,7 @@ export async function analyzeTranscriptForClips(
   contentLanguage: string,
   onProgress?: (partIndex: number, partCount: number) => Promise<void> | void
 ): Promise<MomentCandidate[]> {
-  const provider = getAIProvider();
+  const provider = await getAIProvider();
   // Cuántos clips se buscan depende de la duración del vídeo (aprox. 1 cada 2 minutos), no de un
   // número fijo: un vídeo de 50 min apunta a ~25, uno de 10 min a ~5. MAX_CLIPS_PER_JOB actúa como
   // techo (para no disparar el número de peticiones/render en vídeos muy largos).

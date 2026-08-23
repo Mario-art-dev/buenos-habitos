@@ -13,9 +13,9 @@ import type { AIChatOptions, AIProvider } from "./provider";
 export class MistralProvider implements AIProvider {
   private client: OpenAI;
 
-  constructor() {
+  constructor(apiKey: string = config.ai.mistralApiKey) {
     this.client = new OpenAI({
-      apiKey: config.ai.mistralApiKey,
+      apiKey,
       baseURL: "https://api.mistral.ai/v1",
     });
   }

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import ScheduleSettings from "@/components/ScheduleSettings";
+import AiProvidersSettings from "@/components/AiProvidersSettings";
 
 interface Account {
   platform: "YOUTUBE" | "TIKTOK";
@@ -91,6 +92,8 @@ export default function SettingsClient() {
           Cuenta de {connected === "youtube" ? "YouTube" : "TikTok"} conectada correctamente.
         </div>
       )}
+
+      <AiProvidersSettings />
 
       <div className="rounded-2xl border border-ink-700 bg-ink-800 p-6">
         <div className="flex items-center justify-between">

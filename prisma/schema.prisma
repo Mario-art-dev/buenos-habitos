@@ -235,3 +235,12 @@ model AutoPublishTask {
   error       String?
   createdAt   DateTime @default(now())
 }
+
+// Claves de proveedores de IA pegadas desde Ajustes en vez de como secreto de GitHub — para quien
+// no pueda/sepa moverse por Settings → Secrets del repositorio. Si un proveedor tiene fila aquí,
+// esa clave manda sobre la variable de entorno del mismo nombre (ver src/lib/ai/credentials.ts).
+model AiCredential {
+  provider  String   @id // "gemini" | "groq" | "cerebras" | "mistral" | "anthropic" | "openai"
+  apiKey    String
+  updatedAt DateTime @updatedAt
+}

@@ -258,23 +258,3 @@ export const config = {
 
   storageDir: optional("STORAGE_DIR", "storage"),
 };
-
-// AI_PROVIDER ya no exige tener esa clave EXACTA puesta (con varios proveedores encadenados como
-// repuesto, ver getAIProvider() en provider.ts, exigir precisamente esa rompería el arranque
-// entero solo porque el proveedor "por defecto" no tiene clave aunque otros sí) — solo hace
-// falta que ALGUNA de las claves de IA esté configurada, la que sea.
-export function requireAiKey(): void {
-  const anyKey =
-    config.ai.anthropicApiKey ||
-    config.ai.openaiApiKey ||
-    config.ai.geminiApiKey ||
-    config.ai.groqApiKey ||
-    config.ai.cerebrasApiKey ||
-    config.ai.mistralApiKey;
-  if (!anyKey) {
-    throw new Error(
-      "Falta configurar al menos una clave de IA (ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, " +
-        "GROQ_API_KEY, CEREBRAS_API_KEY o MISTRAL_API_KEY)."
-    );
-  }
-}

@@ -28,7 +28,7 @@ export async function generateSingleCommentary(params: {
   hook: string | null;
   contentLanguage: string;
 }): Promise<SingleCommentary> {
-  const provider = getAIProvider();
+  const provider = await getAIProvider();
   const raw = await provider.chatJson({
     system: buildSystemPrompt(params.contentLanguage),
     prompt: `Vas a presentar este short:

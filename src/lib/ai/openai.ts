@@ -5,8 +5,8 @@ import type { AIChatOptions, AIProvider } from "./provider";
 export class OpenAIProvider implements AIProvider {
   private client: OpenAI;
 
-  constructor() {
-    this.client = new OpenAI({ apiKey: config.ai.openaiApiKey });
+  constructor(apiKey: string = config.ai.openaiApiKey) {
+    this.client = new OpenAI({ apiKey });
   }
 
   async chatJson({ system, prompt, images = [], maxTokens = 4096 }: AIChatOptions): Promise<string> {
