@@ -1,8 +1,9 @@
 import fs from "fs";
 import type { TranscriptSegment } from "./transcribe";
 import { probeVideo, type VerticalResolution } from "./probe";
-import { cutVerticalClip, concatClips, mixBackgroundMusic, extractThumbnail, extractAudioSegment, burnTopLabel } from "./clip";
-import { renderRankingIntroCard, renderRankPositionCard, type RankingIntroTemplate } from "./rankingIntroCard";
+import { cutVerticalClip, concatClips, mixBackgroundMusic, extractThumbnail, extractAudioSegment, renderTitleCard } from "./clip";
+import { renderRankingIntroCard, type RankingIntroTemplate } from "./rankingIntroCard";
+import { burnRankingList, type RankingListItem } from "./rankingListOverlay";
 import { renderCommentaryCard } from "./commentaryCards";
 import { buildBigCaptionsAss } from "./bigCaptions";
 import { getTTSProvider } from "@/lib/tts/provider";
@@ -28,8 +29,10 @@ export interface RenderRankingItem {
 }
 
 /**
- * Monta el vídeo de ranking completo: tarjeta de título + por cada puesto (del peor al mejor)
- * una tarjeta con el número y el clip correspondiente con subtítulos quemados.
+ * Monta el vídeo de ranking completo: tarjeta de título + los clips en orden (del peor al mejor),
+ * cada uno con subtítulos quemados. La lista numerada de puestos (1., 2.…) se quema APARTE, encima
+ * de todo el vídeo ya montado (ver burnRankingList) — pedido explícito: se queda fija en pantalla
+ * durante todo el vídeo en vez de cortar a una tarjeta de título aparte por cada puesto.
  * Devuelve la ruta del vídeo montado SIN música (clipAssembledPath).
  */
 export async function assembleRankingVideo(params: {
@@ -46,9 +49,6 @@ export async function assembleRankingVideo(params: {
   captionsEnabled?: boolean;
   // Imagen propia subida desde la fototeca para la tarjeta de intro, en vez del fondo negro.
   coverImagePath?: string | null;
-  // Texto permanente "Parte N" en la parte superior durante todo el vídeo, igual que en el modo
-  // Doble y en el modo Cortar en shorts — para saber qué vídeo de ranking es cuál.
-  partLabel?: string | null;
   // "TOPIC" (por defecto) -> "Ranking Funniest {category} Moments"; "YOUTUBER" -> "Best 5 {category}
   // Clips" (ver rankingAnalyze.ts groupIntoRankings / Job.manualCategories).
   templateType?: RankingIntroTemplate;
@@ -59,6 +59,10 @@ export async function assembleRankingVideo(params: {
   const playOrder = [...items].sort((a, b) => b.position - a.position); // peor -> mejor
 
   const segmentPaths: string[] = [];
+  // Segundo (dentro del vídeo YA montado) en el que empieza el clip de cada puesto — se usa para
+  // saber cuándo revelar su etiqueta en la lista persistente (burnRankingList).
+  const listItems: RankingListItem[] = [];
+  let cursorSec = 0;
 
   // Tarjeta de intro con la plantilla fija "Ranking Funniest {Category} Moments" (fuente/colores
   // pedidos a partir de una captura real de referencia) — se añade SIEMPRE, a diferencia de la
@@ -74,17 +78,22 @@ export async function assembleRankingVideo(params: {
     await renderRankingIntroCard(introPath, category, 2, resolution, undefined, params.coverImagePath, templateType);
   }
   segmentPaths.push(introPath);
+  cursorSec += (await probeVideo(introPath)).durationSec;
 
   for (const item of playOrder) {
-    const cardPath = candidateCardPath(jobId, clipId, `pos${item.position}`);
+    // Comentario narrado por puesto (opcional, ENABLE_COMMENTARY): tarjeta muda de audio (sin
+    // texto visible, ya no hace falta — el número/etiqueta de este puesto los pone la lista
+    // persistente) justo antes de su clip, para que se oiga la narración antes de que se vea.
     if (item.commentary) {
       const itemAudioPath = narrationAudioPath(jobId, clipId, `pos${item.position}`);
       await getTTSProvider().synthesize(item.commentary, itemAudioPath);
-      await renderRankPositionCard(cardPath, item.position, item.label, 1.4, resolution, itemAudioPath);
-    } else {
-      await renderRankPositionCard(cardPath, item.position, item.label, 1.4, resolution);
+      const cardPath = candidateCardPath(jobId, clipId, `pos${item.position}`);
+      await renderTitleCard(cardPath, "", 0.1, resolution, itemAudioPath);
+      segmentPaths.push(cardPath);
+      cursorSec += (await probeVideo(cardPath)).durationSec;
     }
-    segmentPaths.push(cardPath);
+
+    listItems.push({ position: item.position, label: item.label, revealAtSec: cursorSec });
 
     const subPath = candidateSubClipPath(jobId, clipId, item.position);
     const assContent = captionsEnabled ? buildBigCaptionsAss(transcriptSegments, item.startSec, item.endSec, resolution) : null;
@@ -94,8 +103,8 @@ export async function assembleRankingVideo(params: {
       fs.writeFileSync(bigCaptionsFile, assContent);
     }
 
-    // El número de puesto ya se ve en la tarjeta "#N" que precede a este segmento (arriba);
-    // repetirlo en grande sobre el propio vídeo quedaba fuera de lugar y no aportaba nada.
+    // Nunca zoom/recorte en Rankings — pedido explícito: el clip se ve siempre en horizontal
+    // completo (con relleno desenfocado), sin "punch-ins" (ver buildVerticalFilter en clip.ts).
     await cutVerticalClip({
       sourcePath,
       outPath: subPath,
@@ -103,9 +112,10 @@ export async function assembleRankingVideo(params: {
       endSec: item.endSec,
       resolution,
       bigCaptionsPath: bigCaptionsFile,
-      dynamicZoom: config.dynamicZoom.enabled,
+      dynamicZoom: false,
     });
     segmentPaths.push(subPath);
+    cursorSec += (await probeVideo(subPath)).durationSec;
   }
 
   // Tarjeta de cierre narrada con la opinión final, si el comentario está activado.
@@ -118,6 +128,7 @@ export async function assembleRankingVideo(params: {
       resolution,
     });
     segmentPaths.push(outroPath);
+    cursorSec += (await probeVideo(outroPath)).durationSec;
   }
 
   const assembledPath = clipAssembledPath(jobId, clipId);
@@ -128,11 +139,9 @@ export async function assembleRankingVideo(params: {
     fs.rmSync(p, { force: true });
   }
 
-  if (params.partLabel) {
-    const labeledPath = `${assembledPath}.labeled.mp4`;
-    await burnTopLabel(assembledPath, labeledPath, params.partLabel, resolution);
-    fs.renameSync(labeledPath, assembledPath);
-  }
+  const listedPath = `${assembledPath}.listed.mp4`;
+  await burnRankingList(assembledPath, listedPath, listItems, cursorSec, resolution);
+  fs.renameSync(listedPath, assembledPath);
 
   return assembledPath;
 }

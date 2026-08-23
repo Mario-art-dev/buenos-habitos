@@ -19,6 +19,69 @@ async function nextEligibleClips(limit: number) {
   });
 }
 
+const PUBLISH_ALL_PER_HOUR = 2;
+
+export interface PublishAllResult {
+  scheduledClips: number;
+  firstAt: Date | null;
+  lastAt: Date | null;
+  platforms: Platform[];
+}
+
+/**
+ * Botón "Publicar todos" de la Galería: programa TODOS los shorts listos que aún no se han
+ * publicado ni tienen ya una tarea pendiente, repartidos cada hora en punto (2 shorts por hora,
+ * empezando en la próxima hora en punto) — pedido explícito, en vez de depender de que el usuario
+ * configure franjas horarias a mano. Reutiliza el mismo mecanismo de AutoPublishTask que ya
+ * procesa processDueTasks() cada minuto, así que funciona sea cual sea el estado de
+ * enabled/mode de la programación automática normal (INTERVAL/WINDOW) — son dos vías independientes
+ * hacia la misma cola de tareas.
+ */
+export async function scheduleAllReadyClips(): Promise<PublishAllResult> {
+  const settings = await getAutoPublishSettings();
+  const platforms = await connectedPlatforms(settings.platforms);
+  if (platforms.length === 0) {
+    throw new Error("No tienes ninguna plataforma conectada (YouTube/TikTok) en Ajustes.");
+  }
+
+  const alreadyPending = await db.autoPublishTask.findMany({
+    where: { status: "PENDING" },
+    select: { clipId: true },
+  });
+  const pendingClipIds = new Set(alreadyPending.map((t) => t.clipId));
+
+  const eligible = (await nextEligibleClips(2000)).filter((c) => !pendingClipIds.has(c.id));
+  if (eligible.length === 0) {
+    return { scheduledClips: 0, firstAt: null, lastAt: null, platforms };
+  }
+
+  const start = new Date();
+  start.setMinutes(0, 0, 0);
+  start.setHours(start.getHours() + 1); // próxima hora en punto
+
+  let slot = new Date(start);
+  let countInSlot = 0;
+  let firstAt: Date | null = null;
+  let lastAt: Date | null = null;
+
+  for (const clip of eligible) {
+    if (countInSlot >= PUBLISH_ALL_PER_HOUR) {
+      slot = new Date(slot.getTime() + 3600_000);
+      countInSlot = 0;
+    }
+    if (!firstAt) firstAt = slot;
+    lastAt = slot;
+    for (const platform of platforms) {
+      await db.autoPublishTask.create({
+        data: { clipId: clip.id, platform, scheduledAt: slot, status: "PENDING" },
+      });
+    }
+    countInSlot++;
+  }
+
+  return { scheduledClips: eligible.length, firstAt, lastAt, platforms };
+}
+
 async function runIntervalMode(intervalHours: number, platforms: Platform[], nextRunAt: Date | null) {
   const now = new Date();
   if (nextRunAt && now < nextRunAt) return;

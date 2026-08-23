@@ -66,7 +66,6 @@ export async function regenerateRankingClip(clipId: string): Promise<void> {
       resolution,
       captionsEnabled: clip.captionsEnabled,
       coverImagePath: clip.coverImagePath,
-      partLabel: `Parte ${clip.rank}`,
       templateType: (clip.introTemplate as RankingIntroTemplate) ?? "TOPIC",
     });
 

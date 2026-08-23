@@ -158,7 +158,6 @@ export async function processRankingJob(jobId: string): Promise<void> {
           })),
           transcriptSegments: transcript.segments,
           resolution,
-          partLabel: `Parte ${created.rank}`,
           coverImagePath: job.coverImagePath,
           templateType: group.templateType,
         });
