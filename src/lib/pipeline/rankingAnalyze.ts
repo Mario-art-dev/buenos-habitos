@@ -157,6 +157,29 @@ function genericCategoryLabel(): string {
   return "Viral";
 }
 
+/**
+ * Título corto derivado de la propia transcripción del tramo (en vez de un texto genérico tipo
+ * "Featured moment") para cuando la IA no puso ninguna etiqueta — sea porque el campo "label" no
+ * se pudo recuperar del JSON roto, o porque el lote entero cayó en fallbackMomentsForBatch. Se
+ * queda MUY corto (máx. ~28 caracteres) porque este texto se quema encima del vídeo en la lista
+ * persistente de puestos (rankingListOverlay.ts), que no envuelve línea automáticamente.
+ */
+function deriveLabelFromTranscript(excerpt: string, languageCode: string | null): string {
+  const cleaned = excerpt.replace(/\s+/g, " ").trim();
+  if (!cleaned) {
+    return languageCode === "es" ? "Momento destacado" : "Featured moment";
+  }
+  const words = cleaned.split(" ");
+  let label = "";
+  for (const word of words) {
+    const candidate = label ? `${label} ${word}` : word;
+    if (candidate.length > 28) break;
+    label = candidate;
+  }
+  if (!label) label = words[0].slice(0, 28);
+  return label.length < cleaned.length ? `${label}…` : label;
+}
+
 interface RawMoment {
   index: number;
   include: boolean;
@@ -195,7 +218,9 @@ function parseMomentsLoosely(raw: string): RawMoment[] {
       index: Number(indexMatch[1]),
       include: includeMatch ? includeMatch[1] === "true" : true,
       category: categoryMatch ? categoryMatch[1] : "otros",
-      label: labelMatch ? labelMatch[1] : "Momento destacado",
+      // Vacío en vez de un texto genérico — classifyCandidates lo rellena con un título derivado
+      // de la propia transcripción del tramo (ver deriveLabelFromTranscript).
+      label: labelMatch ? labelMatch[1] : "",
       description: descriptionMatch ? descriptionMatch[1] : "",
       score: scoreMatch ? Number(scoreMatch[1]) : 50,
     });
@@ -225,14 +250,15 @@ function parseMomentsResponse(raw: string): RawMoment[] {
  * candidatos reales de vídeo de por medio, es mucho peor un vídeo sin ranking que uno con
  * categorías/etiquetas menos finas.
  */
-function fallbackMomentsForBatch(batch: CandidateMoment[], languageCode: string | null): RawMoment[] {
+function fallbackMomentsForBatch(batch: CandidateMoment[]): RawMoment[] {
   const category = genericCategoryLabel();
-  const label = languageCode === "es" ? "Momento destacado" : "Featured moment";
   return batch.map((c) => ({
     index: c.index,
     include: true,
     category,
-    label,
+    // Vacío — classifyCandidates lo rellena con un título derivado de la propia transcripción
+    // del tramo (ver deriveLabelFromTranscript), no un texto genérico igual para todos.
+    label: "",
     description: "",
     score: 40,
   }));
@@ -287,7 +313,7 @@ export async function classifyCandidates(
       if (moments.length === 0) {
         // La IA respondió (no fue un fallo de red/cupo) pero con algo sin relación alguna con el
         // esquema pedido — no se descarta el lote, se recupera como momentos genéricos.
-        moments = fallbackMomentsForBatch(batch, languageCode);
+        moments = fallbackMomentsForBatch(batch);
         unrecognizedBatches++;
       }
 
@@ -298,7 +324,7 @@ export async function classifyCandidates(
           ...candidate,
           include: !!m.include,
           category: (m.category || "otros").trim().toLowerCase(),
-          label: m.label || "Momento destacado",
+          label: m.label || deriveLabelFromTranscript(candidate.transcriptExcerpt, languageCode),
           description: m.description || "",
           score: Math.max(0, Math.min(100, Math.round(m.score ?? 0))),
         });
