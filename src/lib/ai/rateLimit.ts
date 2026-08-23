@@ -92,8 +92,10 @@ export class RateLimitedProvider implements AIProvider {
     if (this.dailyLimitUntil && Date.now() < this.dailyLimitUntil) {
       const minutesLeft = Math.ceil((this.dailyLimitUntil - Date.now()) / 60_000);
       throw new Error(
-        `La IA ha agotado su cupo gratuito DIARIO (no solo por minuto). Se libera solo con el tiempo: ` +
-          `prueba de nuevo en ~${minutesLeft} min, o mejor mañana.`
+        `La IA ha agotado su cupo gratuito DIARIO (no solo por minuto). Este cupo se comparte entre TODOS ` +
+          `los trabajos del día (Rankings, vídeos virales, Doble, Producto...), no es por vídeo — así que se ` +
+          `agota antes si se han hecho varias pruebas hoy. Se libera solo con el tiempo: prueba de nuevo en ` +
+          `~${minutesLeft} min, o mejor mañana.`
       );
     }
 
@@ -120,9 +122,11 @@ export class RateLimitedProvider implements AIProvider {
           const retryMs = parseRetryAfterMs(error.message) ?? 60 * 60_000;
           this.dailyLimitUntil = Date.now() + retryMs;
           throw new Error(
-            `La IA ha agotado su cupo gratuito DIARIO (Groq limita los tokens por día, no solo por ` +
-              `minuto). Se libera solo con el tiempo: prueba de nuevo en ~${Math.ceil(retryMs / 60_000)} min, ` +
-              `o mejor mañana. Detalle: ${error.message}`
+            `La IA ha agotado su cupo gratuito DIARIO (Groq limita los tokens por día, no solo por minuto). ` +
+              `Este cupo se comparte entre TODOS los trabajos del día (Rankings, vídeos virales, Doble, ` +
+              `Producto...), no es por vídeo — así que se agota antes si se han hecho varias pruebas hoy. Se ` +
+              `libera solo con el tiempo: prueba de nuevo en ~${Math.ceil(retryMs / 60_000)} min, o mejor ` +
+              `mañana. Detalle: ${error.message}`
           );
         }
         if (!isRateLimitError(error.message)) throw error;

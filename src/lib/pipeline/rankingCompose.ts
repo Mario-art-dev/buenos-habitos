@@ -16,6 +16,19 @@ export interface RankingComposition {
   itemCommentary: string[]; // mismo orden que group.items (mejor puesto primero)
 }
 
+// Campos de placeholder cuando el comentario en off está desactivado (ENABLE_COMMENTARY=false,
+// el valor por defecto real del servidor) — nunca se usan (ver rankingPipeline.ts: solo se
+// guardan si commentaryOn), así que ni siquiera se piden a la IA (ver composeRanking): con la capa
+// gratuita de Groq compartiendo un cupo diario entre TODOS los trabajos del día, pedir y generar
+// texto que luego se descarta es tirar tokens reales a la basura sin que sirvan para nada.
+function placeholderCommentary(itemCount: number): Pick<RankingComposition, "commentaryIntro" | "commentaryOutro" | "itemCommentary"> {
+  return {
+    commentaryIntro: "",
+    commentaryOutro: "",
+    itemCommentary: new Array(itemCount).fill(""),
+  };
+}
+
 function buildSystemPrompt(contentLanguage: string): string {
   return `Eres la voz y la personalidad del canal "${config.channel.name}" (${config.channel.niche}),
 experto en vídeos de ranking/cuenta atrás virales ("TOP 5...", "TOP 10..."). Grabas comentarios cortos en off,
@@ -28,12 +41,27 @@ en ${contentLanguage}. Respondes EXCLUSIVAMENTE con JSON válido, sin markdown.`
 export async function composeRanking(
   group: RankingGroup,
   sourceTitle: string,
-  contentLanguage: string
+  contentLanguage: string,
+  commentaryEnabled: boolean = config.commentary.enabled
 ): Promise<RankingComposition> {
   const provider = getAIProvider();
   const itemsList = group.items
     .map((item, i) => `${i + 1}. ${item.label} — ${item.description} (impacto ${item.score}/100)`)
     .join("\n");
+
+  const commentaryFields = commentaryEnabled
+    ? `- "commentaryIntro": 1 frase corta (máx 15 palabras) que digas en off ANTES de empezar la cuenta atrás,
+  presentando el ranking con tu propio gancho.
+- "commentaryOutro": 1 frase corta (máx 15 palabras) que digas en off AL FINAL, con tu conclusión u opinión
+  sobre el ranking completo.
+- "itemCommentary": array de ${group.items.length} frases cortas (máx 12 palabras cada una), UNA POR CADA
+  puesto en el MISMO ORDEN de la lista de arriba (del puesto ${group.items.length} al puesto 1), con tu
+  reacción/opinión personal a ESE momento concreto, como si lo presentaras justo antes de que se vea.
+`
+    : "";
+  const commentaryJsonFields = commentaryEnabled
+    ? `,\n"commentaryIntro": "...", "commentaryOutro": "...", "itemCommentary": ["...", "..."]`
+    : "";
 
   const raw = await provider.chatJson({
     system: buildSystemPrompt(contentLanguage),
@@ -61,29 +89,29 @@ Genera los metadatos de este vídeo de ranking:
 - "musicSuggestedSection": si musicRecommended=true, un texto corto tipo "1:15-2:00" con la parte aproximada
   de ESA canción que mejor encajaría (el estribillo, el drop, etc. — orientativo, según tu conocimiento general
   de la canción); si no, null.
-- "commentaryIntro": 1 frase corta (máx 15 palabras) que digas en off ANTES de empezar la cuenta atrás,
-  presentando el ranking con tu propio gancho.
-- "commentaryOutro": 1 frase corta (máx 15 palabras) que digas en off AL FINAL, con tu conclusión u opinión
-  sobre el ranking completo.
-- "itemCommentary": array de ${group.items.length} frases cortas (máx 12 palabras cada una), UNA POR CADA
-  puesto en el MISMO ORDEN de la lista de arriba (del puesto ${group.items.length} al puesto 1), con tu
-  reacción/opinión personal a ESE momento concreto, como si lo presentaras justo antes de que se vea.
-
+${commentaryFields}
 Devuelve SOLO este JSON:
 {"title": "...", "description": "...", "hashtags": ["..."], "viralityScore": number, "viralityReason": "...",
-"musicRecommended": boolean, "musicQuery": "...", "musicSuggestedSection": "..." o null,
-"commentaryIntro": "...", "commentaryOutro": "...", "itemCommentary": ["...", "..."]}`,
-    // Los modelos con razonamiento (p.ej. Qwen3 en Groq) gastan una parte fija y considerable
-    // del presupuesto de tokens "pensando" por dentro aunque se oculte del resultado final, y
-    // aquí la salida ya crece con el número de puestos del ranking (hasta RANKING_MAX_ITEMS).
-    maxTokens: 6_000,
+"musicRecommended": boolean, "musicQuery": "...", "musicSuggestedSection": "..." o null${commentaryJsonFields}}`,
+    // Los modelos con razonamiento (p.ej. Qwen3 en Groq) gastan una parte fija y considerable del
+    // presupuesto de tokens "pensando" por dentro aunque se oculte del resultado final. Con el
+    // comentario en off desactivado (ENABLE_COMMENTARY=false, el valor real del servidor) no hace
+    // falta tanto margen de salida — y con la capa gratuita de Groq compartiendo un cupo DIARIO
+    // entre todos los trabajos del día, cada token que no hace falta pedir es cupo real que queda
+    // para el resto de trabajos de ese mismo día.
+    maxTokens: commentaryEnabled ? 6_000 : 2_000,
   });
 
   const cleaned = raw.trim().replace(/^```json\s*/i, "").replace(/```\s*$/i, "");
-  const parsed = JSON.parse(cleaned) as RankingComposition;
+  const parsed = JSON.parse(cleaned) as Partial<RankingComposition>;
 
-  const itemCommentary = Array.isArray(parsed.itemCommentary) ? parsed.itemCommentary : [];
-  while (itemCommentary.length < group.items.length) {
+  const placeholders = placeholderCommentary(group.items.length);
+  const itemCommentary = commentaryEnabled
+    ? Array.isArray(parsed.itemCommentary)
+      ? parsed.itemCommentary
+      : []
+    : placeholders.itemCommentary;
+  while (commentaryEnabled && itemCommentary.length < group.items.length) {
     itemCommentary.push(`Este momento se merece este puesto en el ranking.`);
   }
 
@@ -96,8 +124,12 @@ Devuelve SOLO este JSON:
     musicRecommended: !!parsed.musicRecommended,
     musicQuery: parsed.musicRecommended ? parsed.musicQuery ?? "" : "",
     musicSuggestedSection: parsed.musicRecommended ? parsed.musicSuggestedSection ?? null : null,
-    commentaryIntro: parsed.commentaryIntro?.trim() || `Aquí tienes el top ${group.items.length} de ${group.category}.`,
-    commentaryOutro: parsed.commentaryOutro?.trim() || "Y hasta aquí el ranking de hoy.",
+    commentaryIntro: commentaryEnabled
+      ? parsed.commentaryIntro?.trim() || `Aquí tienes el top ${group.items.length} de ${group.category}.`
+      : placeholders.commentaryIntro,
+    commentaryOutro: commentaryEnabled
+      ? parsed.commentaryOutro?.trim() || "Y hasta aquí el ranking de hoy."
+      : placeholders.commentaryOutro,
     itemCommentary: itemCommentary.slice(0, group.items.length),
   };
 }
