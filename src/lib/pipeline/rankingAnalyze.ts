@@ -144,6 +144,19 @@ Devuelve SOLO este JSON, con un elemento por candidato EN EL MISMO ORDEN (usa el
 {"moments": [{"index": number, "include": boolean, "category": "string", "label": "string", "description": "string", "score": number}]}`;
 }
 
+// Etiqueta genérica para un ranking "de sobras" (fallbackMomentsForBatch, y el cubo de leftover en
+// groupIntoRankings más abajo) cuando no hay ninguna categoría concreta que lo describa — en el
+// idioma REAL detectado del vídeo (o inglés por defecto, igual que CHANNEL_LANGUAGE), nunca en un
+// idioma fijo distinto al del contenido.
+function genericCategoryLabel(): string {
+  // La tarjeta de intro es SIEMPRE en inglés fijo, "Ranking Funniest {category} Moments" (ver
+  // rankingIntroCard.ts, decisión ya tomada a partir de una captura de referencia real) — la
+  // palabra de categoría que se use aquí tiene que sonar bien metida tal cual ahí (nunca "...
+  // Moments Moments"), así que se usa una sola palabra en inglés fija sea cual sea el idioma real
+  // del vídeo, igual que se le pide a la IA para las categorías que detecta ella sola.
+  return "Viral";
+}
+
 interface RawMoment {
   index: number;
   include: boolean;
@@ -202,16 +215,45 @@ function parseMomentsResponse(raw: string): RawMoment[] {
   return parseMomentsLoosely(raw);
 }
 
+/**
+ * Último recurso cuando ni el JSON estricto ni la recuperación campo a campo (parseMomentsLoosely)
+ * encuentran NADA reconocible en la respuesta — visto en real con el modelo local de repuesto
+ * (Ollama/moondream, el último eslabón de FALLBACK_ORDER cuando todos los proveedores en la nube
+ * se quedan sin cupo el mismo día): un modelo tan pequeño a veces ni sigue el esquema pedido ni
+ * menciona el "index", inventándose su propio JSON sin relación con el prompt. Pedido explícito:
+ * mejor incluir el lote como momentos genéricos sin etiquetar que perderlo del todo — con miles de
+ * candidatos reales de vídeo de por medio, es mucho peor un vídeo sin ranking que uno con
+ * categorías/etiquetas menos finas.
+ */
+function fallbackMomentsForBatch(batch: CandidateMoment[], languageCode: string | null): RawMoment[] {
+  const category = genericCategoryLabel();
+  const label = languageCode === "es" ? "Momento destacado" : "Featured moment";
+  return batch.map((c) => ({
+    index: c.index,
+    include: true,
+    category,
+    label,
+    description: "",
+    score: 40,
+  }));
+}
+
 export interface ClassifyResult {
   items: ClassifiedMoment[];
   totalBatches: number;
   failedBatches: number;
+  // Lotes en los que la IA respondió (sin error de red/cupo) pero con algo irreconocible del todo
+  // — se recuperaron igual como momentos genéricos vía fallbackMomentsForBatch, no se perdieron.
+  unrecognizedBatches: number;
   lastErrorMessage: string | null;
 }
 
 export async function classifyCandidates(
   candidates: CandidateMoment[],
-  contentLanguage: string
+  contentLanguage: string,
+  // Código ISO del idioma real del vídeo (o null) — solo para el texto de fallbackMomentsForBatch
+  // (distinto de contentLanguage, que es el nombre del idioma en español tipo "inglés"/"español").
+  languageCode: string | null = null
 ): Promise<ClassifyResult> {
   const provider = await getAIProvider();
   const classified: ClassifiedMoment[] = [];
@@ -220,6 +262,7 @@ export async function classifyCandidates(
   const batchSize = Math.max(1, config.ai.visionBatchSize);
   const totalBatches = Math.ceil(candidates.length / batchSize);
   let failedBatches = 0;
+  let unrecognizedBatches = 0;
   let lastError: Error | null = null;
 
   for (let i = 0; i < candidates.length; i += batchSize) {
@@ -240,9 +283,12 @@ export async function classifyCandidates(
         maxTokens: 4000,
       });
       const cleaned = raw.trim().replace(/^```json\s*/i, "").replace(/```\s*$/i, "");
-      const moments = parseMomentsResponse(cleaned);
+      let moments = parseMomentsResponse(cleaned);
       if (moments.length === 0) {
-        throw new Error(`Respuesta de la IA sin ningún momento reconocible: ${cleaned.slice(0, 300)}`);
+        // La IA respondió (no fue un fallo de red/cupo) pero con algo sin relación alguna con el
+        // esquema pedido — no se descarta el lote, se recupera como momentos genéricos.
+        moments = fallbackMomentsForBatch(batch, languageCode);
+        unrecognizedBatches++;
       }
 
       for (const m of moments) {
@@ -279,14 +325,7 @@ export async function classifyCandidates(
     );
   }
 
-  return { items: classified, totalBatches, failedBatches, lastErrorMessage: lastError?.message ?? null };
-}
-
-// Etiqueta genérica para el ranking "de sobras" (ver más abajo) cuando no hay ninguna categoría
-// concreta que agrupe lo que queda — en el idioma REAL detectado del vídeo (o inglés por
-// defecto, igual que CHANNEL_LANGUAGE), nunca en un idioma fijo distinto al del contenido.
-function genericCategoryLabel(languageCode: string | null): string {
-  return languageCode === "es" ? "Mejores Momentos" : "Best Moments";
+  return { items: classified, totalBatches, failedBatches, unrecognizedBatches, lastErrorMessage: lastError?.message ?? null };
 }
 
 function pickBestRemaining(pool: ClassifiedMoment[], maxItems: number): ClassifiedMoment[] {
@@ -381,7 +420,7 @@ export function groupIntoRankings(
   // posible con ellos. Mismo criterio de duración mínima que arriba; nunca menos de 2 momentos
   // (una cuenta atrás no tiene sentido con solo uno).
   let leftover = included.filter((i) => !usedIndexes.has(i.index)).sort((a, b) => b.score - a.score);
-  const genericLabel = genericCategoryLabel(languageCode);
+  const genericLabel = genericCategoryLabel();
   while (leftover.length >= 2) {
     let picked = leftover.slice(0, config.ranking.maxItems);
     let totalDuration = picked.reduce((sum, i) => sum + (i.endSec - i.startSec), 0);

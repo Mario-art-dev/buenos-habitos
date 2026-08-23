@@ -54,7 +54,7 @@ export async function processRankingJob(jobId: string): Promise<void> {
     await setStatus(jobId, "ANALYZING", "Detectando momentos y clasificándolos por categoría…");
     const spans = await detectContentSegments(srcPath, durationSec);
     const candidates = await buildCandidateMoments(jobId, srcPath, spans, transcript.segments);
-    const classifyResult = await classifyCandidates(candidates, contentLanguage);
+    const classifyResult = await classifyCandidates(candidates, contentLanguage, languageCode);
     const classified = classifyResult.items;
     let manualCategories: ManualCategory[] = [];
     if (job.manualCategories) {
@@ -82,7 +82,8 @@ export async function processRankingJob(jobId: string): Promise<void> {
         "No se encontraron suficientes momentos aprovechables en este vídeo para montar ni un solo ranking " +
           `(ni siquiera juntando categorías distintas). Diagnóstico: ${spans.length} tramos detectados en el ` +
           `vídeo, ${candidates.length} candidatos extraídos, ${classified.length} clasificados por la IA ` +
-          `(${classifyResult.failedBatches}/${classifyResult.totalBatches} lotes fallaron${
+          `(${classifyResult.failedBatches}/${classifyResult.totalBatches} lotes fallaron, ${classifyResult.unrecognizedBatches} ` +
+          `sin reconocer (recuperados como genéricos)${
             classifyResult.lastErrorMessage ? `, último error: ${classifyResult.lastErrorMessage}` : ""
           }), ${included.length} marcados como aprovechables por la IA, ${includedDurationSec}s de duración ` +
           `total aprovechable (mínimo requerido: ${config.ranking.minDurationSec}s, mínimo ${config.ranking.minItems} momentos por categoría).`
