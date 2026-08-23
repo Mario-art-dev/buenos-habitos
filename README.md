@@ -311,6 +311,14 @@ TRANSCRIPTION_PROVIDER="local"    # transcribe en tu propio servidor, sin API
   cupo. Así el límite diario de uno solo deja de ser un techo real: cuantas más claves pongas,
   más "ilimitado" se siente en la práctica. Ver el bloque `AI_PROVIDER` de `.env.example` para
   los enlaces donde conseguir cada clave gratis.
+- **Último eslabón sin clave ni cuenta**: el workflow "Servidor temporal" (más abajo) también
+  instala solo un modelo de IA abierto (Ollama) corriendo en el propio servidor, como último
+  recurso si todos los proveedores de la nube fallan a la vez — sin que tengas que hacer nada.
+  Es más lento que los de arriba (menos potencia que un servidor dedicado de IA), así que es un
+  último recurso, no el proveedor principal.
+- **Gestionar las claves desde la propia web**: si no quieres/puedes moverte por Settings →
+  Secrets de GitHub, entra en **Ajustes → Proveedores de IA** dentro de la propia app: puedes
+  pegar ahí cualquiera de estas claves y se guardan solas, sin tocar GitHub para nada.
 - **Whisper local** (`faster-whisper`) transcribe el audio en el propio servidor: gratis, sin
   claves y sin límite de tamaño de archivo. A cambio es más lento y consume CPU —
   con `LOCAL_WHISPER_MODEL="base"` va bien; `small` transcribe mejor y tarda más.

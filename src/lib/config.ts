@@ -122,6 +122,17 @@ export const config = {
     // Pixtral: la familia de modelos de Mistral que sí ve imágenes, para Rankings.
     mistralVisionModel: optional("MISTRAL_VISION_MODEL", "pixtral-12b-2409"),
 
+    // Ollama: modelos abiertos corriendo EN EL PROPIO SERVIDOR (ver server.yml), último eslabón
+    // de la cadena — sin clave, sin cuenta, sin tarjeta, sin límite de peticiones (el único límite
+    // es lo lento que va en este servidor). Se activa desde el propio despliegue (OLLAMA_ENABLED),
+    // no es algo que el usuario tenga que configurar nunca.
+    ollamaEnabled: optional("OLLAMA_ENABLED", "false") === "true",
+    ollamaBaseUrl: optional("OLLAMA_BASE_URL", "http://127.0.0.1:11434"),
+    ollamaModel: optional("OLLAMA_MODEL", "llama3.2:3b"),
+    // moondream: modelo con visión pequeño pensado para poca potencia (para Rankings) — un modelo
+    // grande de verdad no iría razonable en un servidor sin GPU dedicada.
+    ollamaVisionModel: optional("OLLAMA_VISION_MODEL", "moondream"),
+
     // Presupuesto de tokens por minuto del proveedor (0 = sin freno). Si se supera, la API
     // devuelve 413/429 y el trabajo falla, así que las peticiones se espacian solas.
     tokensPerMinute: Number(optional("AI_TOKENS_PER_MINUTE", aiDefaults.tokensPerMinute)),

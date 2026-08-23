@@ -22,6 +22,7 @@ import { GeminiProvider } from "./gemini";
 import { GroqProvider } from "./groq";
 import { CerebrasProvider } from "./cerebras";
 import { MistralProvider } from "./mistral";
+import { OllamaProvider } from "./ollama";
 import { RateLimitedProvider, TokenRateLimiter } from "./rateLimit";
 import { resolvedAiKeys, type AiProviderName } from "./credentials";
 
@@ -39,19 +40,21 @@ function buildProvider(name: ProviderName, apiKey: string): AIProvider {
       return new CerebrasProvider(apiKey);
     case "mistral":
       return new MistralProvider(apiKey);
+    case "ollama":
+      return new OllamaProvider();
     default:
       return new AnthropicProvider(apiKey);
   }
 }
 
 // Orden de reserva cuando el proveedor principal se queda sin cupo: primero las capas gratuitas
-// sin tarjeta, de mejor a peor para este tipo de tarea (metadatos + clasificación por visión),
-// luego las de pago al final SOLO si además se ha configurado esa clave — así un usuario que solo
-// puso una clave de pago "por si acaso" no la gasta mientras alguna gratuita siga funcionando, y
-// quien no tenga ninguna de pago configurada nunca gasta dinero sin querer. Con las 4 capas
-// gratuitas encadenadas, cada trabajo prueba TODA la cadena antes de fallar de verdad — así que
-// hace falta agotar el cupo diario de las 4 a la vez para que un vídeo falle por esto.
-const FALLBACK_ORDER: ProviderName[] = ["gemini", "groq", "cerebras", "mistral", "anthropic", "openai"];
+// sin tarjeta, de mejor a peor para este tipo de tarea (metadatos + clasificación por visión).
+// Ollama (modelo local en el propio servidor, ver ollama.ts) va el último de las gratuitas: no
+// tiene límite de peticiones ni de cupo diario — es literalmente imposible que se agote — pero es
+// mucho más lento que una API en la nube, así que solo se usa si todas las demás fallan. Las de
+// pago van al final SOLO si además se ha configurado esa clave — así un usuario que solo puso una
+// clave de pago "por si acaso" no la gasta mientras alguna gratuita siga funcionando.
+const FALLBACK_ORDER: ProviderName[] = ["gemini", "groq", "cerebras", "mistral", "ollama", "anthropic", "openai"];
 
 /**
  * Prueba los proveedores en orden y pasa al siguiente si el que está probando falla (agotó su
@@ -110,10 +113,11 @@ export async function getAIProvider(): Promise<AIProvider> {
 
   // Un limitador de tokens por minuto POR PROVEEDOR: cada uno tiene su propio presupuesto (son
   // cuentas distintas), así que comparten limitador no tendría sentido — pero dentro de un mismo
-  // proveedor sí es una única cuenta para todo el proceso.
+  // proveedor sí es una única cuenta para todo el proceso. Ollama no tiene presupuesto que cuidar
+  // (corre en el propio servidor, sin cuota externa), así que no se le aplica ningún freno.
   const wrapped = chain.map((name) => {
     const provider = buildProvider(name, keys[name]);
-    return config.ai.tokensPerMinute > 0
+    return config.ai.tokensPerMinute > 0 && name !== "ollama"
       ? new RateLimitedProvider(provider, new TokenRateLimiter(config.ai.tokensPerMinute))
       : provider;
   });

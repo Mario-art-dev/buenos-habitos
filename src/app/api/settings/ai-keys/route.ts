@@ -10,7 +10,7 @@ export async function GET() {
   return NextResponse.json({ statuses });
 }
 
-const providerEnum = z.enum(["gemini", "groq", "cerebras", "mistral", "anthropic", "openai"]);
+const providerEnum = z.enum(["gemini", "groq", "cerebras", "mistral", "ollama", "anthropic", "openai"]);
 
 const saveSchema = z.object({
   provider: providerEnum,

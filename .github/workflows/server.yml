@@ -58,6 +58,28 @@ jobs:
           sudo curl -fsSL -o /usr/share/fonts/truetype/custom/Caveat-Variable.ttf "https://raw.githubusercontent.com/google/fonts/main/ofl/caveat/Caveat%5Bwght%5D.ttf"
           sudo fc-cache -f
 
+      - name: Instalar el modelo de IA local de repuesto (Ollama) — nunca bloquea el arranque
+        # Último eslabón de la cadena de proveedores de IA (ver src/lib/ai/ollama.ts): un modelo
+        # abierto corriendo en este mismo servidor, sin clave, sin cuenta, sin tarjeta, sin cupo
+        # que se pueda agotar — solo se usa si todos los proveedores en la nube fallan a la vez.
+        # continue-on-error de verdad: si algo aquí falla (red bloqueada, instalador caído, lo que
+        # sea), la sesión sigue exactamente igual que sin este paso — nunca puede romper el
+        # arranque de la web/worker. La descarga del modelo se lanza en segundo plano (no se
+        # espera aquí) para no restar tiempo a los pasos siguientes; con el tiempo que tardan
+        # (fuentes, npm ci, imagen de Docker, compilar) suele terminar de sobra antes de que haga
+        # falta de verdad.
+        continue-on-error: true
+        run: |
+          set +e
+          curl -fsSL https://ollama.com/install.sh | sh
+          nohup ollama serve > ollama.log 2>&1 &
+          for i in $(seq 1 30); do
+            curl -s -o /dev/null http://127.0.0.1:11434 && break
+            sleep 1
+          done
+          nohup sh -c 'ollama pull llama3.2:3b; ollama pull moondream' > ollama-pull.log 2>&1 &
+          exit 0
+
       - name: Instalar dependencias de Node
         run: npm ci
 
@@ -109,6 +131,10 @@ jobs:
           # src/lib/ai/provider.ts.
           CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY }}
           MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          # Último eslabón de repuesto: modelo local sin clave (ver el paso de arriba que lo
+          # instala) — si por lo que sea no llegó a instalarse/descargarse a tiempo, una llamada
+          # aquí simplemente falla y la cadena de proveedores sigue funcionando igual que sin él.
+          OLLAMA_ENABLED: "true"
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           # Sin estos cuatro, config.google/config.tiktok se quedan vacíos y la web no puede

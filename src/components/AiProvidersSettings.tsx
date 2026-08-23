@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-type ProviderName = "gemini" | "groq" | "cerebras" | "mistral" | "anthropic" | "openai";
+type ProviderName = "gemini" | "groq" | "cerebras" | "mistral" | "ollama" | "anthropic" | "openai";
 
 interface Status {
   provider: ProviderName;
@@ -11,16 +11,24 @@ interface Status {
 }
 
 // De mejor a peor calidad para este uso (mismo orden que FALLBACK_ORDER en provider.ts) — así se
-// ve de un vistazo cuál se va a usar primero en cuanto tenga clave.
-const PROVIDER_INFO: Record<ProviderName, { label: string; free: boolean; signupUrl: string }> = {
+// ve de un vistazo cuál se va a usar primero en cuanto tenga clave. Ollama no lleva clave (modelo
+// corriendo en el propio servidor, ver server.yml): signupUrl vacío significa "no hay nada que
+// pegar aquí", solo se enseña su estado.
+const PROVIDER_INFO: Record<ProviderName, { label: string; free: boolean; signupUrl: string; note?: string }> = {
   gemini: { label: "Gemini (Google)", free: true, signupUrl: "https://aistudio.google.com/apikey" },
   groq: { label: "Groq", free: true, signupUrl: "https://console.groq.com/keys" },
   cerebras: { label: "Cerebras", free: true, signupUrl: "https://cloud.cerebras.ai" },
   mistral: { label: "Mistral", free: true, signupUrl: "https://console.mistral.ai" },
+  ollama: {
+    label: "Modelo local (Ollama)",
+    free: true,
+    signupUrl: "",
+    note: "Corre dentro del propio servidor — sin clave, sin cuenta, sin límite de peticiones. Más lento que los de arriba, así que solo se usa como último recurso si todos los demás fallan.",
+  },
   anthropic: { label: "Anthropic (Claude)", free: false, signupUrl: "https://console.anthropic.com" },
   openai: { label: "OpenAI (GPT)", free: false, signupUrl: "https://platform.openai.com/api-keys" },
 };
-const ORDER: ProviderName[] = ["gemini", "groq", "cerebras", "mistral", "anthropic", "openai"];
+const ORDER: ProviderName[] = ["gemini", "groq", "cerebras", "mistral", "ollama", "anthropic", "openai"];
 
 /**
  * Gestión de claves de IA directamente desde la web, para quien no pueda/sepa moverse por
@@ -131,7 +139,8 @@ export default function AiProvidersSettings() {
                     </span>
                   )}
                 </div>
-                {!status?.configured && (
+                {info.note && <p className="mt-2 text-xs text-slate-500">{info.note}</p>}
+                {provider !== "ollama" && !status?.configured && (
                   <div className="mt-2 flex flex-col gap-2 sm:flex-row">
                     <input
                       type="password"

@@ -1,9 +1,17 @@
 import { db } from "@/lib/db";
 import { config } from "@/lib/config";
 
-export type AiProviderName = "gemini" | "groq" | "cerebras" | "mistral" | "anthropic" | "openai";
+export type AiProviderName = "gemini" | "groq" | "cerebras" | "mistral" | "ollama" | "anthropic" | "openai";
 
-export const AI_PROVIDER_NAMES: AiProviderName[] = ["gemini", "groq", "cerebras", "mistral", "anthropic", "openai"];
+export const AI_PROVIDER_NAMES: AiProviderName[] = [
+  "gemini",
+  "groq",
+  "cerebras",
+  "mistral",
+  "ollama",
+  "anthropic",
+  "openai",
+];
 
 function envKey(provider: AiProviderName): string {
   switch (provider) {
@@ -15,6 +23,11 @@ function envKey(provider: AiProviderName): string {
       return config.ai.cerebrasApiKey;
     case "mistral":
       return config.ai.mistralApiKey;
+    // Ollama no usa clave — corre en el propio servidor (ver server.yml). Se activa o no con
+    // OLLAMA_ENABLED, así que aquí se representa como si fuera una "clave" para que encaje con el
+    // resto de la cadena sin duplicar lógica en provider.ts.
+    case "ollama":
+      return config.ai.ollamaEnabled ? "local" : "";
     case "anthropic":
       return config.ai.anthropicApiKey;
     case "openai":
