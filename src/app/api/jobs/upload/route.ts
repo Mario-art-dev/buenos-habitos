@@ -1,9 +1,14 @@
 import fs from "fs";
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { db } from "@/lib/db";
 import { sourceVideoPath, uploadPartPath } from "@/lib/storagePaths";
 
 export const dynamic = "force-dynamic";
+
+// Solo modo RANKING: secciones que el usuario pide expresamente antes de generar (ver
+// Job.manualCategories / rankingAnalyze.ts groupIntoRankings).
+const manualCategorySchema = z.array(z.object({ name: z.string().trim().min(1).max(60), type: z.enum(["TOPIC", "YOUTUBER"]) })).max(20);
 
 const UPLOAD_ID_RE = /^[a-zA-Z0-9-]{8,64}$/;
 // Generoso: de sobra para una recopilación larga a calidad razonable, subida en trozos.
@@ -21,11 +26,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Formulario inválido" }, { status: 400 });
   }
 
-  const { uploadId, mode, filename, splitDurationSec } = body as {
+  const { uploadId, mode, filename, splitDurationSec, manualCategories } = body as {
     uploadId?: string;
     mode?: string;
     filename?: string;
     splitDurationSec?: number;
+    manualCategories?: { name: string; type: "TOPIC" | "YOUTUBER" }[];
   };
 
   if (!uploadId || !UPLOAD_ID_RE.test(uploadId)) {
@@ -36,6 +42,10 @@ export async function POST(req: NextRequest) {
   }
   if (mode === "SPLIT" && splitDurationSec != null && (splitDurationSec < 15 || splitDurationSec > 600)) {
     return NextResponse.json({ error: "Duración de trozo no válida" }, { status: 400 });
+  }
+  const parsedManualCategories = mode === "RANKING" && manualCategories ? manualCategorySchema.safeParse(manualCategories) : null;
+  if (parsedManualCategories && !parsedManualCategories.success) {
+    return NextResponse.json({ error: "Secciones de ranking no válidas" }, { status: 400 });
   }
 
   const partPath = uploadPartPath(uploadId);
@@ -62,6 +72,8 @@ export async function POST(req: NextRequest) {
       sourceTitle: filename || "Vídeo subido",
       status: "PENDING",
       ...(mode === "SPLIT" && { splitDurationSec: splitDurationSec ?? 60 }),
+      ...(parsedManualCategories?.success &&
+        parsedManualCategories.data.length > 0 && { manualCategories: JSON.stringify(parsedManualCategories.data) }),
     },
   });
 

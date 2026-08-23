@@ -22,6 +22,11 @@ model Job {
   mode              String   @default("SINGLE")
   sourceUrl         String? // SINGLE/RANKING: vídeo a procesar. SONG: vídeo de recopilación a re-editar.
   sourceTitle       String?
+  // Nombre del canal/creador de origen (yt-dlp %(uploader)s) — solo modo RANKING lo usa, como
+  // último recurso para nombrar un ranking "Best 5 clips of {uploader}" cuando no hay ninguna
+  // sección pedida a mano ni categoría detectada por la IA (ver rankingAnalyze.ts). null si el
+  // vídeo se subió como archivo directo.
+  sourceUploader    String?
   sourceDurationSec Float?
   status            String   @default("PENDING")
   statusMessage     String?
@@ -37,6 +42,14 @@ model Job {
   // JSON — solo RANKING los necesita guardados (para poder volver a quemar los subtítulos de cada
   // puesto al regenerar un clip desde el editor sin tener que retranscribir el vídeo entero).
   transcriptSegments String?
+
+  // Solo modo RANKING: secciones que el usuario pide expresamente ANTES de generar (opcional),
+  // en JSON: [{"name": "Enfados", "type": "TOPIC"}, {"name": "IlloJuan", "type": "YOUTUBER"}].
+  // "TOPIC" usa la plantilla "Ranking Funniest {name} Moments"; "YOUTUBER" usa "Best 5 clips of
+  // {name}". Cada sección pedida aquí se garantiza un ranking propio (ver rankingAnalyze.ts), no
+  // depende de que la IA la detecte sola. Si el usuario no pide ninguna, el comportamiento es el
+  // de siempre (categorías que detecte la IA).
+  manualCategories String?
 
   // Solo modo PRODUCT
   productName    String?
@@ -122,6 +135,11 @@ model Clip {
   // false, no se queman aunque haya captionCues guardadas (se conservan por si se reactiva).
   captionsEnabled Boolean @default(true)
 
+  // Solo modo RANKING: qué plantilla de tarjeta de intro usa este ranking — "TOPIC" (por defecto,
+  // "Ranking Funniest {category} Moments") o "YOUTUBER" ("Best 5 clips of {category}"), ver
+  // rankingAnalyze.ts/rankingIntroCard.ts. Se guarda para poder regenerar el clip desde el editor
+  // con la misma plantilla sin tener que volver a agrupar los momentos.
+  introTemplate  String  @default("TOPIC")
   category       String?
   // Sugerencia de música de la IA (cualquier modo): si cree que el short mejoraría con canción,
   // musicRecommended=true, musicQuery el título/artista sugerido, y musicSuggestedSection un

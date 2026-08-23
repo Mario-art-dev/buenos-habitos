@@ -12,13 +12,20 @@ interface UrlFormProps {
   helpText?: string;
 }
 
+interface ManualCategoryRow {
+  id: string;
+  name: string;
+  type: "TOPIC" | "YOUTUBER";
+}
+
 const CHUNK_SIZE = 20 * 1024 * 1024; // 20MB por trozo, con margen de sobra bajo el límite del túnel
 
 async function uploadInChunks(
   file: File,
   mode: string,
   onProgress: (pct: number) => void,
-  splitDurationSec?: number
+  splitDurationSec?: number,
+  manualCategories?: { name: string; type: "TOPIC" | "YOUTUBER" }[]
 ): Promise<{ id: string }> {
   const uploadId = crypto.randomUUID();
   const totalChunks = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
@@ -40,7 +47,7 @@ async function uploadInChunks(
   const finalizeRes = await fetchWithRetry("/api/jobs/upload", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ uploadId, mode, filename: file.name, splitDurationSec }),
+    body: JSON.stringify({ uploadId, mode, filename: file.name, splitDurationSec, manualCategories }),
   });
   const data = await finalizeRes.json();
   if (!finalizeRes.ok) throw new Error(data.error ?? "No se pudo crear el trabajo");
@@ -76,11 +83,25 @@ export default function UrlForm({
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [splitMinutes, setSplitMinutes] = useState(1);
+  const [manualCategories, setManualCategories] = useState<ManualCategoryRow[]>([]);
   const router = useRouter();
   const splitDurationSec = mode === "SPLIT" ? Math.round(splitMinutes * 60) : undefined;
   // La portada de marca solo existe en estos tres modos (ver coverCard.ts) — en los demás no tiene
   // sentido ofrecer la foto porque nunca se llegaría a usar.
   const supportsCoverPhoto = mode === "SINGLE" || mode === "RANKING" || mode === "SPLIT";
+
+  function addManualCategory() {
+    setManualCategories((prev) => [...prev, { id: crypto.randomUUID(), name: "", type: "TOPIC" }]);
+  }
+  function updateManualCategory(id: string, patch: Partial<ManualCategoryRow>) {
+    setManualCategories((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+  }
+  function removeManualCategory(id: string) {
+    setManualCategories((prev) => prev.filter((c) => c.id !== id));
+  }
+  const manualCategoriesPayload = manualCategories
+    .map((c) => ({ name: c.name.trim(), type: c.type }))
+    .filter((c) => c.name.length > 0);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -93,14 +114,14 @@ export default function UrlForm({
         const res = await fetchWithRetry("/api/jobs", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url, mode, splitDurationSec }),
+          body: JSON.stringify({ url, mode, splitDurationSec, manualCategories: manualCategoriesPayload }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? "No se pudo crear el trabajo");
         job = data.job;
       } else {
         if (!file) throw new Error("Elige un archivo de vídeo");
-        job = await uploadInChunks(file, mode, setProgress, splitDurationSec);
+        job = await uploadInChunks(file, mode, setProgress, splitDurationSec, manualCategoriesPayload);
       }
       if (coverImage) {
         // No bloquea la creación del trabajo si falla: la portada por defecto (fotograma del
@@ -111,6 +132,7 @@ export default function UrlForm({
       setUrl("");
       setFile(null);
       setCoverImage(null);
+      setManualCategories([]);
       router.push(`/jobs/${job.id}`);
       router.refresh();
     } catch (err) {
@@ -163,6 +185,55 @@ export default function UrlForm({
           <p className="mt-1 text-xs text-slate-500">
             El vídeo se corta entero, de principio a fin, en shorts consecutivos de esta duración.
           </p>
+        </div>
+      )}
+
+      {mode === "RANKING" && (
+        <div className="mb-4">
+          <label className="mb-2 block text-sm font-medium text-slate-300">
+            Secciones de ranking (opcional)
+          </label>
+          <p className="mb-2 text-xs text-slate-500">
+            Añade las secciones que quieras (p.ej. &quot;IlloJuan&quot; como YouTuber, o &quot;Enfados&quot; como
+            temática) y se genera COMO MÍNIMO un ranking de cada una. Si no añades ninguna, la IA elige las
+            categorías sola; si tampoco encuentra ninguna clara, hace un ranking de los mejores clips sueltos.
+          </p>
+          <div className="flex flex-col gap-2">
+            {manualCategories.map((cat) => (
+              <div key={cat.id} className="flex gap-2">
+                <input
+                  type="text"
+                  value={cat.name}
+                  onChange={(e) => updateManualCategory(cat.id, { name: e.target.value })}
+                  placeholder="Nombre del YouTuber o tema (p.ej. IlloJuan, Enfados)"
+                  className="flex-1 rounded-xl border border-ink-600 bg-ink-900 px-4 py-2 text-sm outline-none focus:border-brand-500"
+                />
+                <select
+                  value={cat.type}
+                  onChange={(e) => updateManualCategory(cat.id, { type: e.target.value as "TOPIC" | "YOUTUBER" })}
+                  className="rounded-xl border border-ink-600 bg-ink-900 px-3 py-2 text-sm text-slate-300 outline-none focus:border-brand-500"
+                >
+                  <option value="TOPIC">Temática</option>
+                  <option value="YOUTUBER">YouTuber</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={() => removeManualCategory(cat.id)}
+                  className="rounded-xl bg-ink-700 px-3 py-2 text-sm text-slate-300 hover:bg-ink-600"
+                  aria-label="Quitar sección"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={addManualCategory}
+            className="mt-2 rounded-lg bg-ink-700 px-3 py-1.5 text-sm font-medium text-slate-300 hover:bg-ink-600"
+          >
+            + Añadir sección
+          </button>
         </div>
       )}
 

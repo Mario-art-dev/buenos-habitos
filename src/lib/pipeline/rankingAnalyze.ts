@@ -22,8 +22,16 @@ export interface ClassifiedMoment extends CandidateMoment {
   score: number;
 }
 
+// Secciones que el usuario pide expresamente antes de generar (ver Job.manualCategories) — "TOPIC"
+// usa la plantilla "Ranking Funniest {name} Moments", "YOUTUBER" usa "Best 5 {name} Clips".
+export interface ManualCategory {
+  name: string;
+  type: "TOPIC" | "YOUTUBER";
+}
+
 export interface RankingGroup {
   category: string;
+  templateType: "TOPIC" | "YOUTUBER";
   items: ClassifiedMoment[]; // ordenados por score desc, item[0] = mejor (posición 1)
 }
 
@@ -136,6 +144,64 @@ Devuelve SOLO este JSON, con un elemento por candidato EN EL MISMO ORDEN (usa el
 {"moments": [{"index": number, "include": boolean, "category": "string", "label": "string", "description": "string", "score": number}]}`;
 }
 
+interface RawMoment {
+  index: number;
+  include: boolean;
+  category: string;
+  label: string;
+  description: string;
+  score: number;
+}
+
+/**
+ * Recupera los campos de cada "momento" con expresiones regulares directamente sobre el texto
+ * crudo, sin depender de que el JSON entero sea estrictamente válido. Un proveedor de repuesto más
+ * débil (ver la cadena de FALLBACK_ORDER en provider.ts: si Groq/Gemini se quedan sin cupo, entra
+ * en juego Cerebras/Mistral/el modelo local) a veces deja una comilla sin escapar dentro de un
+ * campo de texto ("label" o "description"), lo que rompe el parseo estricto de TODO el lote
+ * aunque el resto de campos estén perfectamente bien — visto en real: 17 de 18 lotes fallando con
+ * "Expected ',' or ']' after array element" con un vídeo que sí tenía material de sobra. Como se
+ * conoce el esquema exacto que se pide, se puede recuperar campo a campo en vez de descartar el
+ * lote entero por un solo carácter suelto.
+ */
+function parseMomentsLoosely(raw: string): RawMoment[] {
+  const results: RawMoment[] = [];
+  // Cada objeto de "moments" empieza por su "index" (un número, no puede llevar comillas sin
+  // escapar dentro) — se usa como ancla fiable para trocear el texto en un fragmento por
+  // candidato, y luego se extrae cada campo dentro de su propio fragmento.
+  const chunks = raw.split(/(?=\{\s*"index"\s*:)/g).filter((c) => /"index"\s*:\s*\d+/.test(c));
+  for (const chunk of chunks) {
+    const indexMatch = chunk.match(/"index"\s*:\s*(\d+)/);
+    if (!indexMatch) continue;
+    const includeMatch = chunk.match(/"include"\s*:\s*(true|false)/);
+    const categoryMatch = chunk.match(/"category"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+    const labelMatch = chunk.match(/"label"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+    const descriptionMatch = chunk.match(/"description"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+    const scoreMatch = chunk.match(/"score"\s*:\s*(\d+(?:\.\d+)?)/);
+    results.push({
+      index: Number(indexMatch[1]),
+      include: includeMatch ? includeMatch[1] === "true" : true,
+      category: categoryMatch ? categoryMatch[1] : "otros",
+      label: labelMatch ? labelMatch[1] : "Momento destacado",
+      description: descriptionMatch ? descriptionMatch[1] : "",
+      score: scoreMatch ? Number(scoreMatch[1]) : 50,
+    });
+  }
+  return results;
+}
+
+/** JSON estricto primero; si falla, recuperación campo a campo con parseMomentsLoosely — nunca se
+ *  descarta un lote entero solo porque un carácter suelto rompió el parseo estricto. */
+function parseMomentsResponse(raw: string): RawMoment[] {
+  try {
+    const parsed = JSON.parse(raw) as { moments?: RawMoment[] };
+    if (Array.isArray(parsed.moments)) return parsed.moments;
+  } catch {
+    // sigue con la recuperación campo a campo
+  }
+  return parseMomentsLoosely(raw);
+}
+
 export interface ClassifyResult {
   items: ClassifiedMoment[];
   totalBatches: number;
@@ -174,11 +240,12 @@ export async function classifyCandidates(
         maxTokens: 4000,
       });
       const cleaned = raw.trim().replace(/^```json\s*/i, "").replace(/```\s*$/i, "");
-      const parsed = JSON.parse(cleaned) as {
-        moments: { index: number; include: boolean; category: string; label: string; description: string; score: number }[];
-      };
+      const moments = parseMomentsResponse(cleaned);
+      if (moments.length === 0) {
+        throw new Error(`Respuesta de la IA sin ningún momento reconocible: ${cleaned.slice(0, 300)}`);
+      }
 
-      for (const m of parsed.moments) {
+      for (const m of moments) {
         const candidate = candidates.find((c) => c.index === m.index);
         if (!candidate) continue;
         classified.push({
@@ -222,18 +289,67 @@ function genericCategoryLabel(languageCode: string | null): string {
   return languageCode === "es" ? "Mejores Momentos" : "Best Moments";
 }
 
-export function groupIntoRankings(classified: ClassifiedMoment[], languageCode: string | null): RankingGroup[] {
-  const included = classified.filter((c) => c.include);
-  const byCategory = new Map<string, ClassifiedMoment[]>();
+function pickBestRemaining(pool: ClassifiedMoment[], maxItems: number): ClassifiedMoment[] {
+  return [...pool].sort((a, b) => b.score - a.score).slice(0, maxItems);
+}
 
-  for (const item of included) {
+// Coincidencia laxa por palabra clave entre el nombre de una sección pedida a mano ("Enfados") y la
+// categoría/etiqueta/descripción que puso la IA a cada momento — no hace falta que coincidan exacto,
+// basta con que una contenga a la otra en cualquier dirección.
+function matchesManualCategory(item: ClassifiedMoment, nameLower: string): boolean {
+  const cat = item.category.toLowerCase();
+  if (cat.includes(nameLower) || nameLower.includes(cat)) return true;
+  return item.label.toLowerCase().includes(nameLower) || item.description.toLowerCase().includes(nameLower);
+}
+
+/**
+ * Agrupa los momentos clasificados en vídeos de ranking. Antes que nada procesa las secciones que
+ * el usuario pidió a mano (`manualCategories`, ver Job.manualCategories): cada una se GARANTIZA su
+ * propio ranking (relajando los mínimos de duración/nº de items normales a solo "al menos 2 clips
+ * libres"), por delante de cualquier agrupación automática por categoría de la IA. Si el usuario no
+ * pidió ninguna sección y la IA tampoco deja NINGÚN grupo aprovechable (categorías demasiado
+ * pequeñas incluso para el cubo genérico de sobras), como último recurso se monta un ranking con
+ * los mejores clips sueltos: "Best 5 clips of {youtuberFallbackName}" si se conoce el nombre del
+ * canal/creador de origen, o el título genérico si no.
+ */
+export function groupIntoRankings(
+  classified: ClassifiedMoment[],
+  languageCode: string | null,
+  manualCategories: ManualCategory[] = [],
+  youtuberFallbackName?: string | null
+): RankingGroup[] {
+  const included = classified.filter((c) => c.include);
+  const groups: RankingGroup[] = [];
+  const usedIndexes = new Set<number>();
+
+  for (const manual of manualCategories) {
+    const name = manual.name.trim();
+    const nameLower = name.toLowerCase();
+    if (!nameLower) continue;
+    const unused = included.filter((i) => !usedIndexes.has(i.index));
+    let pool: ClassifiedMoment[];
+    if (manual.type === "YOUTUBER") {
+      // Una sección "los mejores clips de tal creador" no se busca por palabra clave (la IA no
+      // etiqueta nombres de creador en "category") — se cogen directamente los mejores clips
+      // libres de todo el vídeo, que es justo lo que pide este tipo de sección.
+      pool = unused;
+    } else {
+      const matched = unused.filter((i) => matchesManualCategory(i, nameLower));
+      pool = matched.length >= 2 ? matched : unused;
+    }
+    const picked = pickBestRemaining(pool, config.ranking.maxItems);
+    if (picked.length < 2) continue; // no quedan ni 2 clips libres en todo el vídeo: imposible garantizar esta sección
+    groups.push({ category: name, templateType: manual.type, items: picked });
+    for (const p of picked) usedIndexes.add(p.index);
+  }
+
+  const remainingForAuto = included.filter((i) => !usedIndexes.has(i.index));
+  const byCategory = new Map<string, ClassifiedMoment[]>();
+  for (const item of remainingForAuto) {
     const list = byCategory.get(item.category) ?? [];
     list.push(item);
     byCategory.set(item.category, list);
   }
-
-  const groups: RankingGroup[] = [];
-  const usedIndexes = new Set<number>();
 
   for (const [category, items] of byCategory) {
     if (items.length < config.ranking.minItems) continue;
@@ -252,7 +368,7 @@ export function groupIntoRankings(classified: ClassifiedMoment[], languageCode: 
     }
     if (totalDuration < config.ranking.minDurationSec) continue;
 
-    groups.push({ category, items: picked });
+    groups.push({ category, templateType: "TOPIC", items: picked });
     for (const p of picked) usedIndexes.add(p.index);
   }
 
@@ -277,9 +393,24 @@ export function groupIntoRankings(classified: ClassifiedMoment[], languageCode: 
     }
     if (totalDuration < config.ranking.minDurationSec || picked.length < 2) break;
 
-    groups.push({ category: genericLabel, items: picked });
+    groups.push({ category: genericLabel, templateType: "TOPIC", items: picked });
     const pickedIndexes = new Set(picked.map((p) => p.index));
     leftover = leftover.filter((i) => !pickedIndexes.has(i.index));
+    for (const p of picked) usedIndexes.add(p.index);
+  }
+
+  // Último recurso: si tras TODO lo anterior sigue sin salir ni un solo ranking (categorías
+  // demasiado pequeñas incluso para el cubo genérico de sobras) pero sí hay al menos 2 momentos
+  // usables en el vídeo, no se falla el job — se monta un ranking con los mejores clips sueltos.
+  if (groups.length === 0) {
+    const picked = pickBestRemaining(included, config.ranking.maxItems);
+    if (picked.length >= 2) {
+      if (youtuberFallbackName && youtuberFallbackName.trim()) {
+        groups.push({ category: youtuberFallbackName.trim(), templateType: "YOUTUBER", items: picked });
+      } else {
+        groups.push({ category: genericLabel, templateType: "TOPIC", items: picked });
+      }
+    }
   }
 
   return groups.sort((a, b) => b.items.length - a.items.length);

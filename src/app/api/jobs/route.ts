@@ -4,11 +4,20 @@ import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
+// Solo modo RANKING: secciones que el usuario pide expresamente antes de generar (ver
+// Job.manualCategories / rankingAnalyze.ts groupIntoRankings).
+const manualCategorySchema = z.object({
+  name: z.string().trim().min(1).max(60),
+  type: z.enum(["TOPIC", "YOUTUBER"]),
+});
+
 const createJobSchema = z.object({
   url: z.string().url("Introduce una URL de vídeo válida"),
   mode: z.enum(["SINGLE", "RANKING", "SPLIT"]).optional(),
   // Solo modo SPLIT: duración en segundos de cada trozo.
   splitDurationSec: z.number().min(15).max(600).optional(),
+  // Solo modo RANKING, opcional.
+  manualCategories: z.array(manualCategorySchema).max(20).optional(),
 });
 
 export async function GET(req: NextRequest) {
@@ -34,6 +43,11 @@ export async function POST(req: NextRequest) {
       mode: parsed.data.mode ?? "SINGLE",
       status: "PENDING",
       ...(parsed.data.mode === "SPLIT" && { splitDurationSec: parsed.data.splitDurationSec ?? 60 }),
+      ...(parsed.data.mode === "RANKING" &&
+        parsed.data.manualCategories &&
+        parsed.data.manualCategories.length > 0 && {
+          manualCategories: JSON.stringify(parsed.data.manualCategories),
+        }),
     },
   });
 

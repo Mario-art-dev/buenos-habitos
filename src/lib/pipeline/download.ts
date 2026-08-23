@@ -5,6 +5,12 @@ import { probeVideo } from "./probe";
 export interface DownloadResult {
   title: string;
   durationSec: number;
+  // Nombre del canal/creador que subió el vídeo (yt-dlp %(uploader)s) — solo modo RANKING lo usa,
+  // como último recurso para nombrar el ranking "Best 5 clips of {uploader}" cuando el usuario no
+  // pidió ninguna sección a mano y la IA tampoco detectó ninguna categoría concreta (ver
+  // rankingAnalyze.ts groupIntoRankings). undefined si el vídeo se subió como archivo directo
+  // (sin pasar por yt-dlp, no hay forma de saberlo).
+  uploader?: string;
 }
 
 // El cliente "web" por defecto de YouTube exige ahora resolver un reto en JavaScript y es el
@@ -67,13 +73,14 @@ export async function downloadSourceVideo(url: string, outputPath: string): Prom
     "-o",
     outputPath,
     "--print",
-    "after_move:%(title)s|||%(duration)s",
+    "after_move:%(title)s|||%(duration)s|||%(uploader)s",
   ]);
 
-  const [title, durationRaw] = stdout.trim().split("|||");
+  const [title, durationRaw, uploaderRaw] = stdout.trim().split("|||");
   return {
     title: title || "Vídeo sin título",
     durationSec: Number(durationRaw) || 0,
+    uploader: uploaderRaw && uploaderRaw !== "NA" ? uploaderRaw : undefined,
   };
 }
 

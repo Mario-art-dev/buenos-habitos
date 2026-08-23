@@ -5,7 +5,7 @@ import { resolveSourceVideo } from "./download";
 import { extractAudio, transcribeAudio } from "./transcribe";
 import { probeVideo, pickVerticalResolution } from "./probe";
 import { detectContentSegments } from "./silence";
-import { buildCandidateMoments, classifyCandidates, groupIntoRankings } from "./rankingAnalyze";
+import { buildCandidateMoments, classifyCandidates, groupIntoRankings, type ManualCategory } from "./rankingAnalyze";
 import { composeRanking } from "./rankingCompose";
 import { assembleRankingVideo, finalizeWithoutMusic } from "./rankingRender";
 import { setStatus } from "./status";
@@ -25,10 +25,10 @@ export async function processRankingJob(jobId: string): Promise<void> {
       job.sourceFilePath ? "Preparando el vídeo subido…" : "Descargando el vídeo original…"
     );
     const srcPath = sourceVideoPath(jobId);
-    const { title, durationSec } = await resolveSourceVideo(job, srcPath);
+    const { title, durationSec, uploader } = await resolveSourceVideo(job, srcPath);
     await db.job.update({
       where: { id: jobId },
-      data: { sourceTitle: title, sourceDurationSec: durationSec, sourceFilePath: srcPath },
+      data: { sourceTitle: title, sourceUploader: uploader ?? null, sourceDurationSec: durationSec, sourceFilePath: srcPath },
     });
 
     await setStatus(jobId, "TRANSCRIBING", "Transcribiendo el audio…");
@@ -56,7 +56,19 @@ export async function processRankingJob(jobId: string): Promise<void> {
     const candidates = await buildCandidateMoments(jobId, srcPath, spans, transcript.segments);
     const classifyResult = await classifyCandidates(candidates, contentLanguage);
     const classified = classifyResult.items;
-    const groups = groupIntoRankings(classified, languageCode);
+    let manualCategories: ManualCategory[] = [];
+    if (job.manualCategories) {
+      try {
+        manualCategories = JSON.parse(job.manualCategories) as ManualCategory[];
+      } catch {
+        manualCategories = [];
+      }
+    }
+    // Nombre del creador de origen como último recurso para la plantilla "Best 5 clips of {name}"
+    // (ver groupIntoRankings) cuando el usuario no pidió ninguna sección y la IA tampoco detectó
+    // ninguna categoría aprovechable — uploader real de yt-dlp si se conoce, si no el título del vídeo.
+    const youtuberFallbackName = uploader ?? title;
+    const groups = groupIntoRankings(classified, languageCode, manualCategories, youtuberFallbackName);
 
     if (groups.length === 0) {
       // Diagnóstico completo en el propio mensaje de error: para poder ver de un vistazo EN QUÉ
@@ -106,6 +118,7 @@ export async function processRankingJob(jobId: string): Promise<void> {
             viralityReason: composition.viralityReason,
             hashtags: JSON.stringify(composition.hashtags),
             category: group.category,
+            introTemplate: group.templateType,
             musicRecommended: composition.musicRecommended,
             musicQuery: composition.musicQuery,
             musicSuggestedSection: composition.musicSuggestedSection,
@@ -146,6 +159,7 @@ export async function processRankingJob(jobId: string): Promise<void> {
           resolution,
           partLabel: `Parte ${created.rank}`,
           coverImagePath: job.coverImagePath,
+          templateType: group.templateType,
         });
 
         const { filePath, thumbnailPath } = await finalizeWithoutMusic(jobId, created.id);

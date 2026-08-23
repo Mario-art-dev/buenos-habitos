@@ -1,8 +1,8 @@
 import fs from "fs";
 import type { TranscriptSegment } from "./transcribe";
 import { probeVideo, type VerticalResolution } from "./probe";
-import { cutVerticalClip, renderTitleCard, concatClips, mixBackgroundMusic, extractThumbnail, extractAudioSegment, burnTopLabel } from "./clip";
-import { renderRankingIntroCard } from "./rankingIntroCard";
+import { cutVerticalClip, concatClips, mixBackgroundMusic, extractThumbnail, extractAudioSegment, burnTopLabel } from "./clip";
+import { renderRankingIntroCard, renderRankPositionCard, type RankingIntroTemplate } from "./rankingIntroCard";
 import { renderCommentaryCard } from "./commentaryCards";
 import { buildBigCaptionsAss } from "./bigCaptions";
 import { getTTSProvider } from "@/lib/tts/provider";
@@ -49,9 +49,13 @@ export async function assembleRankingVideo(params: {
   // Texto permanente "Parte N" en la parte superior durante todo el vídeo, igual que en el modo
   // Doble y en el modo Cortar en shorts — para saber qué vídeo de ranking es cuál.
   partLabel?: string | null;
+  // "TOPIC" (por defecto) -> "Ranking Funniest {category} Moments"; "YOUTUBER" -> "Best 5 {category}
+  // Clips" (ver rankingAnalyze.ts groupIntoRankings / Job.manualCategories).
+  templateType?: RankingIntroTemplate;
 }): Promise<string> {
   const { jobId, clipId, sourcePath, category, items, transcriptSegments, resolution } = params;
   const captionsEnabled = params.captionsEnabled ?? true;
+  const templateType = params.templateType ?? "TOPIC";
   const playOrder = [...items].sort((a, b) => b.position - a.position); // peor -> mejor
 
   const segmentPaths: string[] = [];
@@ -65,21 +69,20 @@ export async function assembleRankingVideo(params: {
   if (config.commentary.enabled && params.overallIntroCommentary) {
     const introAudioPath = narrationAudioPath(jobId, clipId, "intro");
     await getTTSProvider().synthesize(params.overallIntroCommentary, introAudioPath);
-    await renderRankingIntroCard(introPath, category, 2, resolution, introAudioPath, params.coverImagePath);
+    await renderRankingIntroCard(introPath, category, 2, resolution, introAudioPath, params.coverImagePath, templateType);
   } else {
-    await renderRankingIntroCard(introPath, category, 2, resolution, undefined, params.coverImagePath);
+    await renderRankingIntroCard(introPath, category, 2, resolution, undefined, params.coverImagePath, templateType);
   }
   segmentPaths.push(introPath);
 
   for (const item of playOrder) {
     const cardPath = candidateCardPath(jobId, clipId, `pos${item.position}`);
-    const cardText = `#${item.position}\n${item.label}`;
     if (item.commentary) {
       const itemAudioPath = narrationAudioPath(jobId, clipId, `pos${item.position}`);
       await getTTSProvider().synthesize(item.commentary, itemAudioPath);
-      await renderTitleCard(cardPath, cardText, 1.4, resolution, itemAudioPath);
+      await renderRankPositionCard(cardPath, item.position, item.label, 1.4, resolution, itemAudioPath);
     } else {
-      await renderTitleCard(cardPath, cardText, 1.4, resolution);
+      await renderRankPositionCard(cardPath, item.position, item.label, 1.4, resolution);
     }
     segmentPaths.push(cardPath);
 
