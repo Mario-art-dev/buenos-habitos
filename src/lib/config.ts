@@ -25,7 +25,13 @@ function optionalCredential(name: string): string {
   return optional(name).replace(/\s+/g, "");
 }
 
-const aiProvider = optional("AI_PROVIDER", "anthropic") as "anthropic" | "openai" | "gemini" | "groq";
+const aiProvider = optional("AI_PROVIDER", "anthropic") as
+  | "anthropic"
+  | "openai"
+  | "gemini"
+  | "groq"
+  | "cerebras"
+  | "mistral";
 
 // La capa gratuita de Groq limita a 8.000 tokens por PETICIÓN y 200.000 tokens AL DÍA — ambos
 // importan. El modelo de texto por defecto (gpt-oss-20b con reasoning_effort:"low") gasta mucho
@@ -45,6 +51,10 @@ const aiProvider = optional("AI_PROVIDER", "anthropic") as "anthropic" | "openai
 const FREE_TIER_DEFAULTS = {
   groq: { tokensPerMinute: "8000", transcriptChars: "8000", visionBatch: "1", visionCandidates: "40" },
   gemini: { tokensPerMinute: "0", transcriptChars: "40000", visionBatch: "6", visionCandidates: "200" },
+  // Cerebras/Mistral: presupuesto conservador por defecto hasta que se compruebe el límite real
+  // de la cuenta gratuita en la práctica (ajustable con AI_TOKENS_PER_MINUTE si hace falta).
+  cerebras: { tokensPerMinute: "8000", transcriptChars: "8000", visionBatch: "1", visionCandidates: "40" },
+  mistral: { tokensPerMinute: "8000", transcriptChars: "8000", visionBatch: "1", visionCandidates: "40" },
   anthropic: { tokensPerMinute: "0", transcriptChars: "60000", visionBatch: "6", visionCandidates: "200" },
   openai: { tokensPerMinute: "0", transcriptChars: "60000", visionBatch: "6", visionCandidates: "200" },
 } as const;
@@ -93,6 +103,24 @@ export const config = {
     // gpt-oss-20b no tiene visión: para clasificar fotogramas (modo Rankings/Canción) hace falta
     // un modelo que sí vea imágenes, así que ese caso sigue usando qwen3.6 aparte.
     groqVisionModel: optional("GROQ_VISION_MODEL", "qwen/qwen3.6-27b"),
+
+    // Cerebras: otra capa gratuita sin tarjeta (como Groq), segundo eslabón de repuesto en la
+    // cadena de proveedores — comprueba tú mismo al crear la cuenta si te la piden o no, puede
+    // cambiar con el tiempo.
+    cerebrasApiKey: optionalCredential("CEREBRAS_API_KEY"),
+    cerebrasModel: optional("CEREBRAS_MODEL", "llama-3.3-70b"),
+    // Si el modelo de texto por defecto de Cerebras no admite imágenes en tu cuenta, cambia esto
+    // por uno que sí (p.ej. un Llama 4 Scout/Maverick si está disponible) — si no hay ninguno con
+    // visión disponible, las peticiones de Rankings fallarán aquí y pasarán solas al siguiente
+    // proveedor de la cadena (Mistral).
+    cerebrasVisionModel: optional("CEREBRAS_VISION_MODEL", "llama-3.3-70b"),
+
+    // Mistral (La Plateforme): tercer eslabón de repuesto, capa gratuita — comprueba tú mismo al
+    // crear la cuenta si te la piden o no.
+    mistralApiKey: optionalCredential("MISTRAL_API_KEY"),
+    mistralModel: optional("MISTRAL_MODEL", "mistral-small-latest"),
+    // Pixtral: la familia de modelos de Mistral que sí ve imágenes, para Rankings.
+    mistralVisionModel: optional("MISTRAL_VISION_MODEL", "pixtral-12b-2409"),
 
     // Presupuesto de tokens por minuto del proveedor (0 = sin freno). Si se supera, la API
     // devuelve 413/429 y el trabajo falla, así que las peticiones se espacian solas.
@@ -231,17 +259,22 @@ export const config = {
   storageDir: optional("STORAGE_DIR", "storage"),
 };
 
+// AI_PROVIDER ya no exige tener esa clave EXACTA puesta (con varios proveedores encadenados como
+// repuesto, ver getAIProvider() en provider.ts, exigir precisamente esa rompería el arranque
+// entero solo porque el proveedor "por defecto" no tiene clave aunque otros sí) — solo hace
+// falta que ALGUNA de las claves de IA esté configurada, la que sea.
 export function requireAiKey(): void {
-  if (config.ai.provider === "anthropic" && !config.ai.anthropicApiKey) {
-    throw new Error("AI_PROVIDER=anthropic pero falta ANTHROPIC_API_KEY en .env");
-  }
-  if (config.ai.provider === "openai" && !config.ai.openaiApiKey) {
-    throw new Error("AI_PROVIDER=openai pero falta OPENAI_API_KEY en .env");
-  }
-  if (config.ai.provider === "gemini" && !config.ai.geminiApiKey) {
-    throw new Error("AI_PROVIDER=gemini pero falta GEMINI_API_KEY en .env");
-  }
-  if (config.ai.provider === "groq" && !config.ai.groqApiKey) {
-    throw new Error("AI_PROVIDER=groq pero falta GROQ_API_KEY en .env");
+  const anyKey =
+    config.ai.anthropicApiKey ||
+    config.ai.openaiApiKey ||
+    config.ai.geminiApiKey ||
+    config.ai.groqApiKey ||
+    config.ai.cerebrasApiKey ||
+    config.ai.mistralApiKey;
+  if (!anyKey) {
+    throw new Error(
+      "Falta configurar al menos una clave de IA (ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, " +
+        "GROQ_API_KEY, CEREBRAS_API_KEY o MISTRAL_API_KEY)."
+    );
   }
 }

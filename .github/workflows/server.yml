@@ -103,6 +103,12 @@ jobs:
           AI_PROVIDER: "groq"
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          # Cadena de repuesto: si se ponen estos dos secretos (ambos con capa gratuita, ver
+          # src/lib/ai/cerebras.ts y mistral.ts), se usan solos cuando Groq/Gemini se queden sin
+          # cupo — no hace falta tocar nada más aquí, el orden lo decide FALLBACK_ORDER en
+          # src/lib/ai/provider.ts.
+          CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY }}
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           # Sin estos cuatro, config.google/config.tiktok se quedan vacíos y la web no puede

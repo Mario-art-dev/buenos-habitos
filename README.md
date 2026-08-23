@@ -305,6 +305,12 @@ TRANSCRIPTION_PROVIDER="local"    # transcribe en tu propio servidor, sin API
   gratuita tiene límites de peticiones por minuto y por día; para un uso normal (unos pocos
   vídeos al día) sobra. Si te pasas del límite, la app fallará ese trabajo con un error del
   proveedor y podrás reintentarlo más tarde.
+- **Varios proveedores de IA a la vez, encadenados solos**: puedes poner la clave de más de uno
+  (Gemini, Groq, Cerebras, Mistral — las cuatro tienen capa gratuita) y la app los prueba en
+  orden de mejor a peor calidad, pasando al siguiente automáticamente en cuanto uno se queda sin
+  cupo. Así el límite diario de uno solo deja de ser un techo real: cuantas más claves pongas,
+  más "ilimitado" se siente en la práctica. Ver el bloque `AI_PROVIDER` de `.env.example` para
+  los enlaces donde conseguir cada clave gratis.
 - **Whisper local** (`faster-whisper`) transcribe el audio en el propio servidor: gratis, sin
   claves y sin límite de tamaño de archivo. A cambio es más lento y consume CPU —
   con `LOCAL_WHISPER_MODEL="base"` va bien; `small` transcribe mejor y tarda más.
@@ -341,6 +347,8 @@ unos minutos y te descargas el resultado.
    <https://aistudio.google.com/apikey>.
 3. En **Settings → Secrets and variables → Actions → New repository secret**, crea un secreto
    llamado `GROQ_API_KEY` (o `GEMINI_API_KEY` si usas Gemini) con esa clave.
+   Opcional: añade también `CEREBRAS_API_KEY` y/o `MISTRAL_API_KEY` (ambas gratis, ver
+   `.env.example`) para que la app cambie sola de proveedor si el primero se queda sin cupo.
 
 ### Generar un vídeo
 
@@ -375,8 +383,8 @@ el panel se queda disponible de forma casi continua, encadenando sesiones solo.
 
 ### Configurarlo (una sola vez)
 
-Además de `GROQ_API_KEY` (o `GEMINI_API_KEY`, ver arriba), crea estos dos secretos en
-**Settings → Secrets and variables → Actions → Secrets**:
+Además de `GROQ_API_KEY` (o `GEMINI_API_KEY`, `CEREBRAS_API_KEY`, `MISTRAL_API_KEY` — ver arriba),
+crea estos dos secretos en **Settings → Secrets and variables → Actions → Secrets**:
 
 - `APP_PASSWORD` → la contraseña con la que entrarás al panel.
 - `SESSION_SECRET` → cualquier cadena larga aleatoria.
