@@ -83,12 +83,17 @@ function buildTitleLines(category: string, template: RankingOverlayTemplate, tot
 
 function buildListLines(items: RankingListItem[], totalDurationSec: number, resolution: VerticalResolution): string[] {
   const { width, height } = resolution;
-  const n = Math.max(1, items.length);
-  const listTop = height * 0.32;
-  const listBottom = height * 0.92;
-  const rowHeight = (listBottom - listTop) / n;
-  const fontSize = Math.max(30, Math.round(rowHeight * 0.62));
-  const outline = Math.max(3, Math.round(fontSize / 9));
+  // Tamaño del número fijo (no depende de cuántas filas haya) — pedido explícito: los números se
+  // quedan grandes, lo que se aprieta es el hueco ENTRE filas. La etiqueta va más pequeña que el
+  // número, en el mismo color, pegada justo detrás en la misma línea (mismo \pos, mismo \an4).
+  const numberFontSize = Math.max(50, Math.round(height * 0.075));
+  const labelFontSize = Math.max(34, Math.round(numberFontSize * 0.6));
+  // Pedido explícito: filas más juntas — la altura de línea ya no reparte todo el hueco disponible
+  // entre pocas filas, es justo lo que ocupa el número más un margen pequeño.
+  const lineHeight = Math.round(numberFontSize * 1.08);
+  const listTop = height * 0.3;
+  const outline = Math.max(3, Math.round(numberFontSize / 9));
+  const labelOutline = Math.max(2, Math.round(labelFontSize / 9));
   const x = Math.round(width * 0.05);
 
   const lines: string[] = [];
@@ -96,19 +101,19 @@ function buildListLines(items: RankingListItem[], totalDurationSec: number, reso
   for (let i = 0; i < sorted.length; i++) {
     const item = sorted[i];
     const color = POSITION_COLORS[i % POSITION_COLORS.length];
-    const y = Math.round(listTop + i * rowHeight + rowHeight / 2);
-    const bareText = `${item.position}.-`;
-    const revealedText = `${item.position}.- ${escapeAssText(item.label)}`;
+    const y = Math.round(listTop + i * lineHeight + lineHeight / 2);
     const revealAt = Math.max(0, Math.min(item.revealAtSec, totalDurationSec));
     // Sin caja de fondo (BorderStyle 1, solo contorno+sombra) — pedido explícito: nada de "barra"
     // detrás del texto. El número sale SIEMPRE en su color vivo desde el segundo 0; lo único que
-    // cambia al revelarse es que se le añade la etiqueta al lado.
-    const look = `\\an4\\3c&H000000&\\bord${outline}\\shad3\\fs${fontSize}\\pos(${x},${y})\\c${color}`;
+    // cambia al revelarse es que se le añade la etiqueta al lado, más pequeña.
+    const numberTag = `\\an4\\3c&H000000&\\bord${outline}\\shad3\\fs${numberFontSize}\\pos(${x},${y})\\c${color}`;
+    const bareText = `{${numberTag}}${item.position}.-`;
+    const revealedText = `{${numberTag}}${item.position}.- {\\fs${labelFontSize}\\bord${labelOutline}}${escapeAssText(item.label)}`;
 
     if (revealAt > 0.05) {
-      lines.push(`Dialogue: 0,${assTime(0)},${assTime(revealAt)},Base,,0,0,0,,{${look}}${bareText}`);
+      lines.push(`Dialogue: 0,${assTime(0)},${assTime(revealAt)},Base,,0,0,0,,${bareText}`);
     }
-    lines.push(`Dialogue: 0,${assTime(revealAt)},${assTime(totalDurationSec)},Base,,0,0,0,,{${look}}${revealedText}`);
+    lines.push(`Dialogue: 0,${assTime(revealAt)},${assTime(totalDurationSec)},Base,,0,0,0,,${revealedText}`);
   }
   return lines;
 }

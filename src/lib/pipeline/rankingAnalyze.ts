@@ -133,8 +133,9 @@ Para cada candidato decide:
   un tipo de reacción, un deporte, una temática de streaming... no la fuerces a encajar en "fails" o "gracioso"
   si no es lo que es). Sé consistente para que candidatos del mismo tipo caigan en la MISMA categoría exacta
   (mismo singular/plural, misma capitalización).
-- "label": texto muy corto (máx 6 palabras) en ${contentLanguage} para mostrar en pantalla como título de ese
-  puesto del ranking.
+- "label": 1-3 palabras en ${contentLanguage} (idealmente UNA sola palabra clave, o dos si hace falta) para
+  mostrar en pantalla junto al número de ese puesto — como si fuera la palabra más importante o llamativa que
+  se dice o pasa en ese momento concreto, no una frase ni una descripción.
 - "description": 1 frase en ${contentLanguage} describiendo qué pasa.
 - "score": 0-100, qué tan viral/entretenido es este momento comparado con el resto (da igual si es gracioso,
   impactante, hábil o cualquier otra cosa — puntúa por lo interesante que es de ver, no por un tipo de contenido
@@ -157,27 +158,45 @@ function genericCategoryLabel(): string {
   return "Viral";
 }
 
+// Palabras demasiado comunes (español/inglés, los dos idiomas más probables del contenido) como
+// para ser "la palabra importante" de un momento — se descartan al elegir la palabra de
+// deriveLabelFromTranscript. No hace falta que la lista sea exhaustiva, solo evitar que salga
+// siempre "the"/"que"/"and" como título.
+const STOPWORDS = new Set([
+  "a", "an", "the", "is", "are", "was", "were", "be", "been", "to", "of", "in", "on", "at", "it",
+  "that", "this", "and", "or", "but", "so", "for", "with", "from", "as", "he", "she", "they", "we",
+  "you", "i", "my", "your", "his", "her", "its", "their", "our", "not", "no", "do", "does", "did",
+  "just", "like", "get", "got", "really", "very", "what", "when", "where", "who", "how", "why",
+  "el", "la", "los", "las", "un", "una", "unos", "unas", "de", "del", "que", "y", "o", "en", "a",
+  "es", "son", "era", "fue", "por", "para", "con", "sin", "al", "se", "su", "sus", "lo", "le",
+  "les", "yo", "tú", "él", "ella", "ellos", "ellas", "nosotros", "mi", "tu", "no", "muy", "como",
+  "qué", "cuándo", "dónde", "quién", "pues", "bueno", "vale",
+]);
+
 /**
- * Título corto derivado de la propia transcripción del tramo (en vez de un texto genérico tipo
- * "Featured moment") para cuando la IA no puso ninguna etiqueta — sea porque el campo "label" no
- * se pudo recuperar del JSON roto, o porque el lote entero cayó en fallbackMomentsForBatch. Se
- * queda MUY corto (máx. ~28 caracteres) porque este texto se quema encima del vídeo en la lista
- * persistente de puestos (rankingListOverlay.ts), que no envuelve línea automáticamente.
+ * Título de UNA sola palabra derivado de la propia transcripción del tramo (en vez de un texto
+ * genérico tipo "Featured moment", o una frase larga) para cuando la IA no puso ninguna etiqueta
+ * — sea porque el campo "label" no se pudo recuperar del JSON roto, o porque el lote entero cayó
+ * en fallbackMomentsForBatch. Pedido explícito: que sea lo más corto posible, como si fuera "la
+ * palabra importante" que se dice en ese momento — se descartan muletillas/palabras vacías y se
+ * queda con la más larga (suele ser la más "de contenido": un nombre, un verbo concreto...).
  */
 function deriveLabelFromTranscript(excerpt: string, languageCode: string | null): string {
   const cleaned = excerpt.replace(/\s+/g, " ").trim();
   if (!cleaned) {
     return languageCode === "es" ? "Momento destacado" : "Featured moment";
   }
-  const words = cleaned.split(" ");
-  let label = "";
-  for (const word of words) {
-    const candidate = label ? `${label} ${word}` : word;
-    if (candidate.length > 28) break;
-    label = candidate;
+  const words = cleaned
+    .replace(/[^\p{L}\p{N}\s']/gu, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+  const candidates = words.filter((w) => w.length >= 3 && !STOPWORDS.has(w.toLowerCase()));
+  const chosen = candidates.sort((a, b) => b.length - a.length)[0] ?? words[0];
+  if (!chosen) {
+    return languageCode === "es" ? "Momento destacado" : "Featured moment";
   }
-  if (!label) label = words[0].slice(0, 28);
-  return label.length < cleaned.length ? `${label}…` : label;
+  const capped = chosen.length > 18 ? chosen.slice(0, 18) : chosen;
+  return capped.charAt(0).toUpperCase() + capped.slice(1).toLowerCase();
 }
 
 interface RawMoment {
