@@ -18,6 +18,9 @@ const createJobSchema = z.object({
   splitDurationSec: z.number().min(15).max(600).optional(),
   // Solo modo RANKING, opcional.
   manualCategories: z.array(manualCategorySchema).max(20).optional(),
+  // Solo modo SPLIT, opcional: título propio escrito a mano, quemado en pantalla en todos los
+  // shorts que salgan de este vídeo (ver Job.customTitle).
+  customTitle: z.string().trim().min(1).max(120).optional(),
 });
 
 export async function GET(req: NextRequest) {
@@ -42,7 +45,10 @@ export async function POST(req: NextRequest) {
       sourceUrl: parsed.data.url,
       mode: parsed.data.mode ?? "SINGLE",
       status: "PENDING",
-      ...(parsed.data.mode === "SPLIT" && { splitDurationSec: parsed.data.splitDurationSec ?? 60 }),
+      ...(parsed.data.mode === "SPLIT" && {
+        splitDurationSec: parsed.data.splitDurationSec ?? 60,
+        ...(parsed.data.customTitle && { customTitle: parsed.data.customTitle }),
+      }),
       ...(parsed.data.mode === "RANKING" &&
         parsed.data.manualCategories &&
         parsed.data.manualCategories.length > 0 && {

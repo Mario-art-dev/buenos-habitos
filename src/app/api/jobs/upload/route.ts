@@ -26,12 +26,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Formulario inválido" }, { status: 400 });
   }
 
-  const { uploadId, mode, filename, splitDurationSec, manualCategories } = body as {
+  const { uploadId, mode, filename, splitDurationSec, manualCategories, customTitle } = body as {
     uploadId?: string;
     mode?: string;
     filename?: string;
     splitDurationSec?: number;
     manualCategories?: { name: string; type: "TOPIC" | "YOUTUBER" }[];
+    customTitle?: string;
   };
 
   if (!uploadId || !UPLOAD_ID_RE.test(uploadId)) {
@@ -66,12 +67,17 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const trimmedCustomTitle = mode === "SPLIT" && typeof customTitle === "string" ? customTitle.trim().slice(0, 120) : "";
+
   const job = await db.job.create({
     data: {
       mode,
       sourceTitle: filename || "Vídeo subido",
       status: "PENDING",
-      ...(mode === "SPLIT" && { splitDurationSec: splitDurationSec ?? 60 }),
+      ...(mode === "SPLIT" && {
+        splitDurationSec: splitDurationSec ?? 60,
+        ...(trimmedCustomTitle && { customTitle: trimmedCustomTitle }),
+      }),
       ...(parsedManualCategories?.success &&
         parsedManualCategories.data.length > 0 && { manualCategories: JSON.stringify(parsedManualCategories.data) }),
     },

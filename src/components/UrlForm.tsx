@@ -25,7 +25,8 @@ async function uploadInChunks(
   mode: string,
   onProgress: (pct: number) => void,
   splitDurationSec?: number,
-  manualCategories?: { name: string; type: "TOPIC" | "YOUTUBER" }[]
+  manualCategories?: { name: string; type: "TOPIC" | "YOUTUBER" }[],
+  customTitle?: string
 ): Promise<{ id: string }> {
   const uploadId = crypto.randomUUID();
   const totalChunks = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
@@ -47,7 +48,7 @@ async function uploadInChunks(
   const finalizeRes = await fetchWithRetry("/api/jobs/upload", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ uploadId, mode, filename: file.name, splitDurationSec, manualCategories }),
+    body: JSON.stringify({ uploadId, mode, filename: file.name, splitDurationSec, manualCategories, customTitle }),
   });
   const data = await finalizeRes.json();
   if (!finalizeRes.ok) throw new Error(data.error ?? "No se pudo crear el trabajo");
@@ -83,6 +84,7 @@ export default function UrlForm({
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [splitMinutes, setSplitMinutes] = useState(1);
+  const [customTitle, setCustomTitle] = useState("");
   const [manualCategories, setManualCategories] = useState<ManualCategoryRow[]>([]);
   const router = useRouter();
   const splitDurationSec = mode === "SPLIT" ? Math.round(splitMinutes * 60) : undefined;
@@ -114,14 +116,27 @@ export default function UrlForm({
         const res = await fetchWithRetry("/api/jobs", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url, mode, splitDurationSec, manualCategories: manualCategoriesPayload }),
+          body: JSON.stringify({
+            url,
+            mode,
+            splitDurationSec,
+            manualCategories: manualCategoriesPayload,
+            customTitle: mode === "SPLIT" ? customTitle.trim() || undefined : undefined,
+          }),
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? "No se pudo crear el trabajo");
         job = data.job;
       } else {
         if (!file) throw new Error("Elige un archivo de vídeo");
-        job = await uploadInChunks(file, mode, setProgress, splitDurationSec, manualCategoriesPayload);
+        job = await uploadInChunks(
+          file,
+          mode,
+          setProgress,
+          splitDurationSec,
+          manualCategoriesPayload,
+          mode === "SPLIT" ? customTitle.trim() || undefined : undefined
+        );
       }
       if (coverImage) {
         // No bloquea la creación del trabajo si falla: la portada por defecto (fotograma del
@@ -133,6 +148,7 @@ export default function UrlForm({
       setFile(null);
       setCoverImage(null);
       setManualCategories([]);
+      setCustomTitle("");
       router.push(`/jobs/${job.id}`);
       router.refresh();
     } catch (err) {
@@ -184,6 +200,20 @@ export default function UrlForm({
           </div>
           <p className="mt-1 text-xs text-slate-500">
             El vídeo se corta entero, de principio a fin, en shorts consecutivos de esta duración.
+          </p>
+
+          <label className="mb-2 mt-4 block text-sm font-medium text-slate-300">Título (opcional)</label>
+          <input
+            type="text"
+            value={customTitle}
+            onChange={(e) => setCustomTitle(e.target.value)}
+            maxLength={120}
+            placeholder='BROMA TELEFÓNICA A AURONPLAY "EL FIFAS"'
+            className="w-full rounded-xl border border-ink-600 bg-ink-900 px-4 py-2.5 text-sm outline-none focus:border-brand-500"
+          />
+          <p className="mt-1 text-xs text-slate-500">
+            Se queda fijo en pantalla, en mayúsculas sobre una barra negra, arriba del short (sin taparlo) en
+            todos los trozos. Si lo dejas en blanco, no se pone ningún título.
           </p>
         </div>
       )}

@@ -5,10 +5,11 @@ import {
   bottomVideoPath,
   clipVideoPath,
   clipThumbnailPath,
+  bigCaptionsPath,
   customTextPath as customTextAssPath,
 } from "@/lib/storagePaths";
-import { cutSplitScreenClip, applyCustomTextOverlay, extractThumbnail } from "./clip";
-import { buildCustomTextAss, type CustomTextElement } from "./bigCaptions";
+import { cutSplitScreenClip, applyCustomTextOverlay, burnCustomTitleBar, doubleTopHalfHeight, extractThumbnail } from "./clip";
+import { buildCustomTextAss, buildBigCaptionsAssFromCues, defaultSplitDoubleCaptionsStyle, type CustomTextElement, type StoredCue } from "./bigCaptions";
 import { probeVideo, pickVerticalResolution } from "./probe";
 
 /**
@@ -16,8 +17,9 @@ import { probeVideo, pickVerticalResolution } from "./probe";
  * DOS vídeos fuente (arriba/abajo), respetando el recorte guardado del vídeo de arriba
  * (effectiveStartSec/endSec, editable desde el editor) y el punto de arranque guardado del vídeo
  * de abajo (doubleBottomStartSec, fijado al generar por primera vez, para no romper la
- * continuidad del vídeo de fondo entre partes). El texto personalizado añadido a mano se quema
- * como pasada final sobre el resultado ya compuesto.
+ * continuidad del vídeo de fondo entre partes). Los subtítulos automáticos (captionCues, editables
+ * desde el editor como en SPLIT/SINGLE/RANKING) y el título propio (customTitle) se queman como
+ * pasadas aparte, igual que el texto personalizado añadido a mano.
  */
 export async function regenerateDoubleClip(clipId: string): Promise<void> {
   const clip = await db.clip.findUniqueOrThrow({ where: { id: clipId }, include: { job: true } });
@@ -40,7 +42,10 @@ export async function regenerateDoubleClip(clipId: string): Promise<void> {
   const outPath = clipVideoPath(jobId, clip.id);
   const thumbPath = clipThumbnailPath(jobId, clip.id);
   const customTexts: CustomTextElement[] = JSON.parse(clip.customTexts || "[]");
+  const cues: StoredCue[] = JSON.parse(clip.captionCues || "[]");
   const customTextFilePath = customTextAssPath(jobId, clip.id);
+  const bigCaptionsFilePath = bigCaptionsPath(jobId, clip.id);
+  const topHalfH = doubleTopHalfHeight(resolution.height);
 
   try {
     await cutSplitScreenClip({
@@ -53,6 +58,22 @@ export async function regenerateDoubleClip(clipId: string): Promise<void> {
       outPath,
       resolution,
     });
+
+    if (clip.captionsEnabled && cues.length > 0) {
+      const ass = buildBigCaptionsAssFromCues(cues, resolution, defaultSplitDoubleCaptionsStyle(resolution));
+      if (ass) {
+        fs.writeFileSync(bigCaptionsFilePath, ass, "utf-8");
+        const withCaptionsPath = `${outPath}.withcaptions.mp4`;
+        await applyCustomTextOverlay(outPath, withCaptionsPath, bigCaptionsFilePath);
+        fs.renameSync(withCaptionsPath, outPath);
+      }
+    }
+
+    if (clip.customTitle && clip.customTitle.trim()) {
+      const withTitlePath = `${outPath}.withtitle.mp4`;
+      await burnCustomTitleBar(outPath, withTitlePath, clip.customTitle.trim(), topHalfH, resolution);
+      fs.renameSync(withTitlePath, outPath);
+    }
 
     const ass = customTexts.length > 0 ? buildCustomTextAss(customTexts, resolution) : null;
     if (ass) {
@@ -69,5 +90,6 @@ export async function regenerateDoubleClip(clipId: string): Promise<void> {
     });
   } finally {
     fs.rmSync(customTextFilePath, { force: true });
+    fs.rmSync(bigCaptionsFilePath, { force: true });
   }
 }

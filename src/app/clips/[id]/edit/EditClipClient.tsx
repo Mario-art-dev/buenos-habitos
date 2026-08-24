@@ -852,7 +852,7 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
           )}
 
           {/* Subtítulos automáticos: solo en los modos que los generan/regeneran de verdad */}
-          {(clip.jobMode === "SINGLE" || clip.jobMode === "SPLIT" || clip.jobMode === "RANKING") && (
+          {(clip.jobMode === "SINGLE" || clip.jobMode === "SPLIT" || clip.jobMode === "RANKING" || clip.jobMode === "DOUBLE") && (
           <div>
             <div className="mb-2 flex items-center justify-between">
               <h2 className="text-sm font-semibold text-slate-300">Subtítulos generados automáticamente</h2>

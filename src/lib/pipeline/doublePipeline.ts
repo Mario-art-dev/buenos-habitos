@@ -6,12 +6,14 @@ import {
   audioPath,
   clipVideoPath,
   clipThumbnailPath,
+  bigCaptionsPath,
   tmpDir,
 } from "@/lib/storagePaths";
 import { resolveSourceVideo, downloadSourceVideo } from "./download";
 import { extractAudio, transcribeAudio } from "./transcribe";
 import { buildSegmentsByCount, describeFixedSegments } from "./splitAnalyze";
-import { cutSplitScreenClip, extractThumbnail } from "./clip";
+import { cutSplitScreenClip, extractThumbnail, applyCustomTextOverlay, burnCustomTitleBar, doubleTopHalfHeight } from "./clip";
+import { cuesFromTranscript, buildBigCaptionsAssFromCues, defaultSplitDoubleCaptionsStyle, type StoredCue } from "./bigCaptions";
 import { probeVideo, pickVerticalResolution } from "./probe";
 import { setStatus } from "./status";
 import { normalizeLanguageCode, resolveContentLanguage } from "@/lib/lang";
@@ -77,7 +79,9 @@ export async function processDoubleJob(jobId: string): Promise<void> {
     const contentLanguage = resolveContentLanguage(languageCode);
     await db.job.update({
       where: { id: jobId },
-      data: { transcript: transcript.text, contentLanguage: languageCode },
+      // transcriptSegments (con marcas por palabra) se guarda para poder regenerar los subtítulos
+      // de cada parte desde el editor sin tener que retranscribir el vídeo de arriba entero.
+      data: { transcript: transcript.text, contentLanguage: languageCode, transcriptSegments: JSON.stringify(transcript.segments) },
     });
 
     await setStatus(jobId, "ANALYZING", "Cortando el vídeo en partes y describiéndolas…");
@@ -118,9 +122,15 @@ export async function processDoubleJob(jobId: string): Promise<void> {
     // bucle -stream_loop de cutSplitScreenClip se encarga de seguir más allá del final si hace falta).
     let bottomCursorSec = 0;
 
+    const customTitle = job.customTitle?.trim() || null;
+    const topHalfH = doubleTopHalfHeight(resolution.height);
+
     for (const clip of clips) {
       const bottomStartSec = bottomCursorSec % bottomDurationSec;
       bottomCursorSec += clip.endSec - clip.startSec;
+      const bigCaptionsFilePath = bigCaptionsPath(jobId, clip.id);
+      let withCaptionsPath: string | null = null;
+      let withTitlePath: string | null = null;
       try {
         // Se guarda el punto de arranque del vídeo de abajo usado para esta parte, para poder
         // regenerarla (tras recortar el vídeo de arriba o añadir texto) sin romper la
@@ -143,16 +153,58 @@ export async function processDoubleJob(jobId: string): Promise<void> {
           resolution,
         });
 
+        // Subtítulos grandes: primera vez que DOUBLE los lleva — mismo estilo propio (tipografía/
+        // tamaño/colores/posición) que SPLIT, pedido explícito, distinto del resto de modos (ver
+        // defaultSplitDoubleCaptionsStyle en bigCaptions.ts). Como pasada aparte sobre el vídeo YA
+        // compuesto (arriba+abajo), igual que el texto personalizado del editor.
+        const captionCues: StoredCue[] = cuesFromTranscript(transcript.segments, clip.startSec, clip.endSec, 4, true);
+        let core = outPath;
+        if (captionCues.length > 0) {
+          const ass = buildBigCaptionsAssFromCues(captionCues, resolution, defaultSplitDoubleCaptionsStyle(resolution));
+          if (ass) {
+            fs.writeFileSync(bigCaptionsFilePath, ass, "utf-8");
+            withCaptionsPath = `${outPath}.withcaptions.mp4`;
+            await applyCustomTextOverlay(core, withCaptionsPath, bigCaptionsFilePath);
+            core = withCaptionsPath;
+          }
+        }
+
+        // Título propio escrito a mano por el usuario (Job.customTitle, solo SPLIT/DOUBLE): arriba
+        // del clip de ABAJO (el segundo tramo de la pantalla dividida), pedido explícito.
+        if (customTitle) {
+          withTitlePath = `${outPath}.withtitle.mp4`;
+          await burnCustomTitleBar(core, withTitlePath, customTitle, topHalfH, resolution);
+          core = withTitlePath;
+        }
+
+        if (core !== outPath) fs.copyFileSync(core, outPath);
+
         await extractThumbnail(outPath, thumbPath);
         await db.clip.update({
           where: { id: clip.id },
-          data: { status: "READY", filePath: outPath, thumbnailPath: thumbPath, captionCues: "[]" },
+          data: {
+            status: "READY",
+            filePath: outPath,
+            thumbnailPath: thumbPath,
+            captionCues: JSON.stringify(captionCues),
+            customTitle,
+          },
         });
       } catch (err) {
         await db.clip.update({
           where: { id: clip.id },
           data: { status: "FAILED", error: (err as Error).message },
         });
+      } finally {
+        for (const tmp of [bigCaptionsFilePath, withCaptionsPath, withTitlePath]) {
+          if (tmp) {
+            try {
+              fs.rmSync(tmp, { force: true });
+            } catch {
+              // ignorar
+            }
+          }
+        }
       }
     }
 

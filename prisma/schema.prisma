@@ -39,8 +39,10 @@ model Job {
   // no se pudo detectar (o en PRODUCT/SONG, que no transcriben diálogo del vídeo fuente).
   contentLanguage   String?
   // Segmentos de la transcripción (con marcas por palabra) tal y como los devolvió Whisper, en
-  // JSON — solo RANKING los necesita guardados (para poder volver a quemar los subtítulos de cada
-  // puesto al regenerar un clip desde el editor sin tener que retranscribir el vídeo entero).
+  // JSON — RANKING y DOUBLE los necesitan guardados (para poder volver a quemar los subtítulos de
+  // cada puesto/parte al regenerar un clip desde el editor sin tener que retranscribir el vídeo
+  // entero; SPLIT/SINGLE no lo necesitan porque generan sus captionCues directamente al crear el
+  // clip y esas sí que se guardan por clip).
   transcriptSegments String?
 
   // Solo modo RANKING: secciones que el usuario pide expresamente ANTES de generar (opcional),
@@ -70,6 +72,13 @@ model Job {
   bottomVideoUrl      String?
   bottomVideoFilePath String?
   doublePartsCount    Int?
+
+  // Solo modos SPLIT/DOUBLE: título propio escrito a mano por el usuario (p.ej. "BROMA TELEFÓNICA
+  // A AURONPLAY 'EL FIFAS'"), quemado en pantalla en TODOS los shorts que salgan de este vídeo —
+  // arriba del short (sin tapar el contenido) en SPLIT, arriba del clip de ABAJO en DOUBLE. Cada
+  // Clip hereda este texto en su propio customTitle al generarse (igual que coverImagePath), así
+  // se puede volver a quemar al regenerar sin depender de que el Job siga teniendo el campo.
+  customTitle String?
 
   // Foto propia subida al crear el trabajo (horizontal con fondo desenfocado, o vertical) que se
   // usa como portada de marca (con el sonido de marca) en TODOS los shorts que salgan de este
@@ -122,6 +131,12 @@ model Clip {
   // Textos que el usuario añade a mano en el editor (fuente/color/tamaño/posición propios).
   // Formato: [{ id, text, start, end, xPct, yPct, fontName, fontSize, colorHex, uppercase }]
   customTexts       String    @default("[]")
+
+  // Solo modos SPLIT/DOUBLE: título propio escrito a mano por el usuario al crear el trabajo
+  // (heredado de Job.customTitle), quemado en pantalla en este short — se guarda por clip (en vez
+  // de leerlo del Job cada vez) para poder regenerar el clip sin depender de que el Job lo siga
+  // teniendo igual.
+  customTitle String?
 
   // Portada (SINGLE/SPLIT): override elegido a mano desde el editor. Si es null, se usa el
   // fotograma/título por defecto (ver coverCard.ts) — RANKING/PRODUCT/SONG no usan portada.

@@ -8,6 +8,7 @@ export default function DoubleForm() {
   const [top, setTop] = useState<VideoInputValue>({ url: "", uploadId: null });
   const [bottom, setBottom] = useState<VideoInputValue>({ url: "", uploadId: null });
   const [partsCount, setPartsCount] = useState(4);
+  const [customTitle, setCustomTitle] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
@@ -26,6 +27,7 @@ export default function DoubleForm() {
           bottomUrl: bottom.url || undefined,
           bottomUploadId: bottom.uploadId || undefined,
           partsCount,
+          customTitle: customTitle.trim() || undefined,
         }),
       });
       const data = await res.json();
@@ -47,6 +49,20 @@ export default function DoubleForm() {
         value={bottom}
         onChange={setBottom}
       />
+
+      <label className="mb-2 mt-4 block text-sm font-medium text-slate-300">Título (opcional)</label>
+      <input
+        type="text"
+        value={customTitle}
+        onChange={(e) => setCustomTitle(e.target.value)}
+        maxLength={120}
+        placeholder='BROMA TELEFÓNICA A AURONPLAY "EL FIFAS"'
+        className="w-full rounded-xl border border-ink-600 bg-ink-900 px-4 py-2.5 text-sm outline-none focus:border-brand-500"
+      />
+      <p className="mt-1 text-xs text-slate-500">
+        Se queda fijo en pantalla, en mayúsculas sobre una barra negra, arriba del clip de ABAJO en todas las
+        partes. Si lo dejas en blanco, no se pone ningún título.
+      </p>
 
       <label className="mb-2 mt-4 block text-sm font-medium text-slate-300">Número de partes</label>
       <div className="flex items-center gap-3">

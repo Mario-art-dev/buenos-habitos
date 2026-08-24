@@ -14,8 +14,8 @@ import {
 import { resolveSourceVideo } from "./download";
 import { extractAudio, transcribeAudio } from "./transcribe";
 import { buildFixedSegments, describeFixedSegments } from "./splitAnalyze";
-import { cutVerticalClip, extractThumbnail, concatClips, burnTopLabel } from "./clip";
-import { cuesFromTranscript, buildBigCaptionsAssFromCues, type StoredCue } from "./bigCaptions";
+import { cutVerticalClip, extractThumbnail, concatClips, burnTopLabel, burnCustomTitleBar, SPLIT_CUSTOM_TITLE_Y } from "./clip";
+import { cuesFromTranscript, buildBigCaptionsAssFromCues, defaultSplitDoubleCaptionsStyle, type StoredCue } from "./bigCaptions";
 import { pickHookStartSec, hookVerifiedFrameSec } from "./hookFrame";
 import { probeVideo, pickVerticalResolution } from "./probe";
 import { renderCoverCard } from "./coverCard";
@@ -95,9 +95,11 @@ export async function processSplitJob(jobId: string): Promise<void> {
     await setStatus(jobId, "CLIPPING", `Generando ${clips.length} shorts…`);
     const sourceInfo = await probeVideo(srcPath);
     const resolution = pickVerticalResolution(sourceInfo);
+    const customTitle = job.customTitle?.trim() || null;
     for (const clip of clips) {
       const bodyPath = clipBodyPath(jobId, clip.id);
       const labeledPath = `${bodyPath}.labeled.mp4`;
+      const titledPath = `${bodyPath}.titled.mp4`;
       const coverPath = coverCardPath(jobId, clip.id);
       const bigCaptionsFilePath = bigCaptionsPath(jobId, clip.id);
       try {
@@ -114,12 +116,13 @@ export async function processSplitJob(jobId: string): Promise<void> {
           framePath: hookFramePath(jobId, clip.id),
         });
 
-        // Caption grande estilo karaoke: mismo tratamiento que el modo SINGLE ("vídeos virales"),
-        // activado por defecto y editable/desactivable luego desde el editor.
+        // Caption grande estilo karaoke: activado por defecto y editable/desactivable luego desde
+        // el editor. Estilo propio (tipografía/tamaño/colores/posición), distinto del resto de
+        // modos — pedido explícito (ver defaultSplitDoubleCaptionsStyle en bigCaptions.ts).
         const captionCues: StoredCue[] = cuesFromTranscript(transcript.segments, hookStartSec, clip.endSec, 4, true);
         let bigCaptionsFile: string | undefined;
         if (captionCues.length > 0) {
-          const assContent = buildBigCaptionsAssFromCues(captionCues, resolution);
+          const assContent = buildBigCaptionsAssFromCues(captionCues, resolution, defaultSplitDoubleCaptionsStyle(resolution));
           if (assContent) {
             fs.writeFileSync(bigCaptionsFilePath, assContent, "utf-8");
             bigCaptionsFile = bigCaptionsFilePath;
@@ -139,6 +142,14 @@ export async function processSplitJob(jobId: string): Promise<void> {
         // Mismo texto permanente "Parte N" en la parte superior que el modo Doble, para saber qué
         // short es cuál — se quema sobre el cuerpo del vídeo, nunca sobre la portada.
         await burnTopLabel(bodyPath, labeledPath, `Parte ${clip.rank}`, resolution);
+        let core = labeledPath;
+
+        // Título propio escrito a mano por el usuario (Job.customTitle, solo SPLIT/DOUBLE): arriba
+        // del short, sin tapar el contenido — pedido explícito.
+        if (customTitle) {
+          await burnCustomTitleBar(core, titledPath, customTitle, SPLIT_CUSTOM_TITLE_Y, resolution);
+          core = titledPath;
+        }
 
         if (config.coverCard.enabled) {
           await renderCoverCard({
@@ -149,9 +160,9 @@ export async function processSplitJob(jobId: string): Promise<void> {
             resolution,
             customImagePath: job.coverImagePath,
           });
-          await concatClips([labeledPath, coverPath], outPath);
+          await concatClips([core, coverPath], outPath);
         } else {
-          fs.copyFileSync(labeledPath, outPath);
+          fs.copyFileSync(core, outPath);
         }
 
         await extractThumbnail(outPath, thumbPath);
@@ -164,6 +175,7 @@ export async function processSplitJob(jobId: string): Promise<void> {
             effectiveStartSec: hookStartSec,
             captionCues: JSON.stringify(captionCues),
             coverImagePath: job.coverImagePath,
+            customTitle,
           },
         });
       } catch (err) {
@@ -172,7 +184,7 @@ export async function processSplitJob(jobId: string): Promise<void> {
           data: { status: "FAILED", error: (err as Error).message },
         });
       } finally {
-        for (const tmp of [bodyPath, labeledPath, coverPath, bigCaptionsFilePath]) {
+        for (const tmp of [bodyPath, labeledPath, titledPath, coverPath, bigCaptionsFilePath]) {
           try {
             fs.rmSync(tmp, { force: true });
           } catch {

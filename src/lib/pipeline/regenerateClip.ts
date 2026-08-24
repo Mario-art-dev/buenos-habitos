@@ -12,8 +12,8 @@ import {
   customTextPath as customTextAssPath,
   narrationAudioPath,
 } from "@/lib/storagePaths";
-import { cutVerticalClip, concatClips, extractThumbnail, burnTopLabel } from "./clip";
-import { buildBigCaptionsAssFromCues, buildCustomTextAss, type StoredCue, type CustomTextElement } from "./bigCaptions";
+import { cutVerticalClip, concatClips, extractThumbnail, burnTopLabel, burnCustomTitleBar, SPLIT_CUSTOM_TITLE_Y } from "./clip";
+import { buildBigCaptionsAssFromCues, buildCustomTextAss, defaultSplitDoubleCaptionsStyle, type StoredCue, type CustomTextElement } from "./bigCaptions";
 import { hookVerifiedFrameSec } from "./hookFrame";
 import { probeVideo, pickVerticalResolution } from "./probe";
 import { renderCoverCard } from "./coverCard";
@@ -76,6 +76,7 @@ async function regenerateSingleOrSplitClip(clipId: string): Promise<void> {
   const bodyPath = clipBodyPath(jobId, clip.id);
   const commentedPath = clipCommentedPath(jobId, clip.id);
   const labeledPath = `${clipBodyPath(jobId, clip.id)}.labeled.mp4`;
+  const titledPath = `${clipBodyPath(jobId, clip.id)}.titled.mp4`;
   const coverPath = coverCardPath(jobId, clip.id);
   const bigCaptionsFilePath = bigCaptionsPath(jobId, clip.id);
   const customTextFilePath = customTextAssPath(jobId, clip.id);
@@ -87,7 +88,13 @@ async function regenerateSingleOrSplitClip(clipId: string): Promise<void> {
   try {
     let bigCaptionsFile: string | undefined;
     if (config.bigCaptions.enabled && clip.captionsEnabled && cues.length > 0) {
-      const ass = buildBigCaptionsAssFromCues(cues, resolution);
+      // Modo SPLIT ("cortar en shorts"): estilo propio de subtítulos (tipografía/tamaño/colores/
+      // posición), distinto del resto de modos — pedido explícito (ver
+      // defaultSplitDoubleCaptionsStyle en bigCaptions.ts).
+      const ass =
+        clip.job.mode === "SPLIT"
+          ? buildBigCaptionsAssFromCues(cues, resolution, defaultSplitDoubleCaptionsStyle(resolution))
+          : buildBigCaptionsAssFromCues(cues, resolution);
       if (ass) {
         fs.writeFileSync(bigCaptionsFilePath, ass, "utf-8");
         bigCaptionsFile = bigCaptionsFilePath;
@@ -151,6 +158,13 @@ async function regenerateSingleOrSplitClip(clipId: string): Promise<void> {
     if (clip.job.mode === "SPLIT") {
       await burnTopLabel(core, labeledPath, `Parte ${clip.rank}`, resolution);
       core = labeledPath;
+
+      // Título propio escrito a mano por el usuario (Clip.customTitle, heredado de Job.customTitle
+      // al generar), arriba del short sin tapar el contenido — pedido explícito.
+      if (clip.customTitle && clip.customTitle.trim()) {
+        await burnCustomTitleBar(core, titledPath, clip.customTitle.trim(), SPLIT_CUSTOM_TITLE_Y, resolution);
+        core = titledPath;
+      }
     }
 
     if (config.coverCard.enabled) {
@@ -178,6 +192,7 @@ async function regenerateSingleOrSplitClip(clipId: string): Promise<void> {
       bodyPath,
       commentedPath,
       labeledPath,
+      titledPath,
       coverPath,
       bigCaptionsFilePath,
       customTextFilePath,

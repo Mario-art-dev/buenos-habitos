@@ -128,6 +128,12 @@ export interface BigCaptionsStyle {
   blur: number;
   posX: number;
   posY: number;
+  // Color base (sin resaltar) y de resaltado "karaoke" de este estilo — si no se indican, usan los
+  // valores por defecto de toda la app (BASE_COLOR_HEX/HIGHLIGHT_COLOR_HEX). Solo modos SPLIT/
+  // DOUBLE los cambian de momento (ver defaultSplitDoubleCaptionsStyle), el resto sigue con blanco/
+  // verde de siempre.
+  baseColorHex?: string;
+  highlightColorHex?: string;
 }
 
 function defaultBigCaptionsStyle(resolution: { width: number; height: number }): BigCaptionsStyle {
@@ -143,6 +149,30 @@ function defaultBigCaptionsStyle(resolution: { width: number; height: number }):
     blur: 3,
     posX: Math.round(width / 2),
     posY: Math.round(height * 0.62),
+  };
+}
+
+/**
+ * Estilo de subtítulos SOLO para los modos SPLIT ("cortar en shorts") y DOUBLE ("doble") — pedido
+ * explícito a partir de una captura de referencia (vídeo estilo "MI NOMBRE ES"): tipografía y
+ * tamaño distintos del resto de modos, colores blanco/amarillo (en vez de blanco/verde), y
+ * posicionados abajo del todo — "justo debajo del clip" en SPLIT, "justo debajo del clip de abajo"
+ * en DOUBLE (que, al ocupar el mismo alto total de fotograma que SPLIT, cae igual de abajo en
+ * ambos: dentro/pegado al borde inferior de la mitad de abajo). Ningún otro modo usa este estilo.
+ */
+export function defaultSplitDoubleCaptionsStyle(resolution: { width: number; height: number }): BigCaptionsStyle {
+  const { width, height } = resolution;
+  const fontSize = Math.round(width / 16);
+  return {
+    fontName: "Anton",
+    fontSize,
+    outline: Math.max(1, Math.round(fontSize / 12)),
+    outlineColorHex: "101010",
+    blur: 2,
+    posX: Math.round(width / 2),
+    posY: Math.round(height * 0.9),
+    baseColorHex: "FFFFFF",
+    highlightColorHex: "FFD400",
   };
 }
 
@@ -168,7 +198,7 @@ export function buildBigCaptionsAssFromCues(
   if (visible.length === 0) return null;
 
   const { width, height } = resolution;
-  const highlightFill = rgbToAssColor(HIGHLIGHT_COLOR_HEX);
+  const highlightFill = rgbToAssColor(style.highlightColorHex || HIGHLIGHT_COLOR_HEX);
 
   const header = `[Script Info]
 ScriptType: v4.00+
@@ -196,7 +226,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     const yPct = s?.yPct ?? (style.posY / height) * 100;
     const x = Math.round((xPct / 100) * width);
     const y = Math.round((yPct / 100) * height);
-    const baseFill = rgbToAssColor(s?.colorHex || BASE_COLOR_HEX);
+    const baseFill = rgbToAssColor(s?.colorHex || style.baseColorHex || BASE_COLOR_HEX);
     const tags =
       `\\an5\\pos(${x},${y})\\fn${fontName}\\fs${fontSize}\\3c&H${style.outlineColorHex}&\\bord${outline}\\blur${style.blur}`;
     return { tags, baseFill };

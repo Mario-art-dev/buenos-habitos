@@ -15,6 +15,9 @@ const createDoubleJobSchema = z
     bottomUrl: z.string().url().optional(),
     bottomUploadId: z.string().regex(UPLOAD_ID_RE).optional(),
     partsCount: z.number().int().min(2).max(50),
+    // Título propio escrito a mano, quemado en pantalla arriba del clip de abajo en TODAS las
+    // partes de este trabajo (ver Job.customTitle).
+    customTitle: z.string().trim().min(1).max(120).optional(),
   })
   .refine((d) => d.topUrl || d.topUploadId, { message: "Falta el vídeo de arriba (enlace o archivo subido)" })
   .refine((d) => d.bottomUrl || d.bottomUploadId, { message: "Falta el vídeo de abajo (enlace o archivo subido)" });
@@ -35,7 +38,7 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.errors[0]?.message ?? "Datos inválidos" }, { status: 400 });
   }
-  const { topUrl, topUploadId, bottomUrl, bottomUploadId, partsCount } = parsed.data;
+  const { topUrl, topUploadId, bottomUrl, bottomUploadId, partsCount, customTitle } = parsed.data;
 
   const job = await db.job.create({
     data: {
@@ -43,6 +46,7 @@ export async function POST(req: NextRequest) {
       sourceUrl: topUploadId ? null : topUrl,
       bottomVideoUrl: bottomUploadId ? null : bottomUrl,
       doublePartsCount: partsCount,
+      ...(customTitle && { customTitle }),
       status: "PENDING",
     },
   });

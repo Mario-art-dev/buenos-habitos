@@ -227,14 +227,21 @@ function topLabelDrawtextFilter(textFileArg: string, width: number): string {
   );
 }
 
+/** Alto de la mitad de ARRIBA en modo Doble, forzado a par (libx264 exige dimensiones pares con
+ *  yuv420p) — expuesto aparte para que otras pasadas posteriores (p.ej. el título personalizado
+ *  "arriba del clip de abajo") puedan calcular la misma Y sin duplicar la lógica. */
+export function doubleTopHalfHeight(height: number): number {
+  let topHalfH = Math.round(height / 2);
+  if (topHalfH % 2 !== 0) topHalfH -= 1;
+  return topHalfH;
+}
+
 export async function cutSplitScreenClip(opts: SplitScreenOptions): Promise<void> {
   const { topSourcePath, topStartSec, topEndSec, bottomSourcePath, bottomStartSec, label, outPath, resolution = DEFAULT_RES } = opts;
   const duration = Math.max(0.5, topEndSec - topStartSec);
   const { width, height } = resolution;
 
-  // Alto de cada mitad, forzado a par (libx264 exige dimensiones pares con yuv420p).
-  let topHalfH = Math.round(height / 2);
-  if (topHalfH % 2 !== 0) topHalfH -= 1;
+  const topHalfH = doubleTopHalfHeight(height);
   const bottomHalfH = height - topHalfH;
 
   const labelFilePath = `${outPath}.label.txt`;
@@ -332,6 +339,61 @@ export async function burnTopLabel(
     ]);
   } finally {
     fs.rmSync(labelFilePath, { force: true });
+  }
+}
+
+// Y del título propio (Job.customTitle) en modo SPLIT: bien por debajo de la etiqueta fija
+// "Parte N" (que va a y=40 con fontSize=width/14, ver topLabelDrawtextFilter más arriba) para que
+// no se solapen, y sin tapar el contenido principal del short — pedido explícito ("arriba del
+// short... que no tape el short"). Compartida entre la generación inicial (splitPipeline.ts) y la
+// regeneración desde el editor (regenerateClip.ts) para que no se desincronicen.
+export const SPLIT_CUSTOM_TITLE_Y = 170;
+
+/**
+ * Quema el título propio que el usuario escribe a mano al crear el trabajo (solo modos SPLIT/
+ * DOUBLE, ver Job.customTitle), en mayúsculas, blanco sobre una barra negra sólida — mismo estilo
+ * "boom/breaking news" que las capturas de referencia (tipo "BROMA TELEFÓNICA A AURONPLAY 'EL
+ * FIFAS'") — como pasada final aparte sobre un vídeo YA montado, igual que burnTopLabel. La
+ * posición Y la decide quien llama: arriba del short sin tapar el contenido en SPLIT, arriba del
+ * clip de ABAJO (el segundo tramo de la pantalla dividida) en DOUBLE.
+ */
+export async function burnCustomTitleBar(
+  inputPath: string,
+  outputPath: string,
+  text: string,
+  yPosition: number,
+  resolution: VerticalResolution = DEFAULT_RES
+): Promise<void> {
+  const fontSize = Math.round(resolution.width / 16);
+  const wrapped = wrapText(text.toUpperCase(), 22);
+  const textFilePath = `${outputPath}.customtitle.txt`;
+  const filter =
+    `drawtext=${writeDrawtextFile(wrapped, textFilePath)}:fontcolor=white:fontsize=${fontSize}:` +
+    `fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:box=1:boxcolor=black@1:boxborderw=18:` +
+    `line_spacing=12:x=(w-text_w)/2:y=${yPosition}`;
+  try {
+    await run(config.ffmpegPath, [
+      "-y",
+      "-i",
+      inputPath,
+      "-vf",
+      filter,
+      "-c:v",
+      "libx264",
+      "-preset",
+      "fast",
+      "-crf",
+      "18",
+      "-pix_fmt",
+      "yuv420p",
+      "-c:a",
+      "copy",
+      "-movflags",
+      "+faststart",
+      outputPath,
+    ]);
+  } finally {
+    fs.rmSync(textFilePath, { force: true });
   }
 }
 
