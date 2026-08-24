@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
+import { assertStorageNotBlocked } from "@/lib/storageQuota";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +39,12 @@ export async function POST(req: NextRequest) {
   const parsed = createJobSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.errors[0]?.message ?? "URL inválida" }, { status: 400 });
+  }
+
+  try {
+    await assertStorageNotBlocked();
+  } catch (err) {
+    return NextResponse.json({ error: (err as Error).message }, { status: 507 });
   }
 
   const job = await db.job.create({

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { sourceVideoPath, uploadPartPath } from "@/lib/storagePaths";
+import { assertStorageNotBlocked } from "@/lib/storageQuota";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +48,12 @@ export async function POST(req: NextRequest) {
   const parsedManualCategories = mode === "RANKING" && manualCategories ? manualCategorySchema.safeParse(manualCategories) : null;
   if (parsedManualCategories && !parsedManualCategories.success) {
     return NextResponse.json({ error: "Secciones de ranking no válidas" }, { status: 400 });
+  }
+
+  try {
+    await assertStorageNotBlocked();
+  } catch (err) {
+    return NextResponse.json({ error: (err as Error).message }, { status: 507 });
   }
 
   const partPath = uploadPartPath(uploadId);

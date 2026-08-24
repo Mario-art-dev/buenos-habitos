@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { config } from "@/lib/config";
 import NavBar from "@/components/NavBar";
+import StorageQuotaBanner from "@/components/StorageQuotaBanner";
 
 export const metadata: Metadata = {
   title: `${config.channel.name} Studio — Generador de Shorts Virales`,
@@ -13,6 +14,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="es">
       <body>
         <NavBar />
+        <StorageQuotaBanner />
         <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
       </body>
     </html>

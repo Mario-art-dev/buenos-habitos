@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { sourceVideoPath, bottomVideoPath, uploadPartPath } from "@/lib/storagePaths";
+import { assertStorageNotBlocked } from "@/lib/storageQuota";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +40,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.errors[0]?.message ?? "Datos inválidos" }, { status: 400 });
   }
   const { topUrl, topUploadId, bottomUrl, bottomUploadId, partsCount, customTitle } = parsed.data;
+
+  try {
+    await assertStorageNotBlocked();
+  } catch (err) {
+    return NextResponse.json({ error: (err as Error).message }, { status: 507 });
+  }
 
   const job = await db.job.create({
     data: {

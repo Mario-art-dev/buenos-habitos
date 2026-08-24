@@ -2,6 +2,7 @@ import fs from "fs";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { productAssetPath } from "@/lib/storagePaths";
+import { assertStorageNotBlocked } from "@/lib/storageQuota";
 
 export const dynamic = "force-dynamic";
 
@@ -65,6 +66,12 @@ export async function POST(req: NextRequest) {
     if (!f.type.startsWith("image/") && !f.type.startsWith("video/")) {
       return NextResponse.json({ error: `"${f.name}" no es una imagen ni un vídeo` }, { status: 400 });
     }
+  }
+
+  try {
+    await assertStorageNotBlocked();
+  } catch (err) {
+    return NextResponse.json({ error: (err as Error).message }, { status: 507 });
   }
 
   const job = await db.job.create({
