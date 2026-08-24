@@ -3,9 +3,17 @@ import { config } from "@/lib/config";
 import { run } from "./exec";
 import type { VerticalResolution } from "./probe";
 
-// Mismo amarillo de marca que rankingIntroCard.ts/coverCard.ts.
+// Mismos colores/fuente de marca que antes en rankingIntroCard.ts (pedidos a partir de una
+// captura real de referencia) — se mantienen para el título, ver buildTitleLines.
+const WHITE_BGR = "&HFFFFFF&";
+const RED_BGR = "&H0000FF&";
 const YELLOW_BGR = "&H00D4FF&";
 const FONT_NAME = "Anton";
+
+// Colores llamativos por puesto (1..5), pedidos a partir de una captura real de referencia de un
+// ranking (números en amarillo/verde/naranja/magenta/cian) — se repiten en bucle si hubiera más
+// de 5 puestos (no debería pasar con RANKING_MAX_ITEMS=5, ver config.ts).
+const POSITION_COLORS = ["&H00D4FF&", "&H5FE739&", "&H00A5FF&", "&HA63DFF&", "&HFFE122&"];
 
 function assTime(sec: number): string {
   const clamped = Math.max(0, sec);
@@ -24,24 +32,95 @@ function escapeSubtitlesPath(p: string): string {
   return p.replace(/\\/g, "/").replace(/:/g, "\\:");
 }
 
+function titleCase(word: string): string {
+  return word.length === 0 ? word : word[0].toUpperCase() + word.slice(1).toLowerCase();
+}
+
+// "TOPIC" (gracioso/temática): "Ranking Funniest {Category} Moments". "YOUTUBER": "Best 5 {Name}
+// Clips", para cuando la sección pedida es "los mejores clips de tal creador" en vez de una
+// temática — mismo estilo (fuente/colores), solo cambia qué palabras van fijas y cuál es la
+// variable (ver rankingAnalyze.ts groupIntoRankings / Job.manualCategories).
+export type RankingOverlayTemplate = "TOPIC" | "YOUTUBER";
+
 export interface RankingListItem {
   position: number; // 1 = mejor, se muestra ARRIBA de la lista
   label: string;
   // Segundo del vídeo YA MONTADO en el que empieza el clip de este puesto — a partir de ahí se
-  // revela la etiqueta junto al número; antes solo se ve el número suelto.
+  // añade su etiqueta junto al número; antes solo se ve el número suelto (ya en su color vivo).
   revealAtSec: number;
 }
 
-function buildRankingListAss(items: RankingListItem[], totalDurationSec: number, resolution: VerticalResolution): string {
+function buildTitleLines(category: string, template: RankingOverlayTemplate, totalDurationSec: number, resolution: VerticalResolution): string[] {
   const { width, height } = resolution;
-  const n = items.length;
-  const listTop = height * 0.3;
-  const listBottom = height * 0.88;
-  const rowHeight = (listBottom - listTop) / Math.max(1, n);
-  const fontSize = Math.max(20, Math.round(rowHeight * 0.5));
-  const boxPadding = Math.max(4, Math.round(fontSize * 0.22));
-  const x = Math.round(width * 0.06);
+  const fontSize = Math.round(width / 7);
+  const outline = Math.max(2, Math.round(fontSize / 11));
+  const lineGap = Math.round(fontSize * 0.12);
+  const line1Y = Math.round(height * 0.08);
+  const line2Y = line1Y + fontSize + lineGap;
+  const cx = Math.round(width / 2);
+  const categoryLabel = category
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(titleCase)
+    .join(" ");
+  const look = `\\an5\\3c&H000000&\\bord${outline}\\shad2`;
 
+  if (template === "YOUTUBER") {
+    return [
+      `Dialogue: 1,${assTime(0)},${assTime(totalDurationSec)},Base,,0,0,0,,{${look}\\fs${fontSize}\\pos(${cx},${line1Y})\\c${WHITE_BGR}}Best {\\c${RED_BGR}}5`,
+      `Dialogue: 1,${assTime(0)},${assTime(totalDurationSec)},Base,,0,0,0,,{${look}\\fs${fontSize}\\pos(${cx},${line2Y})\\c${YELLOW_BGR}}${escapeAssText(
+        categoryLabel
+      )} {\\c${WHITE_BGR}}Clips`,
+    ];
+  }
+  return [
+    `Dialogue: 1,${assTime(0)},${assTime(totalDurationSec)},Base,,0,0,0,,{${look}\\fs${fontSize}\\pos(${cx},${line1Y})\\c${WHITE_BGR}}Ranking {\\c${RED_BGR}}Funniest`,
+    `Dialogue: 1,${assTime(0)},${assTime(totalDurationSec)},Base,,0,0,0,,{${look}\\fs${fontSize}\\pos(${cx},${line2Y})\\c${YELLOW_BGR}}${escapeAssText(
+      categoryLabel
+    )} {\\c${WHITE_BGR}}Moments`,
+  ];
+}
+
+function buildListLines(items: RankingListItem[], totalDurationSec: number, resolution: VerticalResolution): string[] {
+  const { width, height } = resolution;
+  const n = Math.max(1, items.length);
+  const listTop = height * 0.32;
+  const listBottom = height * 0.92;
+  const rowHeight = (listBottom - listTop) / n;
+  const fontSize = Math.max(30, Math.round(rowHeight * 0.62));
+  const outline = Math.max(3, Math.round(fontSize / 9));
+  const x = Math.round(width * 0.05);
+
+  const lines: string[] = [];
+  const sorted = [...items].sort((a, b) => a.position - b.position);
+  for (let i = 0; i < sorted.length; i++) {
+    const item = sorted[i];
+    const color = POSITION_COLORS[i % POSITION_COLORS.length];
+    const y = Math.round(listTop + i * rowHeight + rowHeight / 2);
+    const bareText = `${item.position}.-`;
+    const revealedText = `${item.position}.- ${escapeAssText(item.label)}`;
+    const revealAt = Math.max(0, Math.min(item.revealAtSec, totalDurationSec));
+    // Sin caja de fondo (BorderStyle 1, solo contorno+sombra) — pedido explícito: nada de "barra"
+    // detrás del texto. El número sale SIEMPRE en su color vivo desde el segundo 0; lo único que
+    // cambia al revelarse es que se le añade la etiqueta al lado.
+    const look = `\\an4\\3c&H000000&\\bord${outline}\\shad3\\fs${fontSize}\\pos(${x},${y})\\c${color}`;
+
+    if (revealAt > 0.05) {
+      lines.push(`Dialogue: 0,${assTime(0)},${assTime(revealAt)},Base,,0,0,0,,{${look}}${bareText}`);
+    }
+    lines.push(`Dialogue: 0,${assTime(revealAt)},${assTime(totalDurationSec)},Base,,0,0,0,,{${look}}${revealedText}`);
+  }
+  return lines;
+}
+
+function buildRankingOverlayAss(
+  category: string,
+  template: RankingOverlayTemplate,
+  items: RankingListItem[],
+  totalDurationSec: number,
+  resolution: VerticalResolution
+): string {
+  const { width, height } = resolution;
   const header = `[Script Info]
 ScriptType: v4.00+
 PlayResX: ${width}
@@ -50,58 +129,37 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: RankList,${FONT_NAME},${fontSize},&H00FFFFFF,&H000000FF,&H70000000,&H70000000,1,0,0,0,100,100,0,0,3,${boxPadding},0,4,${x},${x},0,1
+Style: Base,${FONT_NAME},${Math.round(width / 10)},&H00FFFFFF,&H000000FF,&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,4,2,5,40,40,0,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 `;
 
-  const lines: string[] = [];
-  const sorted = [...items].sort((a, b) => a.position - b.position);
-  for (let i = 0; i < sorted.length; i++) {
-    const item = sorted[i];
-    const y = Math.round(listTop + i * rowHeight + rowHeight / 2);
-    const bareText = `${item.position}.`;
-    const revealedText = `${item.position}. {\\c${YELLOW_BGR}}${escapeAssText(item.label)}`;
-    const revealAt = Math.max(0, Math.min(item.revealAtSec, totalDurationSec));
-
-    if (revealAt > 0.05) {
-      lines.push(
-        `Dialogue: 0,${assTime(0)},${assTime(revealAt)},RankList,,0,0,0,,{\\an4\\pos(${x},${y})}${bareText}`
-      );
-    }
-    lines.push(
-      `Dialogue: 0,${assTime(revealAt)},${assTime(totalDurationSec)},RankList,,0,0,0,,{\\an4\\pos(${x},${y})}${revealedText}`
-    );
-  }
-
-  return header + lines.join("\n") + "\n";
+  const titleLines = buildTitleLines(category, template, totalDurationSec, resolution);
+  const listLines = buildListLines(items, totalDurationSec, resolution);
+  return header + [...titleLines, ...listLines].join("\n") + "\n";
 }
 
 /**
- * Quema la lista numerada del ranking (1., 2., 3.… — con el estilo/fuente de la captura de
- * referencia) como capa PERSISTENTE encima del vídeo YA montado entero (intro + todos los
- * clips), pedido explícito: "que salga en pantalla todo el rato durante todo el vídeo". Cada
- * puesto se ve solo como número suelto hasta el segundo exacto en que empieza su propio clip,
- * momento en el que se revela su etiqueta (en amarillo de marca) y se queda así el resto del
- * vídeo — así el espectador ve de un vistazo qué puestos ya se han visto y cuáles faltan, igual
- * que en la cuenta atrás de la referencia real. Caja semitransparente detrás de cada línea
- * (BorderStyle 3) para que se lea bien encima de cualquier fotograma del clip.
+ * Quema el título del ranking ("Ranking Funniest {Category} Moments" / "Best 5 {Name} Clips") y
+ * la lista numerada de puestos (1.-, 2.-, 3.-…) como UNA sola capa PERSISTENTE encima del vídeo YA
+ * montado entero — pedido explícito: ambos se quedan en pantalla todo el vídeo (no una tarjeta de
+ * título aparte al principio), en letra grande, y cada número ya sale en su color vivo desde el
+ * segundo 0, revelando su etiqueta (misma familia de colores) en el segundo exacto en que empieza
+ * su propio clip. Sin caja de fondo detrás del texto (solo contorno+sombra) para que no parezca
+ * subrayado. Devuelve el vídeo con ambas capas ya quemadas.
  */
-export async function burnRankingList(
+export async function burnRankingOverlay(
   inputPath: string,
   outputPath: string,
+  category: string,
+  template: RankingOverlayTemplate,
   items: RankingListItem[],
   totalDurationSec: number,
   resolution: VerticalResolution
 ): Promise<void> {
-  if (items.length === 0) {
-    fs.copyFileSync(inputPath, outputPath);
-    return;
-  }
-
   const assPath = `${outputPath}.ass`;
-  fs.writeFileSync(assPath, buildRankingListAss(items, totalDurationSec, resolution), "utf-8");
+  fs.writeFileSync(assPath, buildRankingOverlayAss(category, template, items, totalDurationSec, resolution), "utf-8");
 
   try {
     await run(config.ffmpegPath, [

@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { sourceVideoPath, customTextPath as customTextAssPath } from "@/lib/storagePaths";
 import { probeVideo, pickVerticalResolution } from "./probe";
 import { assembleRankingVideo, finalizeWithoutMusic, type RenderRankingItem } from "./rankingRender";
-import type { RankingIntroTemplate } from "./rankingIntroCard";
+import type { RankingOverlayTemplate } from "./rankingListOverlay";
 import { applyCustomTextOverlay } from "./clip";
 import { buildCustomTextAss, type CustomTextElement } from "./bigCaptions";
 import { applyMusicToClip } from "./musicApply";
@@ -65,8 +65,7 @@ export async function regenerateRankingClip(clipId: string): Promise<void> {
       transcriptSegments,
       resolution,
       captionsEnabled: clip.captionsEnabled,
-      coverImagePath: clip.coverImagePath,
-      templateType: (clip.introTemplate as RankingIntroTemplate) ?? "TOPIC",
+      templateType: (clip.introTemplate as RankingOverlayTemplate) ?? "TOPIC",
     });
 
     // Texto personalizado: pasada final sobre el vídeo YA montado (no tiene sentido reintegrarlo

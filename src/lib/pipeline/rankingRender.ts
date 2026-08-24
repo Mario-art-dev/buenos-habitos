@@ -2,8 +2,7 @@ import fs from "fs";
 import type { TranscriptSegment } from "./transcribe";
 import { probeVideo, type VerticalResolution } from "./probe";
 import { cutVerticalClip, concatClips, mixBackgroundMusic, extractThumbnail, extractAudioSegment, renderTitleCard } from "./clip";
-import { renderRankingIntroCard, type RankingIntroTemplate } from "./rankingIntroCard";
-import { burnRankingList, type RankingListItem } from "./rankingListOverlay";
+import { burnRankingOverlay, type RankingListItem, type RankingOverlayTemplate } from "./rankingListOverlay";
 import { renderCommentaryCard } from "./commentaryCards";
 import { buildBigCaptionsAss } from "./bigCaptions";
 import { getTTSProvider } from "@/lib/tts/provider";
@@ -29,10 +28,12 @@ export interface RenderRankingItem {
 }
 
 /**
- * Monta el vídeo de ranking completo: tarjeta de título + los clips en orden (del peor al mejor),
- * cada uno con subtítulos quemados. La lista numerada de puestos (1., 2.…) se quema APARTE, encima
- * de todo el vídeo ya montado (ver burnRankingList) — pedido explícito: se queda fija en pantalla
- * durante todo el vídeo en vez de cortar a una tarjeta de título aparte por cada puesto.
+ * Monta el vídeo de ranking completo: los clips en orden (del peor al mejor), cada uno con
+ * subtítulos quemados — sin tarjeta de título aparte al principio. El título del ranking y la
+ * lista numerada de puestos (1.-, 2.-…) se queman APARTE, como una sola capa persistente encima
+ * de TODO el vídeo ya montado (ver burnRankingOverlay) — pedido explícito: ambos se quedan fijos
+ * en pantalla durante todo el vídeo, encima de los propios clips, en vez de una tarjeta de título
+ * en negro al principio.
  * Devuelve la ruta del vídeo montado SIN música (clipAssembledPath).
  */
 export async function assembleRankingVideo(params: {
@@ -47,11 +48,9 @@ export async function assembleRankingVideo(params: {
   resolution: VerticalResolution;
   // Subtítulos grandes por puesto: activados por defecto, editable desde el editor (regenerar).
   captionsEnabled?: boolean;
-  // Imagen propia subida desde la fototeca para la tarjeta de intro, en vez del fondo negro.
-  coverImagePath?: string | null;
   // "TOPIC" (por defecto) -> "Ranking Funniest {category} Moments"; "YOUTUBER" -> "Best 5 {category}
   // Clips" (ver rankingAnalyze.ts groupIntoRankings / Job.manualCategories).
-  templateType?: RankingIntroTemplate;
+  templateType?: RankingOverlayTemplate;
 }): Promise<string> {
   const { jobId, clipId, sourcePath, category, items, transcriptSegments, resolution } = params;
   const captionsEnabled = params.captionsEnabled ?? true;
@@ -60,25 +59,21 @@ export async function assembleRankingVideo(params: {
 
   const segmentPaths: string[] = [];
   // Segundo (dentro del vídeo YA montado) en el que empieza el clip de cada puesto — se usa para
-  // saber cuándo revelar su etiqueta en la lista persistente (burnRankingList).
+  // saber cuándo revelar su etiqueta en la lista persistente (burnRankingOverlay).
   const listItems: RankingListItem[] = [];
   let cursorSec = 0;
 
-  // Tarjeta de intro con la plantilla fija "Ranking Funniest {Category} Moments" (fuente/colores
-  // pedidos a partir de una captura real de referencia) — se añade SIEMPRE, a diferencia de la
-  // vieja tarjeta de título libre de la IA, que solo se añadía con el comentario activado porque
-  // un título corto/en minúsculas podía verse como una palabra suelta gigante sobre negro. Esa
-  // plantilla es fija y controlada, así que ese riesgo ya no existe.
-  const introPath = candidateCardPath(jobId, clipId, "intro");
+  // Comentario narrado de intro (opcional, ENABLE_COMMENTARY): tarjeta muda de audio (sin texto
+  // visible — el título/lista persistentes ya se queman después encima de todo el vídeo, incluido
+  // este tramo) para que se oiga la narración antes de que empiece el primer clip.
   if (config.commentary.enabled && params.overallIntroCommentary) {
     const introAudioPath = narrationAudioPath(jobId, clipId, "intro");
     await getTTSProvider().synthesize(params.overallIntroCommentary, introAudioPath);
-    await renderRankingIntroCard(introPath, category, 2, resolution, introAudioPath, params.coverImagePath, templateType);
-  } else {
-    await renderRankingIntroCard(introPath, category, 2, resolution, undefined, params.coverImagePath, templateType);
+    const introBlankPath = candidateCardPath(jobId, clipId, "introblank");
+    await renderTitleCard(introBlankPath, "", 0.1, resolution, introAudioPath);
+    segmentPaths.push(introBlankPath);
+    cursorSec += (await probeVideo(introBlankPath)).durationSec;
   }
-  segmentPaths.push(introPath);
-  cursorSec += (await probeVideo(introPath)).durationSec;
 
   for (const item of playOrder) {
     // Comentario narrado por puesto (opcional, ENABLE_COMMENTARY): tarjeta muda de audio (sin
@@ -139,9 +134,9 @@ export async function assembleRankingVideo(params: {
     fs.rmSync(p, { force: true });
   }
 
-  const listedPath = `${assembledPath}.listed.mp4`;
-  await burnRankingList(assembledPath, listedPath, listItems, cursorSec, resolution);
-  fs.renameSync(listedPath, assembledPath);
+  const overlaidPath = `${assembledPath}.overlay.mp4`;
+  await burnRankingOverlay(assembledPath, overlaidPath, category, templateType, listItems, cursorSec, resolution);
+  fs.renameSync(overlaidPath, assembledPath);
 
   return assembledPath;
 }
