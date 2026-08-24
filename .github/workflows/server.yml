@@ -21,7 +21,15 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Restaurar la galería de la sesión anterior
-        uses: actions/cache@v4
+        # "restore" (no "actions/cache@v4" a secas): solo queremos RECUPERAR el último checkpoint
+        # guardado por la sesión anterior, nunca que este paso guarde uno nuevo por su cuenta al
+        # terminar el job — ya hay guardado explícito propio más abajo (uno por checkpoint, con
+        # limpieza del anterior). Con "actions/cache@v4" normal, su propio guardado automático al
+        # final (bajo la clave única de ESTE run, sin limpiar nunca) se quedaba huérfano para
+        # siempre en cada sesión que terminaba bien — con el tiempo iba acumulando caché sin
+        # límite y podía acabar desalojando (por el tope de 10GB del repo) el checkpoint de verdad
+        # que hacía falta para recuperar la galería.
+        uses: actions/cache/restore@v4
         with:
           path: storage
           key: escenas-storage-${{ github.run_id }}
@@ -201,150 +209,438 @@ jobs:
           echo "Esta URL cambiará dentro de ~5h30min, cuando esta sesión pase el testigo a la siguiente." >> "$GITHUB_STEP_SUMMARY"
           echo "[cloudflared] URL pública: $URL"
 
-      # El guardado automático de la galería (paso "Post Restaurar...") SOLO se ejecuta si este
-      # job termina por sí solo (bien o mal) — si se CANCELA a mitad de sesión (p.ej. al reiniciar
-      # el servidor manualmente tras subir código nuevo), ese guardado se salta sin avisar y se
-      # pierden todos los shorts generados en la sesión entera. Para no depender de que la sesión
-      # termine "limpiamente", guardamos también un snapshot manual cada 30 minutos: como mucho se
-      # pierden los últimos 30 min de trabajo en vez de las ~5h30min completas.
-      - name: Mantener la sesión activa (checkpoint 1/11 de la galería)
-        run: sleep 1800
+      # El guardado automático de la galería (paso "Post Restaurar...") ya NO existe (ver el paso
+      # de arriba, que usa "restore" en vez de "cache@v4" a secas) — el ÚNICO guardado real pasa
+      # por aquí: un snapshot manual cada 10 minutos, cada uno borrando el anterior nada más
+      # guardar el siguiente. Así, tanto si el job termina limpio como si se CANCELA a mitad de
+      # sesión (p.ej. al reiniciar el servidor manualmente tras subir código nuevo) o se cae por
+      # cualquier otro motivo, como mucho se pierden los últimos 10 min de shorts generados en vez
+      # de la sesión entera (~5h30min) — antes el intervalo era de 30 min; se acortó a 10 min a
+      # petición expresa para que los shorts sobrevivan de verdad al cambio de URL entre sesiones.
+      - name: Mantener la sesión activa (checkpoint 1/33 de la galería)
+        run: sleep 600
 
-      - name: Guardar la galería (checkpoint 1/11)
+      - name: Guardar la galería (checkpoint 1/33)
         uses: actions/cache/save@v4
         with:
           path: storage
           key: escenas-storage-${{ github.run_id }}-1
 
-      - name: Mantener la sesión activa (checkpoint 2/11 de la galería)
+      - name: Mantener la sesión activa (checkpoint 2/33 de la galería)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          sleep 1800
+          sleep 600
           gh cache delete "escenas-storage-${{ github.run_id }}-1" || true
 
-      - name: Guardar la galería (checkpoint 2/11)
+      - name: Guardar la galería (checkpoint 2/33)
         uses: actions/cache/save@v4
         with:
           path: storage
           key: escenas-storage-${{ github.run_id }}-2
 
-      - name: Mantener la sesión activa (checkpoint 3/11 de la galería)
+      - name: Mantener la sesión activa (checkpoint 3/33 de la galería)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          sleep 1800
+          sleep 600
           gh cache delete "escenas-storage-${{ github.run_id }}-2" || true
 
-      - name: Guardar la galería (checkpoint 3/11)
+      - name: Guardar la galería (checkpoint 3/33)
         uses: actions/cache/save@v4
         with:
           path: storage
           key: escenas-storage-${{ github.run_id }}-3
 
-      - name: Mantener la sesión activa (checkpoint 4/11 de la galería)
+      - name: Mantener la sesión activa (checkpoint 4/33 de la galería)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          sleep 1800
+          sleep 600
           gh cache delete "escenas-storage-${{ github.run_id }}-3" || true
 
-      - name: Guardar la galería (checkpoint 4/11)
+      - name: Guardar la galería (checkpoint 4/33)
         uses: actions/cache/save@v4
         with:
           path: storage
           key: escenas-storage-${{ github.run_id }}-4
 
-      - name: Mantener la sesión activa (checkpoint 5/11 de la galería)
+      - name: Mantener la sesión activa (checkpoint 5/33 de la galería)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          sleep 1800
+          sleep 600
           gh cache delete "escenas-storage-${{ github.run_id }}-4" || true
 
-      - name: Guardar la galería (checkpoint 5/11)
+      - name: Guardar la galería (checkpoint 5/33)
         uses: actions/cache/save@v4
         with:
           path: storage
           key: escenas-storage-${{ github.run_id }}-5
 
-      - name: Mantener la sesión activa (checkpoint 6/11 de la galería)
+      - name: Mantener la sesión activa (checkpoint 6/33 de la galería)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          sleep 1800
+          sleep 600
           gh cache delete "escenas-storage-${{ github.run_id }}-5" || true
 
-      - name: Guardar la galería (checkpoint 6/11)
+      - name: Guardar la galería (checkpoint 6/33)
         uses: actions/cache/save@v4
         with:
           path: storage
           key: escenas-storage-${{ github.run_id }}-6
 
-      - name: Mantener la sesión activa (checkpoint 7/11 de la galería)
+      - name: Mantener la sesión activa (checkpoint 7/33 de la galería)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          sleep 1800
+          sleep 600
           gh cache delete "escenas-storage-${{ github.run_id }}-6" || true
 
-      - name: Guardar la galería (checkpoint 7/11)
+      - name: Guardar la galería (checkpoint 7/33)
         uses: actions/cache/save@v4
         with:
           path: storage
           key: escenas-storage-${{ github.run_id }}-7
 
-      - name: Mantener la sesión activa (checkpoint 8/11 de la galería)
+      - name: Mantener la sesión activa (checkpoint 8/33 de la galería)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          sleep 1800
+          sleep 600
           gh cache delete "escenas-storage-${{ github.run_id }}-7" || true
 
-      - name: Guardar la galería (checkpoint 8/11)
+      - name: Guardar la galería (checkpoint 8/33)
         uses: actions/cache/save@v4
         with:
           path: storage
           key: escenas-storage-${{ github.run_id }}-8
 
-      - name: Mantener la sesión activa (checkpoint 9/11 de la galería)
+      - name: Mantener la sesión activa (checkpoint 9/33 de la galería)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          sleep 1800
+          sleep 600
           gh cache delete "escenas-storage-${{ github.run_id }}-8" || true
 
-      - name: Guardar la galería (checkpoint 9/11)
+      - name: Guardar la galería (checkpoint 9/33)
         uses: actions/cache/save@v4
         with:
           path: storage
           key: escenas-storage-${{ github.run_id }}-9
 
-      - name: Mantener la sesión activa (checkpoint 10/11 de la galería)
+      - name: Mantener la sesión activa (checkpoint 10/33 de la galería)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          sleep 1800
+          sleep 600
           gh cache delete "escenas-storage-${{ github.run_id }}-9" || true
 
-      - name: Guardar la galería (checkpoint 10/11)
+      - name: Guardar la galería (checkpoint 10/33)
         uses: actions/cache/save@v4
         with:
           path: storage
           key: escenas-storage-${{ github.run_id }}-10
 
-      - name: Mantener la sesión activa (checkpoint 11/11 de la galería)
+      - name: Mantener la sesión activa (checkpoint 11/33 de la galería)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          sleep 1800
+          sleep 600
           gh cache delete "escenas-storage-${{ github.run_id }}-10" || true
 
-      - name: Guardar la galería (checkpoint 11/11)
+      - name: Guardar la galería (checkpoint 11/33)
         uses: actions/cache/save@v4
         with:
           path: storage
           key: escenas-storage-${{ github.run_id }}-11
+
+      - name: Mantener la sesión activa (checkpoint 12/33 de la galería)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sleep 600
+          gh cache delete "escenas-storage-${{ github.run_id }}-11" || true
+
+      - name: Guardar la galería (checkpoint 12/33)
+        uses: actions/cache/save@v4
+        with:
+          path: storage
+          key: escenas-storage-${{ github.run_id }}-12
+
+      - name: Mantener la sesión activa (checkpoint 13/33 de la galería)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sleep 600
+          gh cache delete "escenas-storage-${{ github.run_id }}-12" || true
+
+      - name: Guardar la galería (checkpoint 13/33)
+        uses: actions/cache/save@v4
+        with:
+          path: storage
+          key: escenas-storage-${{ github.run_id }}-13
+
+      - name: Mantener la sesión activa (checkpoint 14/33 de la galería)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sleep 600
+          gh cache delete "escenas-storage-${{ github.run_id }}-13" || true
+
+      - name: Guardar la galería (checkpoint 14/33)
+        uses: actions/cache/save@v4
+        with:
+          path: storage
+          key: escenas-storage-${{ github.run_id }}-14
+
+      - name: Mantener la sesión activa (checkpoint 15/33 de la galería)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sleep 600
+          gh cache delete "escenas-storage-${{ github.run_id }}-14" || true
+
+      - name: Guardar la galería (checkpoint 15/33)
+        uses: actions/cache/save@v4
+        with:
+          path: storage
+          key: escenas-storage-${{ github.run_id }}-15
+
+      - name: Mantener la sesión activa (checkpoint 16/33 de la galería)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sleep 600
+          gh cache delete "escenas-storage-${{ github.run_id }}-15" || true
+
+      - name: Guardar la galería (checkpoint 16/33)
+        uses: actions/cache/save@v4
+        with:
+          path: storage
+          key: escenas-storage-${{ github.run_id }}-16
+
+      - name: Mantener la sesión activa (checkpoint 17/33 de la galería)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sleep 600
+          gh cache delete "escenas-storage-${{ github.run_id }}-16" || true
+
+      - name: Guardar la galería (checkpoint 17/33)
+        uses: actions/cache/save@v4
+        with:
+          path: storage
+          key: escenas-storage-${{ github.run_id }}-17
+
+      - name: Mantener la sesión activa (checkpoint 18/33 de la galería)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sleep 600
+          gh cache delete "escenas-storage-${{ github.run_id }}-17" || true
+
+      - name: Guardar la galería (checkpoint 18/33)
+        uses: actions/cache/save@v4
+        with:
+          path: storage
+          key: escenas-storage-${{ github.run_id }}-18
+
+      - name: Mantener la sesión activa (checkpoint 19/33 de la galería)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sleep 600
+          gh cache delete "escenas-storage-${{ github.run_id }}-18" || true
+
+      - name: Guardar la galería (checkpoint 19/33)
+        uses: actions/cache/save@v4
+        with:
+          path: storage
+          key: escenas-storage-${{ github.run_id }}-19
+
+      - name: Mantener la sesión activa (checkpoint 20/33 de la galería)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sleep 600
+          gh cache delete "escenas-storage-${{ github.run_id }}-19" || true
+
+      - name: Guardar la galería (checkpoint 20/33)
+        uses: actions/cache/save@v4
+        with:
+          path: storage
+          key: escenas-storage-${{ github.run_id }}-20
+
+      - name: Mantener la sesión activa (checkpoint 21/33 de la galería)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sleep 600
+          gh cache delete "escenas-storage-${{ github.run_id }}-20" || true
+
+      - name: Guardar la galería (checkpoint 21/33)
+        uses: actions/cache/save@v4
+        with:
+          path: storage
+          key: escenas-storage-${{ github.run_id }}-21
+
+      - name: Mantener la sesión activa (checkpoint 22/33 de la galería)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sleep 600
+          gh cache delete "escenas-storage-${{ github.run_id }}-21" || true
+
+      - name: Guardar la galería (checkpoint 22/33)
+        uses: actions/cache/save@v4
+        with:
+          path: storage
+          key: escenas-storage-${{ github.run_id }}-22
+
+      - name: Mantener la sesión activa (checkpoint 23/33 de la galería)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sleep 600
+          gh cache delete "escenas-storage-${{ github.run_id }}-22" || true
+
+      - name: Guardar la galería (checkpoint 23/33)
+        uses: actions/cache/save@v4
+        with:
+          path: storage
+          key: escenas-storage-${{ github.run_id }}-23
+
+      - name: Mantener la sesión activa (checkpoint 24/33 de la galería)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sleep 600
+          gh cache delete "escenas-storage-${{ github.run_id }}-23" || true
+
+      - name: Guardar la galería (checkpoint 24/33)
+        uses: actions/cache/save@v4
+        with:
+          path: storage
+          key: escenas-storage-${{ github.run_id }}-24
+
+      - name: Mantener la sesión activa (checkpoint 25/33 de la galería)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sleep 600
+          gh cache delete "escenas-storage-${{ github.run_id }}-24" || true
+
+      - name: Guardar la galería (checkpoint 25/33)
+        uses: actions/cache/save@v4
+        with:
+          path: storage
+          key: escenas-storage-${{ github.run_id }}-25
+
+      - name: Mantener la sesión activa (checkpoint 26/33 de la galería)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sleep 600
+          gh cache delete "escenas-storage-${{ github.run_id }}-25" || true
+
+      - name: Guardar la galería (checkpoint 26/33)
+        uses: actions/cache/save@v4
+        with:
+          path: storage
+          key: escenas-storage-${{ github.run_id }}-26
+
+      - name: Mantener la sesión activa (checkpoint 27/33 de la galería)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sleep 600
+          gh cache delete "escenas-storage-${{ github.run_id }}-26" || true
+
+      - name: Guardar la galería (checkpoint 27/33)
+        uses: actions/cache/save@v4
+        with:
+          path: storage
+          key: escenas-storage-${{ github.run_id }}-27
+
+      - name: Mantener la sesión activa (checkpoint 28/33 de la galería)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sleep 600
+          gh cache delete "escenas-storage-${{ github.run_id }}-27" || true
+
+      - name: Guardar la galería (checkpoint 28/33)
+        uses: actions/cache/save@v4
+        with:
+          path: storage
+          key: escenas-storage-${{ github.run_id }}-28
+
+      - name: Mantener la sesión activa (checkpoint 29/33 de la galería)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sleep 600
+          gh cache delete "escenas-storage-${{ github.run_id }}-28" || true
+
+      - name: Guardar la galería (checkpoint 29/33)
+        uses: actions/cache/save@v4
+        with:
+          path: storage
+          key: escenas-storage-${{ github.run_id }}-29
+
+      - name: Mantener la sesión activa (checkpoint 30/33 de la galería)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sleep 600
+          gh cache delete "escenas-storage-${{ github.run_id }}-29" || true
+
+      - name: Guardar la galería (checkpoint 30/33)
+        uses: actions/cache/save@v4
+        with:
+          path: storage
+          key: escenas-storage-${{ github.run_id }}-30
+
+      - name: Mantener la sesión activa (checkpoint 31/33 de la galería)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sleep 600
+          gh cache delete "escenas-storage-${{ github.run_id }}-30" || true
+
+      - name: Guardar la galería (checkpoint 31/33)
+        uses: actions/cache/save@v4
+        with:
+          path: storage
+          key: escenas-storage-${{ github.run_id }}-31
+
+      - name: Mantener la sesión activa (checkpoint 32/33 de la galería)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sleep 600
+          gh cache delete "escenas-storage-${{ github.run_id }}-31" || true
+
+      - name: Guardar la galería (checkpoint 32/33)
+        uses: actions/cache/save@v4
+        with:
+          path: storage
+          key: escenas-storage-${{ github.run_id }}-32
+
+      - name: Mantener la sesión activa (checkpoint 33/33 de la galería)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sleep 600
+          gh cache delete "escenas-storage-${{ github.run_id }}-32" || true
+
+      - name: Guardar la galería (checkpoint 33/33)
+        uses: actions/cache/save@v4
+        with:
+          path: storage
+          key: escenas-storage-${{ github.run_id }}-33
 
       - name: Pasar el testigo a la siguiente sesión
         if: ${{ vars.SERVER_ENABLED != 'false' }}
