@@ -36,6 +36,21 @@ jobs:
           restore-keys: |
             escenas-storage-
 
+      - name: Diagnóstico — comprobar que la base de datos restaurada existe de verdad
+        # Investigando un bug real: tras restaurar (paso de arriba, éxito confirmado, ~12GB), "npx
+        # prisma db push" seguía diciendo "SQLite database app.db created" — es decir, ni rastro
+        # de storage/app.db en disco pese a que el resto de storage/ (vídeos) sí llegaba. Este paso
+        # no cambia nada, solo deja constancia en el log de qué hay EXACTAMENTE en storage/ justo
+        # después de restaurar, para saber si el archivo de verdad no llega o si el problema está
+        # en otro sitio (permisos, ruta, lo que sea).
+        run: |
+          echo "--- contenido de storage/ ---"
+          ls -la storage/ 2>&1 || echo "(storage/ no existe)"
+          echo "--- buscando app.db en todo el árbol ---"
+          find storage -maxdepth 3 -iname "app.db*" -exec ls -la {} \; 2>&1 || true
+          echo "--- espacio en disco ---"
+          df -h . || true
+
       - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
@@ -218,7 +233,12 @@ jobs:
       # de la sesión entera (~5h30min) — antes el intervalo era de 30 min; se acortó a 10 min a
       # petición expresa para que los shorts sobrevivan de verdad al cambio de URL entre sesiones.
       - name: Mantener la sesión activa (checkpoint 1/33 de la galería)
-        run: sleep 600
+        run: |
+          echo "--- app.db justo después de arrancar la web (recién creado por 'prisma db push') ---"
+          ls -la storage/app.db* 2>&1 || echo "app.db NO existe aquí tampoco"
+          sleep 600
+          echo "--- app.db justo antes de guardar el primer checkpoint ---"
+          ls -la storage/app.db* 2>&1 || echo "app.db NO existe justo antes de guardar"
 
       - name: Guardar la galería (checkpoint 1/33)
         uses: actions/cache/save@v4
