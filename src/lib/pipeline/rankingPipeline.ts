@@ -54,7 +54,7 @@ export async function processRankingJob(jobId: string): Promise<void> {
     await setStatus(jobId, "ANALYZING", "Detectando momentos y clasificándolos por categoría…");
     const spans = await detectContentSegments(srcPath, durationSec);
     const candidates = await buildCandidateMoments(jobId, srcPath, spans, transcript.segments);
-    const classifyResult = await classifyCandidates(candidates, contentLanguage, languageCode);
+    const classifyResult = await classifyCandidates(candidates, contentLanguage);
     const classified = classifyResult.items;
     let manualCategories: ManualCategory[] = [];
     if (job.manualCategories) {

@@ -238,12 +238,14 @@ export const config = {
   },
 
   ranking: {
-    // Fijado a 5: pedido explícito ("por short 5 clips, no 10") — grupos de exactamente 5 en vez
-    // de hasta 10, para poder sacar MÁS vídeos de ranking distintos del mismo material (18
-    // candidatos dan para 3 shorts de 5 en vez de 1-2 shorts de hasta 10). minDurationSec sigue
-    // siendo el filtro de calidad real (duración), y puede seguir añadiendo algún clip extra por
-    // encima de 5 si 5 no llegan al mínimo de duración (ver groupIntoRankings).
-    minItems: Number(optional("RANKING_MIN_ITEMS", "5")),
+    // Tope duro en 5 clips por short de ranking, suelo duro en 3 — pedido explícito: lo normal es
+    // 5 (para poder sacar MÁS vídeos de ranking distintos del mismo material: 18 candidatos dan
+    // para 3 shorts de 5 en vez de 1-2 shorts de hasta 10), pero si 5 no caben en una categoría se
+    // baja a 4 o 3 antes que forzar el grupo o quedarse sin él; por debajo de 3 el grupo se
+    // descarta. NUNCA se supera maxItems, ni siquiera para llegar a minDurationSec (ver
+    // groupIntoRankings) — un grupo que no llega a minDurationSec con 5 o menos simplemente no se
+    // forma, en vez de alargarse.
+    minItems: Number(optional("RANKING_MIN_ITEMS", "3")),
     maxItems: Number(optional("RANKING_MAX_ITEMS", "5")),
     minSegmentSeconds: Number(optional("RANKING_MIN_SEGMENT_SECONDS", "3")),
     // Duración total mínima (suma de los momentos, sin contar tarjetas/subtítulos) que tiene que

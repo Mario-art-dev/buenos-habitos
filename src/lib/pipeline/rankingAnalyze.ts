@@ -174,6 +174,14 @@ const STOPWORDS = new Set([
   "qué", "cuándo", "dónde", "quién", "pues", "bueno", "vale",
 ]);
 
+function titleCaseWords(text: string): string {
+  return text
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ");
+}
+
 /**
  * Título corto derivado de la propia transcripción del tramo (en vez de un texto genérico tipo
  * "Featured moment", o una frase larga) para cuando la IA no puso ninguna etiqueta — sea porque
@@ -182,17 +190,20 @@ const STOPWORDS = new Set([
  * muletilla) y la extiende con hasta 2 palabras seguidas más si también son de contenido y caben
  * en el presupuesto de caracteres — no hace falta que sea una sola palabra, pero lo único que
  * importa de verdad es que sea LO MÁS CORTO POSIBLE para que no tape tanto el propio clip.
+ *
+ * `fallbackSeed` (la categoría que ya le puso la IA a este momento, o "Otros") es lo que se usa
+ * si el tramo no tiene NINGÚN diálogo — pedido explícito: bajo ningún concepto un texto genérico
+ * tipo "Featured moment"/"Momento destacado" igual para todos los clips, sea lo que sea menos eso.
  */
-function deriveLabelFromTranscript(excerpt: string, languageCode: string | null): string {
+function deriveLabelFromTranscript(excerpt: string, fallbackSeed: string): string {
   const cleaned = excerpt.replace(/\s+/g, " ").trim();
-  const fallback = languageCode === "es" ? "Momento destacado" : "Featured moment";
-  if (!cleaned) return fallback;
+  if (!cleaned) return fallbackSeed;
 
   const words = cleaned
     .replace(/[^\p{L}\p{N}\s']/gu, " ")
     .split(/\s+/)
     .filter(Boolean);
-  if (words.length === 0) return fallback;
+  if (words.length === 0) return fallbackSeed;
 
   const CHAR_BUDGET = 22;
   const isContentWord = (w: string) => w.length >= 3 && !STOPWORDS.has(w.toLowerCase());
@@ -314,10 +325,7 @@ export interface ClassifyResult {
 
 export async function classifyCandidates(
   candidates: CandidateMoment[],
-  contentLanguage: string,
-  // Código ISO del idioma real del vídeo (o null) — solo para el texto de fallbackMomentsForBatch
-  // (distinto de contentLanguage, que es el nombre del idioma en español tipo "inglés"/"español").
-  languageCode: string | null = null
+  contentLanguage: string
 ): Promise<ClassifyResult> {
   const provider = await getAIProvider();
   const classified: ClassifiedMoment[] = [];
@@ -362,7 +370,7 @@ export async function classifyCandidates(
           ...candidate,
           include: !!m.include,
           category: (m.category || "otros").trim().toLowerCase(),
-          label: m.label || deriveLabelFromTranscript(candidate.transcriptExcerpt, languageCode),
+          label: m.label || deriveLabelFromTranscript(candidate.transcriptExcerpt, titleCaseWords((m.category || "otros").trim())),
           description: m.description || "",
           score: Math.max(0, Math.min(100, Math.round(m.score ?? 0))),
         });
@@ -408,12 +416,17 @@ function matchesManualCategory(item: ClassifiedMoment, nameLower: string): boole
 /**
  * Agrupa los momentos clasificados en vídeos de ranking. Antes que nada procesa las secciones que
  * el usuario pidió a mano (`manualCategories`, ver Job.manualCategories): cada una se GARANTIZA su
- * propio ranking (relajando los mínimos de duración/nº de items normales a solo "al menos 2 clips
+ * propio ranking (relajando los mínimos de duración/nº de items normales a solo "al menos 3 clips
  * libres"), por delante de cualquier agrupación automática por categoría de la IA. Si el usuario no
  * pidió ninguna sección y la IA tampoco deja NINGÚN grupo aprovechable (categorías demasiado
  * pequeñas incluso para el cubo genérico de sobras), como último recurso se monta un ranking con
  * los mejores clips sueltos: "Best 5 clips of {youtuberFallbackName}" si se conoce el nombre del
  * canal/creador de origen, o el título genérico si no.
+ *
+ * Pedido explícito: cada grupo tiene un TOPE DURO de config.ranking.maxItems (5) clips — nunca se
+ * supera, ni siquiera para llegar a la duración mínima (config.ranking.minDurationSec) — y un
+ * SUELO DURO de 3 clips — por debajo de 3 el grupo se descarta entero (nada de "de emergencia con
+ * 2"), lo normal/preferido es siempre 5, y solo se baja a 4 o 3 cuando 5 no es posible.
  */
 export function groupIntoRankings(
   classified: ClassifiedMoment[],
@@ -441,7 +454,7 @@ export function groupIntoRankings(
       pool = matched.length >= 2 ? matched : unused;
     }
     const picked = pickBestRemaining(pool, config.ranking.maxItems);
-    if (picked.length < 2) continue; // no quedan ni 2 clips libres en todo el vídeo: imposible garantizar esta sección
+    if (picked.length < 3) continue; // no quedan ni 3 clips libres en todo el vídeo: imposible garantizar esta sección
     groups.push({ category: name, templateType: manual.type, items: picked });
     for (const p of picked) usedIndexes.add(p.index);
   }
@@ -457,18 +470,11 @@ export function groupIntoRankings(
   for (const [category, items] of byCategory) {
     if (items.length < config.ranking.minItems) continue;
     const sorted = items.sort((a, b) => b.score - a.score);
-    let picked = sorted.slice(0, config.ranking.maxItems);
-
-    // Un vídeo de ranking tiene que durar al menos config.ranking.minDurationSec de verdad (no
-    // solo tener el nº mínimo de momentos) — si con maxItems no llega, se añaden más momentos de
-    // la MISMA categoría (por orden de score) hasta llegar a la duración mínima o agotar la lista.
-    let totalDuration = picked.reduce((sum, i) => sum + (i.endSec - i.startSec), 0);
-    let extra = config.ranking.maxItems;
-    while (totalDuration < config.ranking.minDurationSec && extra < sorted.length) {
-      picked = sorted.slice(0, extra + 1);
-      totalDuration += sorted[extra].endSec - sorted[extra].startSec;
-      extra++;
-    }
+    // Tope duro en maxItems (5): nunca se supera, ni siquiera para llegar a minDurationSec — si con
+    // los mejores 5 (o menos, si la categoría no llega) no se alcanza la duración mínima, el grupo
+    // se descarta entero en vez de alargarse por encima del tope.
+    const picked = sorted.slice(0, config.ranking.maxItems);
+    const totalDuration = picked.reduce((sum, i) => sum + (i.endSec - i.startSec), 0);
     if (totalDuration < config.ranking.minDurationSec) continue;
 
     groups.push({ category, templateType: "TOPIC", items: picked });
@@ -481,20 +487,14 @@ export function groupIntoRankings(
   // En vez de fallar, se juntan TODOS los momentos que se quedaron sueltos — de categorías que no
   // llegaron al mínimo, y sobrantes de categorías que sí formaron grupo pero no cupieron por
   // maxItems — en una categoría genérica "inventada", y se monta el máximo de ranking(s) extra
-  // posible con ellos. Mismo criterio de duración mínima que arriba; nunca menos de 2 momentos
-  // (una cuenta atrás no tiene sentido con solo uno).
+  // posible con ellos. Mismo tope duro de maxItems y suelo duro de 3 momentos que arriba — nunca
+  // se alarga por encima de 5 para llegar a la duración mínima.
   let leftover = included.filter((i) => !usedIndexes.has(i.index)).sort((a, b) => b.score - a.score);
   const genericLabel = genericCategoryLabel();
-  while (leftover.length >= 2) {
-    let picked = leftover.slice(0, config.ranking.maxItems);
-    let totalDuration = picked.reduce((sum, i) => sum + (i.endSec - i.startSec), 0);
-    let extra = picked.length;
-    while (totalDuration < config.ranking.minDurationSec && extra < leftover.length) {
-      picked = leftover.slice(0, extra + 1);
-      totalDuration += leftover[extra].endSec - leftover[extra].startSec;
-      extra++;
-    }
-    if (totalDuration < config.ranking.minDurationSec || picked.length < 2) break;
+  while (leftover.length >= 3) {
+    const picked = leftover.slice(0, config.ranking.maxItems);
+    const totalDuration = picked.reduce((sum, i) => sum + (i.endSec - i.startSec), 0);
+    if (totalDuration < config.ranking.minDurationSec || picked.length < 3) break;
 
     groups.push({ category: genericLabel, templateType: "TOPIC", items: picked });
     const pickedIndexes = new Set(picked.map((p) => p.index));
@@ -503,11 +503,11 @@ export function groupIntoRankings(
   }
 
   // Último recurso: si tras TODO lo anterior sigue sin salir ni un solo ranking (categorías
-  // demasiado pequeñas incluso para el cubo genérico de sobras) pero sí hay al menos 2 momentos
+  // demasiado pequeñas incluso para el cubo genérico de sobras) pero sí hay al menos 3 momentos
   // usables en el vídeo, no se falla el job — se monta un ranking con los mejores clips sueltos.
   if (groups.length === 0) {
     const picked = pickBestRemaining(included, config.ranking.maxItems);
-    if (picked.length >= 2) {
+    if (picked.length >= 3) {
       if (youtuberFallbackName && youtuberFallbackName.trim()) {
         groups.push({ category: youtuberFallbackName.trim(), templateType: "YOUTUBER", items: picked });
       } else {
