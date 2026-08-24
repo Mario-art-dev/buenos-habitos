@@ -133,9 +133,10 @@ Para cada candidato decide:
   un tipo de reacción, un deporte, una temática de streaming... no la fuerces a encajar en "fails" o "gracioso"
   si no es lo que es). Sé consistente para que candidatos del mismo tipo caigan en la MISMA categoría exacta
   (mismo singular/plural, misma capitalización).
-- "label": 1-3 palabras en ${contentLanguage} (idealmente UNA sola palabra clave, o dos si hace falta) para
-  mostrar en pantalla junto al número de ese puesto — como si fuera la palabra más importante o llamativa que
-  se dice o pasa en ese momento concreto, no una frase ni una descripción.
+- "label": lo más relevante posible a lo que se dice o pasa en ese momento concreto, en ${contentLanguage} —
+  si con 1 palabra clave ya se entiende, mejor, pero usa 2 o 3 si hace falta para que tenga sentido. Lo único
+  que importa de verdad es que sea LO MÁS CORTO POSIBLE (nunca una frase completa ni una descripción): se
+  quema en pantalla junto al número de ese puesto, y cuanto más largo, más tapa el propio clip.
 - "description": 1 frase en ${contentLanguage} describiendo qué pasa.
 - "score": 0-100, qué tan viral/entretenido es este momento comparado con el resto (da igual si es gracioso,
   impactante, hábil o cualquier otra cosa — puntúa por lo interesante que es de ver, no por un tipo de contenido
@@ -174,28 +175,46 @@ const STOPWORDS = new Set([
 ]);
 
 /**
- * Título de UNA sola palabra derivado de la propia transcripción del tramo (en vez de un texto
- * genérico tipo "Featured moment", o una frase larga) para cuando la IA no puso ninguna etiqueta
- * — sea porque el campo "label" no se pudo recuperar del JSON roto, o porque el lote entero cayó
- * en fallbackMomentsForBatch. Pedido explícito: que sea lo más corto posible, como si fuera "la
- * palabra importante" que se dice en ese momento — se descartan muletillas/palabras vacías y se
- * queda con la más larga (suele ser la más "de contenido": un nombre, un verbo concreto...).
+ * Título corto derivado de la propia transcripción del tramo (en vez de un texto genérico tipo
+ * "Featured moment", o una frase larga) para cuando la IA no puso ninguna etiqueta — sea porque
+ * el campo "label" no se pudo recuperar del JSON roto, o porque el lote entero cayó en
+ * fallbackMomentsForBatch. Ancla en la palabra "de más contenido" (la más larga que no sea
+ * muletilla) y la extiende con hasta 2 palabras seguidas más si también son de contenido y caben
+ * en el presupuesto de caracteres — no hace falta que sea una sola palabra, pero lo único que
+ * importa de verdad es que sea LO MÁS CORTO POSIBLE para que no tape tanto el propio clip.
  */
 function deriveLabelFromTranscript(excerpt: string, languageCode: string | null): string {
   const cleaned = excerpt.replace(/\s+/g, " ").trim();
-  if (!cleaned) {
-    return languageCode === "es" ? "Momento destacado" : "Featured moment";
-  }
+  const fallback = languageCode === "es" ? "Momento destacado" : "Featured moment";
+  if (!cleaned) return fallback;
+
   const words = cleaned
     .replace(/[^\p{L}\p{N}\s']/gu, " ")
     .split(/\s+/)
     .filter(Boolean);
-  const candidates = words.filter((w) => w.length >= 3 && !STOPWORDS.has(w.toLowerCase()));
-  const chosen = candidates.sort((a, b) => b.length - a.length)[0] ?? words[0];
-  if (!chosen) {
-    return languageCode === "es" ? "Momento destacado" : "Featured moment";
+  if (words.length === 0) return fallback;
+
+  const CHAR_BUDGET = 22;
+  const isContentWord = (w: string) => w.length >= 3 && !STOPWORDS.has(w.toLowerCase());
+  const contentIdxs = words.map((w, i) => ({ w, i })).filter(({ w }) => isContentWord(w));
+
+  if (contentIdxs.length === 0) {
+    const capped = words[0].length > CHAR_BUDGET ? words[0].slice(0, CHAR_BUDGET) : words[0];
+    return capped.charAt(0).toUpperCase() + capped.slice(1).toLowerCase();
   }
-  const capped = chosen.length > 18 ? chosen.slice(0, 18) : chosen;
+
+  const anchor = [...contentIdxs].sort((a, b) => b.w.length - a.w.length)[0];
+  let label = anchor.w;
+  let extras = 0;
+  for (let i = anchor.i + 1; extras < 2 && i < words.length; i++) {
+    if (!isContentWord(words[i])) break;
+    const candidate = `${label} ${words[i]}`;
+    if (candidate.length > CHAR_BUDGET) break;
+    label = candidate;
+    extras++;
+  }
+
+  const capped = label.length > CHAR_BUDGET ? label.slice(0, CHAR_BUDGET) : label;
   return capped.charAt(0).toUpperCase() + capped.slice(1).toLowerCase();
 }
 
