@@ -59,6 +59,8 @@ export async function regenerateRankingClip(clipId: string): Promise<void> {
       clipId: clip.id,
       sourcePath: srcPath,
       category: clip.category ?? "Momentos",
+      title: clip.title,
+      coverImagePath: clip.coverImagePath,
       overallIntroCommentary: clip.commentaryIntro,
       overallOutroCommentary: clip.commentaryOutro,
       items,

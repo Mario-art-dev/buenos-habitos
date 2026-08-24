@@ -739,9 +739,10 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
         </div>
 
         <div className="flex-1 space-y-6">
-          {/* Portada: SINGLE/SPLIT tienen fotograma+título editables; RANKING solo puede cambiar
-              el fondo de su propia tarjeta de intro (plantilla fija, sin título propio). PRODUCT/
-              SONG/DOUBLE nunca han tenido portada. */}
+          {/* Portada: SINGLE/SPLIT tienen fotograma+título editables; RANKING solo puede subir su
+              propia foto (el título de portada es el título del vídeo, no editable aquí, y el
+              fotograma automático es el punto medio del mejor clip). PRODUCT/SONG/DOUBLE nunca
+              han tenido portada. */}
           {(clip.jobMode === "SINGLE" || clip.jobMode === "SPLIT" || clip.jobMode === "RANKING") && (
             <div>
               <h2 className="mb-2 text-sm font-semibold text-slate-300">Portada</h2>
@@ -802,7 +803,7 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
               )}
 
               <p className="mb-1 mt-4 text-xs text-slate-400">
-                {clip.jobMode === "RANKING" ? "Sube tu propia foto para el fondo de la tarjeta de intro:" : "O sube tu propia foto para la portada:"}
+                {clip.jobMode === "RANKING" ? "Sube tu propia foto para la portada:" : "O sube tu propia foto para la portada:"}
               </p>
               <div className="flex items-center gap-3">
                 {coverImageUrl && (
@@ -838,16 +839,14 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
                       disabled={uploadingCover}
                       className="text-xs text-slate-400 underline hover:text-slate-300"
                     >
-                      {clip.jobMode === "RANKING" ? "Quitar y usar fondo negro" : "Quitar y usar fotograma del vídeo"}
+                      Quitar y usar fotograma del vídeo
                     </button>
                   )}
                 </div>
               </div>
               <p className="mt-1 text-xs text-slate-600">
-                {clip.jobMode === "RANKING"
-                  ? "Si subes una foto, se usa de fondo en la tarjeta de intro en vez del negro por defecto."
-                  : 'Si subes una foto, se usa esa en la portada en vez de un fotograma del vídeo (el sonido de marca sigue igual).'}{" "}
-                Dale a "Guardar y regenerar" abajo para aplicarla.
+                Si subes una foto, se usa esa en la portada en vez de un fotograma del vídeo (el sonido de marca
+                sigue igual). Dale a "Guardar y regenerar" abajo para aplicarla.
               </p>
             </div>
           )}

@@ -147,6 +147,8 @@ export async function processRankingJob(jobId: string): Promise<void> {
           clipId: created.id,
           sourcePath: srcPath,
           category: group.category,
+          title: composition.title,
+          coverImagePath: job.coverImagePath,
           overallIntroCommentary: commentaryOn ? composition.commentaryIntro : null,
           overallOutroCommentary: commentaryOn ? composition.commentaryOutro : null,
           items: created.rankingItems.map((i) => ({

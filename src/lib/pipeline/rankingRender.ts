@@ -4,17 +4,20 @@ import { probeVideo, type VerticalResolution } from "./probe";
 import { cutVerticalClip, concatClips, mixBackgroundMusic, extractThumbnail, extractAudioSegment, renderTitleCard } from "./clip";
 import { burnRankingOverlay, type RankingListItem, type RankingOverlayTemplate } from "./rankingListOverlay";
 import { renderCommentaryCard } from "./commentaryCards";
+import { renderCoverCard } from "./coverCard";
 import { buildBigCaptionsAss } from "./bigCaptions";
 import { getTTSProvider } from "@/lib/tts/provider";
 import {
   candidateSubClipPath,
   candidateCardPath,
   clipAssembledPath,
+  clipBodyPath,
   clipVideoPath,
   clipThumbnailPath,
   bigCaptionsPath,
   musicSegmentPath,
   narrationAudioPath,
+  coverCardPath,
 } from "@/lib/storagePaths";
 import { run } from "./exec";
 import { config } from "@/lib/config";
@@ -41,6 +44,9 @@ export async function assembleRankingVideo(params: {
   clipId: string;
   sourcePath: string;
   category: string;
+  // Título del vídeo (el generado por la IA, p.ej. "TOP 5 CRAZIEST GOALS...") — se usa SOLO para
+  // la tarjeta de portada final (ver coverCard.ts), no para la lista/título en pantalla.
+  title: string;
   overallIntroCommentary?: string | null;
   overallOutroCommentary?: string | null;
   items: RenderRankingItem[]; // ya ordenados de mejor a peor (position 1..N)
@@ -48,6 +54,9 @@ export async function assembleRankingVideo(params: {
   resolution: VerticalResolution;
   // Subtítulos grandes por puesto: activados por defecto, editable desde el editor (regenerar).
   captionsEnabled?: boolean;
+  // Imagen propia subida desde la fototeca para la tarjeta de portada final, en vez de un
+  // fotograma del vídeo (ver coverCard.ts) — igual que en SINGLE/SPLIT.
+  coverImagePath?: string | null;
   // "TOPIC" (por defecto) -> "Ranking Funniest {category} Moments"; "YOUTUBER" -> "Best 5 {category}
   // Clips" (ver rankingAnalyze.ts groupIntoRankings / Job.manualCategories).
   templateType?: RankingOverlayTemplate;
@@ -126,17 +135,40 @@ export async function assembleRankingVideo(params: {
     cursorSec += (await probeVideo(outroPath)).durationSec;
   }
 
-  const assembledPath = clipAssembledPath(jobId, clipId);
-  await concatClips(segmentPaths, assembledPath);
+  const bodyPath = clipBodyPath(jobId, clipId);
+  await concatClips(segmentPaths, bodyPath);
 
   // limpieza de archivos temporales de este clip
   for (const p of segmentPaths) {
     fs.rmSync(p, { force: true });
   }
 
-  const overlaidPath = `${assembledPath}.overlay.mp4`;
-  await burnRankingOverlay(assembledPath, overlaidPath, category, templateType, listItems, cursorSec, resolution);
-  fs.renameSync(overlaidPath, assembledPath);
+  const overlaidPath = `${bodyPath}.overlay.mp4`;
+  await burnRankingOverlay(bodyPath, overlaidPath, category, templateType, listItems, cursorSec, resolution);
+  fs.rmSync(bodyPath, { force: true });
+
+  const assembledPath = clipAssembledPath(jobId, clipId);
+  if (config.coverCard.enabled) {
+    // Fotograma representativo para la portada: el punto medio del MEJOR clip (puesto 1), el más
+    // impactante del ranking — mismo tratamiento que SINGLE/SPLIT (título quemado encima, sonido
+    // de marca), y con la misma foto propia subida si el usuario la puso (job.coverImagePath).
+    const best = [...items].sort((a, b) => a.position - b.position)[0];
+    const frameAtSec = best ? (best.startSec + best.endSec) / 2 : 0;
+    const coverPath = coverCardPath(jobId, clipId);
+    await renderCoverCard({
+      sourcePath,
+      frameAtSec,
+      title: params.title,
+      outPath: coverPath,
+      resolution,
+      customImagePath: params.coverImagePath,
+    });
+    await concatClips([overlaidPath, coverPath], assembledPath);
+    fs.rmSync(overlaidPath, { force: true });
+    fs.rmSync(coverPath, { force: true });
+  } else {
+    fs.renameSync(overlaidPath, assembledPath);
+  }
 
   return assembledPath;
 }

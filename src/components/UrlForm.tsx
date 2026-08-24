@@ -87,9 +87,8 @@ export default function UrlForm({
   const router = useRouter();
   const splitDurationSec = mode === "SPLIT" ? Math.round(splitMinutes * 60) : undefined;
   // La portada de marca solo existe en estos modos (ver coverCard.ts) — en los demás no tiene
-  // sentido ofrecer la foto porque nunca se llegaría a usar. RANKING ya no la usa: el título/lista
-  // de puestos se queman siempre encima de los propios clips, sin tarjeta de intro con fondo propio.
-  const supportsCoverPhoto = mode === "SINGLE" || mode === "SPLIT";
+  // sentido ofrecer la foto porque nunca se llegaría a usar.
+  const supportsCoverPhoto = mode === "SINGLE" || mode === "SPLIT" || mode === "RANKING";
 
   function addManualCategory() {
     setManualCategories((prev) => [...prev, { id: crypto.randomUUID(), name: "", type: "TOPIC" }]);
