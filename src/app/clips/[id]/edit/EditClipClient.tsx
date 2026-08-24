@@ -42,6 +42,12 @@ function defaultCueFontSize(resolution: { width: number } | null): number {
 
 type CustomTextElement = CompositionCustomText;
 
+interface RankingItemData {
+  id: string;
+  position: number;
+  label: string;
+}
+
 interface ClipData {
   id: string;
   title: string;
@@ -59,6 +65,15 @@ interface ClipData {
   coverTitle: string | null;
   coverImageUrl: string | null;
   captionsEnabled: boolean;
+  // Solo RANKING: rellenan la plantilla fija del título quemado en pantalla (ver
+  // rankingListOverlay.ts) — "TOPIC" -> "Ranking Funniest {category} Moments", "YOUTUBER" ->
+  // "Best 5 {category} Clips".
+  category: string | null;
+  introTemplate: string | null;
+  // Solo SPLIT/DOUBLE: título propio quemado en pantalla (ver Job.customTitle).
+  customTitle: string | null;
+  // Solo RANKING: etiqueta en pantalla de cada puesto del listado numerado.
+  rankingItems: RankingItemData[] | null;
 }
 
 // Reloj virtual de la composición de Remotion — no tiene por qué coincidir con el fps real del
@@ -116,6 +131,19 @@ function newCustomText(durationSec: number): CustomTextElement {
     colorHex: "FFFFFF",
     uppercase: false,
   };
+}
+
+// Reproduce el mismo formateo de rankingListOverlay.ts (buildTitleLines) para que la vista previa
+// del editor coincida EXACTAMENTE con lo que se va a quemar en el vídeo tras regenerar.
+function previewRankingTitle(category: string, template: string): string {
+  const cat = category
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w) => w[0].toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ");
+  if (!cat) return "…";
+  return template === "YOUTUBER" ? `Best 5 ${cat} Clips` : `Ranking Funniest ${cat} Moments`;
 }
 
 function formatTime(sec: number): string {
@@ -203,6 +231,12 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
   const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
   const [uploadingCover, setUploadingCover] = useState(false);
   const [captionsEnabled, setCaptionsEnabled] = useState(true);
+  // Solo RANKING: categoría/plantilla del título quemado y etiqueta en pantalla de cada puesto.
+  const [category, setCategory] = useState("");
+  const [introTemplate, setIntroTemplate] = useState<"TOPIC" | "YOUTUBER">("TOPIC");
+  const [rankingItemLabels, setRankingItemLabels] = useState<RankingItemData[]>([]);
+  // Solo SPLIT/DOUBLE: título propio quemado en pantalla.
+  const [customTitle, setCustomTitle] = useState("");
   const coverImageInputRef = useRef<HTMLInputElement | null>(null);
 
   const overlayRef = useRef<HTMLDivElement | null>(null);
@@ -237,6 +271,10 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
       setCoverTitle(data.clip.coverTitle ?? data.clip.title);
       setCoverImageUrl(data.clip.coverImageUrl);
       setCaptionsEnabled(data.clip.captionsEnabled);
+      setCategory(data.clip.category ?? "");
+      setIntroTemplate(data.clip.introTemplate === "YOUTUBER" ? "YOUTUBER" : "TOPIC");
+      setRankingItemLabels(data.clip.rankingItems ?? []);
+      setCustomTitle(data.clip.customTitle ?? "");
       setLoading(false);
     }
     load();
@@ -348,6 +386,10 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
   function removeText(id: string) {
     setTexts((prev) => prev.filter((t) => t.id !== id));
     if (selectedTextId === id) setSelectedTextId(null);
+  }
+
+  function updateRankingItemLabel(id: string, label: string) {
+    setRankingItemLabels((prev) => prev.map((i) => (i.id === id ? { ...i, label } : i)));
   }
 
   // Arrastre con puntero (funciona con ratón Y con el dedo en pantallas táctiles, Pointer Events
@@ -527,6 +569,14 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
           coverFrameSec: nextCoverFrameSec,
           coverTitle,
           captionsEnabled,
+          // Textos en pantalla propios de cada modo — solo se mandan cuando aplican, para no
+          // pisar campos de otros modos sin querer.
+          ...(clip.jobMode === "RANKING" && {
+            category,
+            introTemplate,
+            rankingItems: rankingItemLabels.map((i) => ({ id: i.id, label: i.label })),
+          }),
+          ...((clip.jobMode === "SPLIT" || clip.jobMode === "DOUBLE") && { customTitle }),
         }),
       });
       const putData = await putRes.json().catch(() => null);
@@ -549,6 +599,10 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
               endSec: nextEnd,
               coverFrameSec: nextCoverFrameSec,
               coverTitle,
+              category: prev.jobMode === "RANKING" ? category : prev.category,
+              introTemplate: prev.jobMode === "RANKING" ? introTemplate : prev.introTemplate,
+              rankingItems: prev.jobMode === "RANKING" ? rankingItemLabels : prev.rankingItems,
+              customTitle: prev.jobMode === "SPLIT" || prev.jobMode === "DOUBLE" ? customTitle : prev.customTitle,
               videoUrl: regenData.videoUrl,
               thumbnailUrl: regenData.thumbnailUrl,
             }
@@ -847,6 +901,78 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
               <p className="mt-1 text-xs text-slate-600">
                 Si subes una foto, se usa esa en la portada en vez de un fotograma del vídeo (el sonido de marca
                 sigue igual). Dale a "Guardar y regenerar" abajo para aplicarla.
+              </p>
+            </div>
+          )}
+
+          {/* Título quemado en pantalla: en RANKING es la categoría/plantilla fija que se ve todo
+              el vídeo ("Ranking Funniest {Category} Moments" / "Best 5 {Category} Clips") más la
+              etiqueta de cada puesto del listado numerado; en SPLIT/DOUBLE es el título propio
+              escrito al crear el trabajo (barra negra arriba del short/del clip de abajo). */}
+          {clip.jobMode === "RANKING" && (
+            <div>
+              <h2 className="mb-2 text-sm font-semibold text-slate-300">Título del ranking (en pantalla)</h2>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <input
+                  type="text"
+                  value={category}
+                  onChange={(e) => setCategory(e.target.value)}
+                  maxLength={60}
+                  placeholder="p.ej. Ishowspeed"
+                  className="flex-1 rounded-lg border border-ink-600 bg-ink-900 px-3 py-2 text-sm text-slate-200 outline-none focus:border-brand-500"
+                />
+                <select
+                  value={introTemplate}
+                  onChange={(e) => setIntroTemplate(e.target.value as "TOPIC" | "YOUTUBER")}
+                  className="rounded-lg border border-ink-600 bg-ink-900 px-3 py-2 text-sm text-slate-300 outline-none focus:border-brand-500"
+                >
+                  <option value="TOPIC">Temática ("Ranking Funniest ... Moments")</option>
+                  <option value="YOUTUBER">YouTuber ("Best 5 ... Clips")</option>
+                </select>
+              </div>
+              <p className="mt-1 text-xs text-slate-500">
+                Se verá así en pantalla: <span className="font-semibold text-slate-300">{previewRankingTitle(category, introTemplate)}</span>
+              </p>
+
+              {rankingItemLabels.length > 0 && (
+                <div className="mt-3 space-y-1.5">
+                  <p className="text-xs text-slate-400">Etiqueta de cada puesto en el listado numerado:</p>
+                  {[...rankingItemLabels]
+                    .sort((a, b) => a.position - b.position)
+                    .map((item) => (
+                      <div key={item.id} className="flex items-center gap-2">
+                        <span className="w-6 shrink-0 text-right text-xs font-semibold text-brand-400">
+                          {item.position}.
+                        </span>
+                        <input
+                          type="text"
+                          value={item.label}
+                          onChange={(e) => updateRankingItemLabel(item.id, e.target.value)}
+                          maxLength={80}
+                          className="flex-1 rounded-lg border border-ink-600 bg-ink-900 px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-brand-500"
+                        />
+                      </div>
+                    ))}
+                </div>
+              )}
+              <p className="mt-2 text-xs text-slate-600">Dale a "Guardar y regenerar" abajo para aplicar los cambios.</p>
+            </div>
+          )}
+
+          {(clip.jobMode === "SPLIT" || clip.jobMode === "DOUBLE") && (
+            <div>
+              <h2 className="mb-2 text-sm font-semibold text-slate-300">Título propio (en pantalla)</h2>
+              <input
+                type="text"
+                value={customTitle}
+                onChange={(e) => setCustomTitle(e.target.value)}
+                maxLength={120}
+                placeholder='BROMA TELEFÓNICA A AURONPLAY "EL FIFAS"'
+                className="w-full rounded-lg border border-ink-600 bg-ink-900 px-3 py-2 text-sm text-slate-200 outline-none focus:border-brand-500"
+              />
+              <p className="mt-1 text-xs text-slate-600">
+                Barra negra fija arriba {clip.jobMode === "DOUBLE" ? "del clip de abajo" : "del short, sin taparlo"}.
+                Déjalo en blanco para quitarlo. Dale a "Guardar y regenerar" abajo para aplicarlo.
               </p>
             </div>
           )}

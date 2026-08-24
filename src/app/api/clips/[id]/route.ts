@@ -12,9 +12,10 @@ function serialize(clip: {
   filePath: string | null;
   thumbnailPath: string | null;
   job?: { sourceFilePath: string | null; mode: string };
+  rankingItems?: { id: string; position: number; label: string }[];
   [key: string]: unknown;
 }) {
-  const { job, ...rest } = clip;
+  const { job, rankingItems, ...rest } = clip;
   return {
     ...rest,
     hashtags: JSON.parse(clip.hashtags || "[]"),
@@ -29,11 +30,17 @@ function serialize(clip: {
     sourceVideoUrl: job ? toMediaUrl(job.sourceFilePath) : null,
     // La portada (coverCard.ts) solo existe en SINGLE/SPLIT — el editor la muestra solo entonces.
     jobMode: job?.mode ?? null,
+    // Solo RANKING: puestos con su etiqueta en pantalla, editable desde el editor (ver rankingItems
+    // en el PUT de abajo) — ordenados por posición para que el editor los liste 1..N.
+    rankingItems: rankingItems ? [...rankingItems].sort((a, b) => a.position - b.position) : undefined,
   };
 }
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
-  const clip = await db.clip.findUnique({ where: { id: params.id }, include: { job: true } });
+  const clip = await db.clip.findUnique({
+    where: { id: params.id },
+    include: { job: true, rankingItems: true },
+  });
   if (!clip) {
     return NextResponse.json({ error: "Clip no encontrado" }, { status: 404 });
   }
@@ -90,6 +97,17 @@ const editSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   description: z.string().max(5000).optional(),
   hashtags: z.array(z.string().min(1).max(50)).max(30).optional(),
+  // Solo RANKING: la categoría/nombre que rellena la plantilla fija del título quemado en pantalla
+  // ("Ranking Funniest {category} Moments" / "Best 5 {category} Clips", ver rankingListOverlay.ts)
+  // y qué plantilla usa. Hace falta regenerar para que se vea el cambio (está quemado en el vídeo).
+  category: z.string().trim().min(1).max(60).optional(),
+  introTemplate: z.enum(["TOPIC", "YOUTUBER"]).optional(),
+  // Solo SPLIT/DOUBLE: título propio quemado en pantalla (ver Job.customTitle/clip.ts
+  // burnCustomTitleBar). "" se guarda como null (sin título) — nunca una barra vacía.
+  customTitle: z.string().trim().max(120).optional(),
+  // Solo RANKING: etiqueta en pantalla de cada puesto del listado numerado (ver
+  // rankingListOverlay.ts buildListLines) — cada id tiene que pertenecer a ESTE clip.
+  rankingItems: z.array(z.object({ id: z.string(), label: z.string().trim().min(1).max(80) })).max(10).optional(),
 });
 
 /** Guarda los subtítulos editados/borrados y los textos personalizados del editor (sin regenerar el vídeo todavía). */
@@ -100,7 +118,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     return NextResponse.json({ error: parsed.error.errors[0]?.message ?? "Datos inválidos" }, { status: 400 });
   }
 
-  const clip = await db.clip.findUnique({ where: { id: params.id } });
+  const clip = await db.clip.findUnique({ where: { id: params.id }, include: { rankingItems: true } });
   if (!clip) {
     return NextResponse.json({ error: "Clip no encontrado" }, { status: 404 });
   }
@@ -118,21 +136,37 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     return NextResponse.json({ error: "El fotograma de portada tiene que estar dentro del clip" }, { status: 400 });
   }
 
-  const updated = await db.clip.update({
-    where: { id: params.id },
-    data: {
-      ...(parsed.data.captionCues !== undefined && { captionCues: JSON.stringify(parsed.data.captionCues) }),
-      ...(parsed.data.customTexts !== undefined && { customTexts: JSON.stringify(parsed.data.customTexts) }),
-      ...(parsed.data.effectiveStartSec !== undefined && { effectiveStartSec: parsed.data.effectiveStartSec }),
-      ...(parsed.data.endSec !== undefined && { endSec: parsed.data.endSec }),
-      ...(parsed.data.coverFrameSec !== undefined && { coverFrameSec: parsed.data.coverFrameSec }),
-      ...(parsed.data.coverTitle !== undefined && { coverTitle: parsed.data.coverTitle }),
-      ...(parsed.data.captionsEnabled !== undefined && { captionsEnabled: parsed.data.captionsEnabled }),
-      ...(parsed.data.title !== undefined && { title: parsed.data.title }),
-      ...(parsed.data.description !== undefined && { description: parsed.data.description }),
-      ...(parsed.data.hashtags !== undefined && { hashtags: JSON.stringify(parsed.data.hashtags) }),
-    },
-  });
+  if (parsed.data.rankingItems) {
+    const ownIds = new Set(clip.rankingItems.map((i) => i.id));
+    if (parsed.data.rankingItems.some((i) => !ownIds.has(i.id))) {
+      return NextResponse.json({ error: "Puesto de ranking no válido para este clip" }, { status: 400 });
+    }
+  }
 
+  await db.$transaction([
+    db.clip.update({
+      where: { id: params.id },
+      data: {
+        ...(parsed.data.captionCues !== undefined && { captionCues: JSON.stringify(parsed.data.captionCues) }),
+        ...(parsed.data.customTexts !== undefined && { customTexts: JSON.stringify(parsed.data.customTexts) }),
+        ...(parsed.data.effectiveStartSec !== undefined && { effectiveStartSec: parsed.data.effectiveStartSec }),
+        ...(parsed.data.endSec !== undefined && { endSec: parsed.data.endSec }),
+        ...(parsed.data.coverFrameSec !== undefined && { coverFrameSec: parsed.data.coverFrameSec }),
+        ...(parsed.data.coverTitle !== undefined && { coverTitle: parsed.data.coverTitle }),
+        ...(parsed.data.captionsEnabled !== undefined && { captionsEnabled: parsed.data.captionsEnabled }),
+        ...(parsed.data.title !== undefined && { title: parsed.data.title }),
+        ...(parsed.data.description !== undefined && { description: parsed.data.description }),
+        ...(parsed.data.hashtags !== undefined && { hashtags: JSON.stringify(parsed.data.hashtags) }),
+        ...(parsed.data.category !== undefined && { category: parsed.data.category }),
+        ...(parsed.data.introTemplate !== undefined && { introTemplate: parsed.data.introTemplate }),
+        ...(parsed.data.customTitle !== undefined && { customTitle: parsed.data.customTitle || null }),
+      },
+    }),
+    ...(parsed.data.rankingItems ?? []).map((item) =>
+      db.rankingItem.update({ where: { id: item.id }, data: { label: item.label } })
+    ),
+  ]);
+
+  const updated = await db.clip.findUniqueOrThrow({ where: { id: params.id }, include: { rankingItems: true } });
   return NextResponse.json({ clip: serialize(updated) });
 }
