@@ -6,6 +6,12 @@ import { probeVideo, type VerticalResolution } from "./probe";
 
 const DEFAULT_RES: VerticalResolution = { width: 1080, height: 1920 };
 
+// Tipografía compartida por el título propio (burnCustomTitleBar) y la etiqueta "Parte N"
+// (topLabelDrawtextFilter) en SPLIT/DOUBLE: Poppins Bold — redonda pero seria/profesional, muy
+// distinta de la angulosa DejaVu Sans que llevaban antes — pedido explícito. Ya viene instalada
+// en /usr/share/fonts/truetype/custom (ver "Instalar fuentes libres..." en server.yml).
+const TITLE_FONT_FILE = "/usr/share/fonts/truetype/custom/Poppins-Bold.ttf";
+
 /**
  * `concatClips` une varios mp4 por copia de flujo (`-c copy`, sin recodificar). Eso exige que
  * TODOS los tramos que se vayan a concatenar entre sí (cuerpo del clip, tarjetas de título/
@@ -220,9 +226,10 @@ export interface SplitScreenOptions {
 /** Filtro drawtext para un texto fijo pegado arriba de la pantalla durante TODO el vídeo (p.ej. "Parte N"). */
 function topLabelDrawtextFilter(textFileArg: string, width: number): string {
   const fontSize = Math.round(width / 14);
+  const borderw = Math.max(3, Math.round(fontSize / 14));
   return (
     `drawtext=${textFileArg}:fontcolor=white:fontsize=${fontSize}:` +
-    `fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:borderw=5:bordercolor=black@0.85:` +
+    `fontfile=${TITLE_FONT_FILE}:borderw=${borderw}:bordercolor=black@1:` +
     `x=(w-text_w)/2:y=40`
   );
 }
@@ -351,11 +358,12 @@ export const SPLIT_CUSTOM_TITLE_Y = 170;
 
 /**
  * Quema el título propio que el usuario escribe a mano al crear el trabajo (solo modos SPLIT/
- * DOUBLE, ver Job.customTitle), en mayúsculas, blanco sobre una barra negra sólida — mismo estilo
- * "boom/breaking news" que las capturas de referencia (tipo "BROMA TELEFÓNICA A AURONPLAY 'EL
- * FIFAS'") — como pasada final aparte sobre un vídeo YA montado, igual que burnTopLabel. La
- * posición Y la decide quien llama: arriba del short sin tapar el contenido en SPLIT, arriba del
- * clip de ABAJO (el segundo tramo de la pantalla dividida) en DOUBLE.
+ * DOUBLE, ver Job.customTitle), en mayúsculas, blanco con borde negro sobre las letras (sin caja/
+ * barra de fondo — pedido explícito: nada que parezca una raya subrayando el texto), tipografía
+ * redonda pero profesional (ver TITLE_FONT_FILE) — como pasada final aparte sobre un vídeo YA
+ * montado, igual que burnTopLabel. La posición Y la decide quien llama: arriba del short sin tapar
+ * el contenido en SPLIT, arriba del clip de ABAJO (el segundo tramo de la pantalla dividida) en
+ * DOUBLE.
  */
 export async function burnCustomTitleBar(
   inputPath: string,
@@ -365,11 +373,12 @@ export async function burnCustomTitleBar(
   resolution: VerticalResolution = DEFAULT_RES
 ): Promise<void> {
   const fontSize = Math.round(resolution.width / 16);
+  const borderw = Math.max(3, Math.round(fontSize / 14));
   const wrapped = wrapText(text.toUpperCase(), 22);
   const textFilePath = `${outputPath}.customtitle.txt`;
   const filter =
     `drawtext=${writeDrawtextFile(wrapped, textFilePath)}:fontcolor=white:fontsize=${fontSize}:` +
-    `fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf:box=1:boxcolor=black@1:boxborderw=18:` +
+    `fontfile=${TITLE_FONT_FILE}:borderw=${borderw}:bordercolor=black@1:` +
     `line_spacing=12:x=(w-text_w)/2:y=${yPosition}`;
   try {
     await run(config.ffmpegPath, [

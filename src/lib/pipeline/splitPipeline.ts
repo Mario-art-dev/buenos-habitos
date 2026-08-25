@@ -21,7 +21,7 @@ import { probeVideo, pickVerticalResolution } from "./probe";
 import { renderCoverCard } from "./coverCard";
 import { setStatus } from "./status";
 import { config } from "@/lib/config";
-import { normalizeLanguageCode, resolveContentLanguage } from "@/lib/lang";
+import { normalizeLanguageCode, resolveContentLanguage, partLabel } from "@/lib/lang";
 
 const DEFAULT_SPLIT_DURATION_SEC = 60;
 
@@ -141,7 +141,7 @@ export async function processSplitJob(jobId: string): Promise<void> {
 
         // Mismo texto permanente "Parte N" en la parte superior que el modo Doble, para saber qué
         // short es cuál — se quema sobre el cuerpo del vídeo, nunca sobre la portada.
-        await burnTopLabel(bodyPath, labeledPath, `Parte ${clip.rank}`, resolution);
+        await burnTopLabel(bodyPath, labeledPath, partLabel(languageCode, clip.rank), resolution);
         let core = labeledPath;
 
         // Título propio escrito a mano por el usuario (Job.customTitle, solo SPLIT/DOUBLE): arriba

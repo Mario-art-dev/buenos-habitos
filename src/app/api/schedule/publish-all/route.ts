@@ -4,9 +4,9 @@ import { scheduleAllReadyClips } from "@/lib/schedule/scheduler";
 export const dynamic = "force-dynamic";
 
 /**
- * Botón "Publicar todos" de la Galería: programa TODOS los shorts listos y aún no publicados,
- * repartidos cada hora en punto (2 por hora) en las plataformas conectadas — ver
- * scheduleAllReadyClips en scheduler.ts.
+ * Botón "Configurar horarios" de la Galería: programa TODOS los shorts listos y aún no
+ * publicados, repartidos equitativamente entre las 24 horas del día según cuántos haya ahora
+ * mismo en la galería, en las plataformas conectadas — ver scheduleAllReadyClips en scheduler.ts.
  */
 export async function POST() {
   try {

@@ -69,3 +69,12 @@ export function resolveContentLanguage(detectedCode: string | null | undefined):
   if (detectedCode) return languageDisplayName(detectedCode);
   return contentLanguageName();
 }
+
+/**
+ * Etiqueta "Parte N" quemada en pantalla en SPLIT/DOUBLE, traducida al inglés ("Part N") cuando
+ * el vídeo está en inglés — pedido explícito. Cualquier otro idioma (incluido español, o sin
+ * detectar) se queda en español, que es el valor por defecto de siempre.
+ */
+export function partLabel(contentLanguageCode: string | null | undefined, n: number): string {
+  return contentLanguageCode === "en" ? `Part ${n}` : `Parte ${n}`;
+}

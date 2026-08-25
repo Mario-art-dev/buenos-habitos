@@ -6,16 +6,20 @@ import { getAccount, saveAccount } from "./accounts";
 const AUTH_URL = "https://www.tiktok.com/v2/auth/authorize/";
 const TOKEN_URL = "https://open.tiktokapis.com/v2/oauth/token/";
 const USERINFO_URL = "https://open.tiktokapis.com/v2/user/info/";
-// Flujo de "subir al inbox como borrador": es el que permiten las apps SIN auditar por TikTok.
-// Cuando TikTok apruebe tu app para publicación directa, cambia esta URL por:
-// https://open.tiktokapis.com/v2/post/publish/video/init/  (y añade post_info con privacy_level)
-const INBOX_UPLOAD_INIT_URL = "https://open.tiktokapis.com/v2/post/publish/inbox/video/init/";
+// Publicación DIRECTA (Content Posting API) en vez del flujo antiguo de "subir al inbox como
+// borrador" — pedido explícito: el borrador ni siquiera llegaba a aparecer en la app. Con la app
+// SIN auditar por TikTok, esta misma URL sigue funcionando pero fuerza privacy_level=SELF_ONLY
+// (solo lo ve el propio dueño de la cuenta) — sigue siendo un vídeo REAL ya publicado, no un
+// borrador manual — y en cuanto TikTok audite la app, empieza a admitir PUBLIC_TO_EVERYONE sin
+// tener que tocar este código (ver pickPrivacyLevel/queryCreatorInfo más abajo).
+const DIRECT_POST_INIT_URL = "https://open.tiktokapis.com/v2/post/publish/video/init/";
+const CREATOR_INFO_URL = "https://open.tiktokapis.com/v2/post/publish/creator_info/query/";
 
-// "video.publish" es para publicación DIRECTA, que solo se concede a apps auditadas por TikTok
-// (ver INBOX_UPLOAD_INIT_URL arriba) — pedirlo aquí sin tenerlo habilitado en el panel de la app
-// hace que TikTok rechace el login entero con "Something went wrong / scope". El flujo de
-// borrador al inbox que usa esta app solo necesita subir el vídeo, no publicarlo.
-const SCOPES = ["user.info.basic", "video.upload"];
+// "video.publish" es imprescindible para publicación DIRECTA — IMPORTANTE: hay que añadir este
+// scope al producto "Content Posting API" en el panel de desarrollador de TikTok (la misma app
+// que ya usa video.upload) antes de volver a conectar TikTok tras este cambio; si no, TikTok
+// rechaza el login entero con "Something went wrong / scope".
+const SCOPES = ["user.info.basic", "video.upload", "video.publish"];
 
 function base64url(input: Buffer): string {
   return input.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
@@ -136,25 +140,70 @@ export interface UploadToTikTokParams {
   hashtags: string[];
 }
 
+interface CreatorInfo {
+  privacyLevelOptions: string[];
+}
+
 /**
- * Sube el vídeo al inbox de TikTok como borrador (único modo permitido para apps sin auditar
- * por el "Content Posting API"). El creador lo verá dentro de la app de TikTok, en "Borradores",
- * listo para revisar y publicar con un toque.
+ * TikTok exige consultar esto antes de cada publicación (requisito de sus políticas, no
+ * opcional): qué niveles de privacidad puede usar esta cuenta/app en este momento. Una app sin
+ * auditar solo tiene disponible "SELF_ONLY"; en cuanto TikTok audite la app, empiezan a aparecer
+ * también "MUTUAL_FOLLOW_FRIENDS"/"PUBLIC_TO_EVERYONE" aquí, sin más cambios en este código.
+ */
+async function queryCreatorInfo(accessToken: string): Promise<CreatorInfo> {
+  const res = await fetch(CREATOR_INFO_URL, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json; charset=UTF-8" },
+  });
+  const data = await res.json();
+  if (!res.ok || data.error?.code !== "ok") {
+    throw new Error(`TikTok rechazó la consulta de la cuenta: ${data.error?.message ?? res.statusText}`);
+  }
+  return { privacyLevelOptions: data.data?.privacy_level_options ?? ["SELF_ONLY"] };
+}
+
+/** El mejor nivel de privacidad disponible ahora mismo — público si la app ya está auditada por TikTok, si no, el máximo permitido (normalmente SELF_ONLY, visible solo para el propio dueño de la cuenta). */
+function pickPrivacyLevel(options: string[]): string {
+  const preference = ["PUBLIC_TO_EVERYONE", "MUTUAL_FOLLOW_FRIENDS", "FOLLOWER_OF_CREATOR", "SELF_ONLY"];
+  return preference.find((p) => options.includes(p)) ?? options[0] ?? "SELF_ONLY";
+}
+
+function buildCaption(title: string, hashtags: string[]): string {
+  const tags = hashtags.map((h) => (h.startsWith("#") ? h : `#${h}`)).join(" ");
+  const caption = tags ? `${title}\n\n${tags}` : title;
+  // TikTok trunca/rechaza captions de más de 2200 caracteres.
+  return caption.slice(0, 2200);
+}
+
+/**
+ * Publica el vídeo directamente en TikTok (Content Posting API) — ya no queda como borrador
+ * manual en el inbox: sale como una publicación real desde el momento en que termina de subirse,
+ * con la privacidad que permita la app ahora mismo (ver pickPrivacyLevel).
  */
 export async function uploadShortToTikTok(
   params: UploadToTikTokParams
-): Promise<{ publishId: string; status: "DRAFT" }> {
+): Promise<{ publishId: string; status: "PUBLISHED"; privacyLevel: string }> {
   const accessToken = await refreshTokenIfNeeded();
   const stats = fs.statSync(params.filePath);
   const videoSize = stats.size;
 
-  const initRes = await fetch(INBOX_UPLOAD_INIT_URL, {
+  const creatorInfo = await queryCreatorInfo(accessToken);
+  const privacyLevel = pickPrivacyLevel(creatorInfo.privacyLevelOptions);
+
+  const initRes = await fetch(DIRECT_POST_INIT_URL, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
+      "Content-Type": "application/json; charset=UTF-8",
     },
     body: JSON.stringify({
+      post_info: {
+        title: buildCaption(params.title, params.hashtags),
+        privacy_level: privacyLevel,
+        disable_duet: false,
+        disable_comment: false,
+        disable_stitch: false,
+      },
       source_info: {
         source: "FILE_UPLOAD",
         video_size: videoSize,
@@ -184,5 +233,5 @@ export async function uploadShortToTikTok(
     throw new Error(`Fallo subiendo el vídeo a TikTok (${uploadRes.status})`);
   }
 
-  return { publishId, status: "DRAFT" };
+  return { publishId, status: "PUBLISHED", privacyLevel };
 }

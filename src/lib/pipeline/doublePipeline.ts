@@ -16,7 +16,7 @@ import { cutSplitScreenClip, extractThumbnail, applyCustomTextOverlay, burnCusto
 import { cuesFromTranscript, buildBigCaptionsAssFromCues, defaultSplitDoubleCaptionsStyle, type StoredCue } from "./bigCaptions";
 import { probeVideo, pickVerticalResolution } from "./probe";
 import { setStatus } from "./status";
-import { normalizeLanguageCode, resolveContentLanguage } from "@/lib/lang";
+import { normalizeLanguageCode, resolveContentLanguage, partLabel } from "@/lib/lang";
 
 const DEFAULT_PARTS_COUNT = 4;
 
@@ -148,7 +148,7 @@ export async function processDoubleJob(jobId: string): Promise<void> {
           topEndSec: clip.endSec,
           bottomSourcePath: bottomPath,
           bottomStartSec,
-          label: `Parte ${clip.rank}`,
+          label: partLabel(languageCode, clip.rank),
           outPath,
           resolution,
         });

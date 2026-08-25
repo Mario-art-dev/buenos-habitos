@@ -19,23 +19,27 @@ async function nextEligibleClips(limit: number) {
   });
 }
 
-const PUBLISH_ALL_PER_HOUR = 2;
+const HOURS_PER_DAY = 24;
 
 export interface PublishAllResult {
   scheduledClips: number;
   firstAt: Date | null;
   lastAt: Date | null;
   platforms: Platform[];
+  perHour: number;
 }
 
 /**
- * Botón "Publicar todos" de la Galería: programa TODOS los shorts listos que aún no se han
- * publicado ni tienen ya una tarea pendiente, repartidos cada hora en punto (2 shorts por hora,
- * empezando en la próxima hora en punto) — pedido explícito, en vez de depender de que el usuario
- * configure franjas horarias a mano. Reutiliza el mismo mecanismo de AutoPublishTask que ya
- * procesa processDueTasks() cada minuto, así que funciona sea cual sea el estado de
- * enabled/mode de la programación automática normal (INTERVAL/WINDOW) — son dos vías independientes
- * hacia la misma cola de tareas.
+ * Botón "Configurar horarios" de la Galería: programa TODOS los shorts listos que aún no se han
+ * publicado ni tienen ya una tarea pendiente, repartidos EQUITATIVAMENTE entre las 24 horas del
+ * día — no un número fijo por hora, sino el total actual de la galería dividido entre 24 (p.ej.
+ * 48 shorts = 2/hora, 72 = 3/hora, 120 = 5/hora); si no es divisible exacto, las horas iniciales
+ * absorben 1 extra cada una hasta agotar el resto, para que la suma cuadre siempre con el total
+ * real — pedido explícito, en vez de un ritmo fijo (antes 2/hora) que no se adaptaba a cuántos
+ * shorts hay realmente esperando. Reutiliza el mismo mecanismo de AutoPublishTask que ya procesa
+ * processDueTasks() cada minuto, así que funciona sea cual sea el estado de enabled/mode de la
+ * programación automática normal (INTERVAL/WINDOW) — son dos vías independientes hacia la misma
+ * cola de tareas.
  */
 export async function scheduleAllReadyClips(): Promise<PublishAllResult> {
   const settings = await getAutoPublishSettings();
@@ -52,34 +56,80 @@ export async function scheduleAllReadyClips(): Promise<PublishAllResult> {
 
   const eligible = (await nextEligibleClips(2000)).filter((c) => !pendingClipIds.has(c.id));
   if (eligible.length === 0) {
-    return { scheduledClips: 0, firstAt: null, lastAt: null, platforms };
+    return { scheduledClips: 0, firstAt: null, lastAt: null, platforms, perHour: 0 };
   }
+
+  const perHourBase = Math.floor(eligible.length / HOURS_PER_DAY);
+  const extraHours = eligible.length % HOURS_PER_DAY; // las primeras `extraHours` horas llevan 1 short de más
 
   const start = new Date();
   start.setMinutes(0, 0, 0);
   start.setHours(start.getHours() + 1); // próxima hora en punto
 
-  let slot = new Date(start);
-  let countInSlot = 0;
+  let clipIndex = 0;
   let firstAt: Date | null = null;
   let lastAt: Date | null = null;
 
-  for (const clip of eligible) {
-    if (countInSlot >= PUBLISH_ALL_PER_HOUR) {
-      slot = new Date(slot.getTime() + 3600_000);
-      countInSlot = 0;
+  for (let hour = 0; hour < HOURS_PER_DAY && clipIndex < eligible.length; hour++) {
+    const slot = new Date(start.getTime() + hour * 3600_000);
+    const countInSlot = perHourBase + (hour < extraHours ? 1 : 0);
+    for (let i = 0; i < countInSlot && clipIndex < eligible.length; i++, clipIndex++) {
+      const clip = eligible[clipIndex];
+      if (!firstAt) firstAt = slot;
+      lastAt = slot;
+      for (const platform of platforms) {
+        await db.autoPublishTask.create({
+          data: { clipId: clip.id, platform, scheduledAt: slot, status: "PENDING" },
+        });
+      }
     }
-    if (!firstAt) firstAt = slot;
-    lastAt = slot;
-    for (const platform of platforms) {
-      await db.autoPublishTask.create({
-        data: { clipId: clip.id, platform, scheduledAt: slot, status: "PENDING" },
-      });
-    }
-    countInSlot++;
   }
 
-  return { scheduledClips: eligible.length, firstAt, lastAt, platforms };
+  return { scheduledClips: eligible.length, firstAt, lastAt, platforms, perHour: perHourBase + (extraHours > 0 ? 1 : 0) };
+}
+
+export interface PublishNowResult {
+  publishedClips: number;
+  failedClips: number;
+  platforms: Platform[];
+}
+
+/**
+ * Sección "Publicar de inmediato" de la Galería: el usuario elige una cantidad N y se suben AHORA
+ * MISMO (sin esperar a ninguna hora programada) los N shorts más antiguos de la galería — los
+ * primeros que entraron, orden FIFO por createdAt — a todas las plataformas conectadas. Si un clip
+ * ya se había publicado a mano en alguna plataforma antes, no se vuelve a subir ahí (evita
+ * duplicados); solo se sube a las plataformas que todavía le faltan.
+ */
+export async function publishImmediately(count: number): Promise<PublishNowResult> {
+  const settings = await getAutoPublishSettings();
+  const platforms = await connectedPlatforms(settings.platforms);
+  if (platforms.length === 0) {
+    throw new Error("No tienes ninguna plataforma conectada (YouTube/TikTok) en Ajustes.");
+  }
+
+  const clips = await db.clip.findMany({
+    where: { status: "READY" },
+    orderBy: { createdAt: "asc" },
+    take: count,
+    include: { publications: { where: { status: { in: ["PUBLISHED", "DRAFT"] } } } },
+  });
+
+  let publishedClips = 0;
+  let failedClips = 0;
+  for (const clip of clips) {
+    const alreadyDone = new Set(clip.publications.map((p) => p.platform));
+    const pending = platforms.filter((p) => !alreadyDone.has(p));
+    let clipOk = true;
+    for (const platform of pending) {
+      const result = await publishClip(clip.id, platform);
+      if (!result.ok) clipOk = false;
+    }
+    if (clipOk) publishedClips++;
+    else failedClips++;
+  }
+
+  return { publishedClips, failedClips, platforms };
 }
 
 async function runIntervalMode(intervalHours: number, platforms: Platform[], nextRunAt: Date | null) {

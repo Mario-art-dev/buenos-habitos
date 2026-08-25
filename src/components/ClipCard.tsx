@@ -384,7 +384,11 @@ export default function ClipCard({ clip }: { clip: ClipData }) {
               onClick={() => publish("TIKTOK")}
               className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-black disabled:opacity-40"
             >
-              {tt?.status === "DRAFT" ? "✓ Borrador en TikTok" : publishing === "TIKTOK" ? "Subiendo…" : "Enviar a TikTok"}
+              {tt?.status === "PUBLISHED" || tt?.status === "DRAFT"
+                ? "✓ Publicado en TikTok"
+                : publishing === "TIKTOK"
+                  ? "Subiendo…"
+                  : "Publicar en TikTok"}
             </button>
             {clip.status === "READY" && (
               <a

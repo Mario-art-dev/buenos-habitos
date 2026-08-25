@@ -18,6 +18,7 @@ import { hookVerifiedFrameSec } from "./hookFrame";
 import { probeVideo, pickVerticalResolution } from "./probe";
 import { renderCoverCard } from "./coverCard";
 import { renderCommentaryCard } from "./commentaryCards";
+import { partLabel } from "@/lib/lang";
 import { regenerateRankingClip } from "./rankingRegenerateClip";
 import { regenerateDoubleClip } from "./doubleRegenerateClip";
 import { regenerateSongClip } from "./songRegenerateClip";
@@ -156,7 +157,7 @@ async function regenerateSingleOrSplitClip(clipId: string): Promise<void> {
     // lleva el modo Doble, para que se sepa qué short es cuál — se quema sobre el cuerpo del vídeo
     // (no sobre la portada, que es una imagen fija aparte al final).
     if (clip.job.mode === "SPLIT") {
-      await burnTopLabel(core, labeledPath, `Parte ${clip.rank}`, resolution);
+      await burnTopLabel(core, labeledPath, partLabel(clip.job.contentLanguage, clip.rank), resolution);
       core = labeledPath;
 
       // Título propio escrito a mano por el usuario (Clip.customTitle, heredado de Job.customTitle

@@ -44,7 +44,7 @@ jobs:
           mkdir -p storage
           REMOTE_URL="https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
           rm -rf /tmp/gallery-backup
-          if git clone --branch gallery-data --single-branch --depth 1 "$REMOTE_URL" /tmp/gallery-backup 2>/tmp/gallery-clone.log; then
+          if timeout 120 git clone --branch gallery-data --single-branch --depth 1 "$REMOTE_URL" /tmp/gallery-backup 2>/tmp/gallery-clone.log; then
             echo "Rama de respaldo permanente encontrada, restaurando..."
             if [ -d /tmp/gallery-backup/storage ]; then
               cp -a /tmp/gallery-backup/storage/. storage/
@@ -242,7 +242,7 @@ jobs:
           echo "**$URL**" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "Entra con la contraseña que pusiste en el secreto \`APP_PASSWORD\`." >> "$GITHUB_STEP_SUMMARY"
-          echo "Esta URL cambiará dentro de ~5h30min, cuando esta sesión pase el testigo a la siguiente." >> "$GITHUB_STEP_SUMMARY"
+          echo "Esta URL cambiará dentro de ~5h, cuando esta sesión pase el testigo a la siguiente." >> "$GITHUB_STEP_SUMMARY"
           echo "[cloudflared] URL pública: $URL"
 
       # A partir de aquí: el ÚNICO guardado real de la galería. Cada 10 minutos se hace un commit
@@ -251,11 +251,25 @@ jobs:
       # temporal termine, se cancele o se caiga por cualquier motivo (como mucho se pierden los
       # últimos 10 minutos de shorts generados, no la sesión entera). Ya NO se usa
       # "actions/cache" para esto — motivo completo en el primer paso de este archivo.
+      #
+      # BUG REAL CONFIRMADO Y CORREGIDO (sesión temporal 97, con logs reales): el job entero tiene
+      # un tope DURO de 360 minutos (timeout-minutes de este workflow) que GitHub Actions mata sin
+      # avisar si se supera — y si eso pasa ANTES de llegar al último paso ("Pasar el testigo"),
+      # nadie relanza la siguiente sesión: el servidor se queda caído del todo hasta que alguien
+      # lo note y lo arranque a mano. Con 33 checkpoints de 10 min (330 min) más el arranque
+      # (~4 min) solo quedaban ~26 min de margen — y una sola operación de red (git push/fetch)
+      # que se quede colgada sin límite propio basta para comerse ese margen y hacer que el job
+      # entero muera a mitad de un checkpoint, justo lo que pasó. Arreglo doble: (1) bajado a 30
+      # checkpoints (300 min) para dejar ~55 min de margen real antes del tope de 360, y (2) cada
+      # operación de red de git en los checkpoints lleva ahora su propio "timeout" (nunca puede
+      # colgarse sin límite, como mucho falla rápido y el reintento con backoff ya existente se
+      # encarga del resto).
 
-      - name: Mantener la sesión activa (checkpoint 1/33 de la galería)
+
+      - name: Mantener la sesión activa (checkpoint 1/30 de la galería)
         run: sleep 600
 
-      - name: Guardar el respaldo permanente (checkpoint 1/33) — rama git, nunca caduca ni se desaloja
+      - name: Guardar el respaldo permanente (checkpoint 1/30) — rama git, nunca caduca ni se desaloja
         run: |
           cd /tmp/gallery-backup
           # Copia completa en vez de una sincronización incremental: no depende de rsync (no
@@ -274,7 +288,7 @@ jobs:
           committed=""
           if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
             echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 1/33 ($(date -u +%FT%TZ))"; then
+          elif git commit -q -m "Snapshot automático checkpoint 1/30 ($(date -u +%FT%TZ))"; then
             committed=1
           else
             echo "Nada que respaldar todavía (storage/ vacío)."
@@ -282,12 +296,12 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if git push -q origin HEAD:gallery-data; then
+              if timeout 90 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
@@ -296,10 +310,10 @@ jobs:
             fi
           fi
 
-      - name: Mantener la sesión activa (checkpoint 2/33 de la galería)
+      - name: Mantener la sesión activa (checkpoint 2/30 de la galería)
         run: sleep 600
 
-      - name: Guardar el respaldo permanente (checkpoint 2/33) — rama git, nunca caduca ni se desaloja
+      - name: Guardar el respaldo permanente (checkpoint 2/30) — rama git, nunca caduca ni se desaloja
         run: |
           cd /tmp/gallery-backup
           # Copia completa en vez de una sincronización incremental: no depende de rsync (no
@@ -318,7 +332,7 @@ jobs:
           committed=""
           if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
             echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 2/33 ($(date -u +%FT%TZ))"; then
+          elif git commit -q -m "Snapshot automático checkpoint 2/30 ($(date -u +%FT%TZ))"; then
             committed=1
           else
             echo "Nada que respaldar todavía (storage/ vacío)."
@@ -326,12 +340,12 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if git push -q origin HEAD:gallery-data; then
+              if timeout 90 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
@@ -340,10 +354,10 @@ jobs:
             fi
           fi
 
-      - name: Mantener la sesión activa (checkpoint 3/33 de la galería)
+      - name: Mantener la sesión activa (checkpoint 3/30 de la galería)
         run: sleep 600
 
-      - name: Guardar el respaldo permanente (checkpoint 3/33) — rama git, nunca caduca ni se desaloja
+      - name: Guardar el respaldo permanente (checkpoint 3/30) — rama git, nunca caduca ni se desaloja
         run: |
           cd /tmp/gallery-backup
           # Copia completa en vez de una sincronización incremental: no depende de rsync (no
@@ -362,7 +376,7 @@ jobs:
           committed=""
           if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
             echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 3/33 ($(date -u +%FT%TZ))"; then
+          elif git commit -q -m "Snapshot automático checkpoint 3/30 ($(date -u +%FT%TZ))"; then
             committed=1
           else
             echo "Nada que respaldar todavía (storage/ vacío)."
@@ -370,12 +384,12 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if git push -q origin HEAD:gallery-data; then
+              if timeout 90 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
@@ -384,10 +398,10 @@ jobs:
             fi
           fi
 
-      - name: Mantener la sesión activa (checkpoint 4/33 de la galería)
+      - name: Mantener la sesión activa (checkpoint 4/30 de la galería)
         run: sleep 600
 
-      - name: Guardar el respaldo permanente (checkpoint 4/33) — rama git, nunca caduca ni se desaloja
+      - name: Guardar el respaldo permanente (checkpoint 4/30) — rama git, nunca caduca ni se desaloja
         run: |
           cd /tmp/gallery-backup
           # Copia completa en vez de una sincronización incremental: no depende de rsync (no
@@ -406,7 +420,7 @@ jobs:
           committed=""
           if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
             echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 4/33 ($(date -u +%FT%TZ))"; then
+          elif git commit -q -m "Snapshot automático checkpoint 4/30 ($(date -u +%FT%TZ))"; then
             committed=1
           else
             echo "Nada que respaldar todavía (storage/ vacío)."
@@ -414,12 +428,12 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if git push -q origin HEAD:gallery-data; then
+              if timeout 90 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
@@ -428,10 +442,10 @@ jobs:
             fi
           fi
 
-      - name: Mantener la sesión activa (checkpoint 5/33 de la galería)
+      - name: Mantener la sesión activa (checkpoint 5/30 de la galería)
         run: sleep 600
 
-      - name: Guardar el respaldo permanente (checkpoint 5/33) — rama git, nunca caduca ni se desaloja
+      - name: Guardar el respaldo permanente (checkpoint 5/30) — rama git, nunca caduca ni se desaloja
         run: |
           cd /tmp/gallery-backup
           # Copia completa en vez de una sincronización incremental: no depende de rsync (no
@@ -450,7 +464,7 @@ jobs:
           committed=""
           if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
             echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 5/33 ($(date -u +%FT%TZ))"; then
+          elif git commit -q -m "Snapshot automático checkpoint 5/30 ($(date -u +%FT%TZ))"; then
             committed=1
           else
             echo "Nada que respaldar todavía (storage/ vacío)."
@@ -458,12 +472,12 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if git push -q origin HEAD:gallery-data; then
+              if timeout 90 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
@@ -472,10 +486,10 @@ jobs:
             fi
           fi
 
-      - name: Mantener la sesión activa (checkpoint 6/33 de la galería)
+      - name: Mantener la sesión activa (checkpoint 6/30 de la galería)
         run: sleep 600
 
-      - name: Guardar el respaldo permanente (checkpoint 6/33) — rama git, nunca caduca ni se desaloja
+      - name: Guardar el respaldo permanente (checkpoint 6/30) — rama git, nunca caduca ni se desaloja
         run: |
           cd /tmp/gallery-backup
           # Copia completa en vez de una sincronización incremental: no depende de rsync (no
@@ -494,7 +508,7 @@ jobs:
           committed=""
           if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
             echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 6/33 ($(date -u +%FT%TZ))"; then
+          elif git commit -q -m "Snapshot automático checkpoint 6/30 ($(date -u +%FT%TZ))"; then
             committed=1
           else
             echo "Nada que respaldar todavía (storage/ vacío)."
@@ -502,12 +516,12 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if git push -q origin HEAD:gallery-data; then
+              if timeout 90 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
@@ -516,10 +530,10 @@ jobs:
             fi
           fi
 
-      - name: Mantener la sesión activa (checkpoint 7/33 de la galería)
+      - name: Mantener la sesión activa (checkpoint 7/30 de la galería)
         run: sleep 600
 
-      - name: Guardar el respaldo permanente (checkpoint 7/33) — rama git, nunca caduca ni se desaloja
+      - name: Guardar el respaldo permanente (checkpoint 7/30) — rama git, nunca caduca ni se desaloja
         run: |
           cd /tmp/gallery-backup
           # Copia completa en vez de una sincronización incremental: no depende de rsync (no
@@ -538,7 +552,7 @@ jobs:
           committed=""
           if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
             echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 7/33 ($(date -u +%FT%TZ))"; then
+          elif git commit -q -m "Snapshot automático checkpoint 7/30 ($(date -u +%FT%TZ))"; then
             committed=1
           else
             echo "Nada que respaldar todavía (storage/ vacío)."
@@ -546,12 +560,12 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if git push -q origin HEAD:gallery-data; then
+              if timeout 90 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
@@ -560,10 +574,10 @@ jobs:
             fi
           fi
 
-      - name: Mantener la sesión activa (checkpoint 8/33 de la galería)
+      - name: Mantener la sesión activa (checkpoint 8/30 de la galería)
         run: sleep 600
 
-      - name: Guardar el respaldo permanente (checkpoint 8/33) — rama git, nunca caduca ni se desaloja
+      - name: Guardar el respaldo permanente (checkpoint 8/30) — rama git, nunca caduca ni se desaloja
         run: |
           cd /tmp/gallery-backup
           # Copia completa en vez de una sincronización incremental: no depende de rsync (no
@@ -582,7 +596,7 @@ jobs:
           committed=""
           if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
             echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 8/33 ($(date -u +%FT%TZ))"; then
+          elif git commit -q -m "Snapshot automático checkpoint 8/30 ($(date -u +%FT%TZ))"; then
             committed=1
           else
             echo "Nada que respaldar todavía (storage/ vacío)."
@@ -590,12 +604,12 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if git push -q origin HEAD:gallery-data; then
+              if timeout 90 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
@@ -604,10 +618,10 @@ jobs:
             fi
           fi
 
-      - name: Mantener la sesión activa (checkpoint 9/33 de la galería)
+      - name: Mantener la sesión activa (checkpoint 9/30 de la galería)
         run: sleep 600
 
-      - name: Guardar el respaldo permanente (checkpoint 9/33) — rama git, nunca caduca ni se desaloja
+      - name: Guardar el respaldo permanente (checkpoint 9/30) — rama git, nunca caduca ni se desaloja
         run: |
           cd /tmp/gallery-backup
           # Copia completa en vez de una sincronización incremental: no depende de rsync (no
@@ -626,7 +640,7 @@ jobs:
           committed=""
           if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
             echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 9/33 ($(date -u +%FT%TZ))"; then
+          elif git commit -q -m "Snapshot automático checkpoint 9/30 ($(date -u +%FT%TZ))"; then
             committed=1
           else
             echo "Nada que respaldar todavía (storage/ vacío)."
@@ -634,12 +648,12 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if git push -q origin HEAD:gallery-data; then
+              if timeout 90 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
@@ -648,10 +662,10 @@ jobs:
             fi
           fi
 
-      - name: Mantener la sesión activa (checkpoint 10/33 de la galería)
+      - name: Mantener la sesión activa (checkpoint 10/30 de la galería)
         run: sleep 600
 
-      - name: Guardar el respaldo permanente (checkpoint 10/33) — rama git, nunca caduca ni se desaloja
+      - name: Guardar el respaldo permanente (checkpoint 10/30) — rama git, nunca caduca ni se desaloja
         run: |
           cd /tmp/gallery-backup
           # Copia completa en vez de una sincronización incremental: no depende de rsync (no
@@ -670,7 +684,7 @@ jobs:
           committed=""
           if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
             echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 10/33 ($(date -u +%FT%TZ))"; then
+          elif git commit -q -m "Snapshot automático checkpoint 10/30 ($(date -u +%FT%TZ))"; then
             committed=1
           else
             echo "Nada que respaldar todavía (storage/ vacío)."
@@ -678,12 +692,12 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if git push -q origin HEAD:gallery-data; then
+              if timeout 90 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
@@ -692,10 +706,10 @@ jobs:
             fi
           fi
 
-      - name: Mantener la sesión activa (checkpoint 11/33 de la galería)
+      - name: Mantener la sesión activa (checkpoint 11/30 de la galería)
         run: sleep 600
 
-      - name: Guardar el respaldo permanente (checkpoint 11/33) — rama git, nunca caduca ni se desaloja
+      - name: Guardar el respaldo permanente (checkpoint 11/30) — rama git, nunca caduca ni se desaloja
         run: |
           cd /tmp/gallery-backup
           # Copia completa en vez de una sincronización incremental: no depende de rsync (no
@@ -714,7 +728,7 @@ jobs:
           committed=""
           if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
             echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 11/33 ($(date -u +%FT%TZ))"; then
+          elif git commit -q -m "Snapshot automático checkpoint 11/30 ($(date -u +%FT%TZ))"; then
             committed=1
           else
             echo "Nada que respaldar todavía (storage/ vacío)."
@@ -722,12 +736,12 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if git push -q origin HEAD:gallery-data; then
+              if timeout 90 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
@@ -736,10 +750,10 @@ jobs:
             fi
           fi
 
-      - name: Mantener la sesión activa (checkpoint 12/33 de la galería)
+      - name: Mantener la sesión activa (checkpoint 12/30 de la galería)
         run: sleep 600
 
-      - name: Guardar el respaldo permanente (checkpoint 12/33) — rama git, nunca caduca ni se desaloja
+      - name: Guardar el respaldo permanente (checkpoint 12/30) — rama git, nunca caduca ni se desaloja
         run: |
           cd /tmp/gallery-backup
           # Copia completa en vez de una sincronización incremental: no depende de rsync (no
@@ -758,7 +772,7 @@ jobs:
           committed=""
           if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
             echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 12/33 ($(date -u +%FT%TZ))"; then
+          elif git commit -q -m "Snapshot automático checkpoint 12/30 ($(date -u +%FT%TZ))"; then
             committed=1
           else
             echo "Nada que respaldar todavía (storage/ vacío)."
@@ -766,12 +780,12 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if git push -q origin HEAD:gallery-data; then
+              if timeout 90 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
@@ -780,10 +794,10 @@ jobs:
             fi
           fi
 
-      - name: Mantener la sesión activa (checkpoint 13/33 de la galería)
+      - name: Mantener la sesión activa (checkpoint 13/30 de la galería)
         run: sleep 600
 
-      - name: Guardar el respaldo permanente (checkpoint 13/33) — rama git, nunca caduca ni se desaloja
+      - name: Guardar el respaldo permanente (checkpoint 13/30) — rama git, nunca caduca ni se desaloja
         run: |
           cd /tmp/gallery-backup
           # Copia completa en vez de una sincronización incremental: no depende de rsync (no
@@ -802,7 +816,7 @@ jobs:
           committed=""
           if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
             echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 13/33 ($(date -u +%FT%TZ))"; then
+          elif git commit -q -m "Snapshot automático checkpoint 13/30 ($(date -u +%FT%TZ))"; then
             committed=1
           else
             echo "Nada que respaldar todavía (storage/ vacío)."
@@ -810,12 +824,12 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if git push -q origin HEAD:gallery-data; then
+              if timeout 90 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
@@ -824,10 +838,10 @@ jobs:
             fi
           fi
 
-      - name: Mantener la sesión activa (checkpoint 14/33 de la galería)
+      - name: Mantener la sesión activa (checkpoint 14/30 de la galería)
         run: sleep 600
 
-      - name: Guardar el respaldo permanente (checkpoint 14/33) — rama git, nunca caduca ni se desaloja
+      - name: Guardar el respaldo permanente (checkpoint 14/30) — rama git, nunca caduca ni se desaloja
         run: |
           cd /tmp/gallery-backup
           # Copia completa en vez de una sincronización incremental: no depende de rsync (no
@@ -846,7 +860,7 @@ jobs:
           committed=""
           if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
             echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 14/33 ($(date -u +%FT%TZ))"; then
+          elif git commit -q -m "Snapshot automático checkpoint 14/30 ($(date -u +%FT%TZ))"; then
             committed=1
           else
             echo "Nada que respaldar todavía (storage/ vacío)."
@@ -854,12 +868,12 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if git push -q origin HEAD:gallery-data; then
+              if timeout 90 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
@@ -868,10 +882,10 @@ jobs:
             fi
           fi
 
-      - name: Mantener la sesión activa (checkpoint 15/33 de la galería)
+      - name: Mantener la sesión activa (checkpoint 15/30 de la galería)
         run: sleep 600
 
-      - name: Guardar el respaldo permanente (checkpoint 15/33) — rama git, nunca caduca ni se desaloja
+      - name: Guardar el respaldo permanente (checkpoint 15/30) — rama git, nunca caduca ni se desaloja
         run: |
           cd /tmp/gallery-backup
           # Copia completa en vez de una sincronización incremental: no depende de rsync (no
@@ -890,7 +904,7 @@ jobs:
           committed=""
           if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
             echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 15/33 ($(date -u +%FT%TZ))"; then
+          elif git commit -q -m "Snapshot automático checkpoint 15/30 ($(date -u +%FT%TZ))"; then
             committed=1
           else
             echo "Nada que respaldar todavía (storage/ vacío)."
@@ -898,12 +912,12 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if git push -q origin HEAD:gallery-data; then
+              if timeout 90 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
@@ -912,10 +926,10 @@ jobs:
             fi
           fi
 
-      - name: Mantener la sesión activa (checkpoint 16/33 de la galería)
+      - name: Mantener la sesión activa (checkpoint 16/30 de la galería)
         run: sleep 600
 
-      - name: Guardar el respaldo permanente (checkpoint 16/33) — rama git, nunca caduca ni se desaloja
+      - name: Guardar el respaldo permanente (checkpoint 16/30) — rama git, nunca caduca ni se desaloja
         run: |
           cd /tmp/gallery-backup
           # Copia completa en vez de una sincronización incremental: no depende de rsync (no
@@ -934,7 +948,7 @@ jobs:
           committed=""
           if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
             echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 16/33 ($(date -u +%FT%TZ))"; then
+          elif git commit -q -m "Snapshot automático checkpoint 16/30 ($(date -u +%FT%TZ))"; then
             committed=1
           else
             echo "Nada que respaldar todavía (storage/ vacío)."
@@ -942,12 +956,12 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if git push -q origin HEAD:gallery-data; then
+              if timeout 90 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
@@ -956,10 +970,10 @@ jobs:
             fi
           fi
 
-      - name: Mantener la sesión activa (checkpoint 17/33 de la galería)
+      - name: Mantener la sesión activa (checkpoint 17/30 de la galería)
         run: sleep 600
 
-      - name: Guardar el respaldo permanente (checkpoint 17/33) — rama git, nunca caduca ni se desaloja
+      - name: Guardar el respaldo permanente (checkpoint 17/30) — rama git, nunca caduca ni se desaloja
         run: |
           cd /tmp/gallery-backup
           # Copia completa en vez de una sincronización incremental: no depende de rsync (no
@@ -978,7 +992,7 @@ jobs:
           committed=""
           if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
             echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 17/33 ($(date -u +%FT%TZ))"; then
+          elif git commit -q -m "Snapshot automático checkpoint 17/30 ($(date -u +%FT%TZ))"; then
             committed=1
           else
             echo "Nada que respaldar todavía (storage/ vacío)."
@@ -986,12 +1000,12 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if git push -q origin HEAD:gallery-data; then
+              if timeout 90 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
@@ -1000,10 +1014,10 @@ jobs:
             fi
           fi
 
-      - name: Mantener la sesión activa (checkpoint 18/33 de la galería)
+      - name: Mantener la sesión activa (checkpoint 18/30 de la galería)
         run: sleep 600
 
-      - name: Guardar el respaldo permanente (checkpoint 18/33) — rama git, nunca caduca ni se desaloja
+      - name: Guardar el respaldo permanente (checkpoint 18/30) — rama git, nunca caduca ni se desaloja
         run: |
           cd /tmp/gallery-backup
           # Copia completa en vez de una sincronización incremental: no depende de rsync (no
@@ -1022,7 +1036,7 @@ jobs:
           committed=""
           if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
             echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 18/33 ($(date -u +%FT%TZ))"; then
+          elif git commit -q -m "Snapshot automático checkpoint 18/30 ($(date -u +%FT%TZ))"; then
             committed=1
           else
             echo "Nada que respaldar todavía (storage/ vacío)."
@@ -1030,12 +1044,12 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if git push -q origin HEAD:gallery-data; then
+              if timeout 90 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
@@ -1044,10 +1058,10 @@ jobs:
             fi
           fi
 
-      - name: Mantener la sesión activa (checkpoint 19/33 de la galería)
+      - name: Mantener la sesión activa (checkpoint 19/30 de la galería)
         run: sleep 600
 
-      - name: Guardar el respaldo permanente (checkpoint 19/33) — rama git, nunca caduca ni se desaloja
+      - name: Guardar el respaldo permanente (checkpoint 19/30) — rama git, nunca caduca ni se desaloja
         run: |
           cd /tmp/gallery-backup
           # Copia completa en vez de una sincronización incremental: no depende de rsync (no
@@ -1066,7 +1080,7 @@ jobs:
           committed=""
           if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
             echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 19/33 ($(date -u +%FT%TZ))"; then
+          elif git commit -q -m "Snapshot automático checkpoint 19/30 ($(date -u +%FT%TZ))"; then
             committed=1
           else
             echo "Nada que respaldar todavía (storage/ vacío)."
@@ -1074,12 +1088,12 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if git push -q origin HEAD:gallery-data; then
+              if timeout 90 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
@@ -1088,10 +1102,10 @@ jobs:
             fi
           fi
 
-      - name: Mantener la sesión activa (checkpoint 20/33 de la galería)
+      - name: Mantener la sesión activa (checkpoint 20/30 de la galería)
         run: sleep 600
 
-      - name: Guardar el respaldo permanente (checkpoint 20/33) — rama git, nunca caduca ni se desaloja
+      - name: Guardar el respaldo permanente (checkpoint 20/30) — rama git, nunca caduca ni se desaloja
         run: |
           cd /tmp/gallery-backup
           # Copia completa en vez de una sincronización incremental: no depende de rsync (no
@@ -1110,7 +1124,7 @@ jobs:
           committed=""
           if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
             echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 20/33 ($(date -u +%FT%TZ))"; then
+          elif git commit -q -m "Snapshot automático checkpoint 20/30 ($(date -u +%FT%TZ))"; then
             committed=1
           else
             echo "Nada que respaldar todavía (storage/ vacío)."
@@ -1118,12 +1132,12 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if git push -q origin HEAD:gallery-data; then
+              if timeout 90 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
@@ -1132,10 +1146,10 @@ jobs:
             fi
           fi
 
-      - name: Mantener la sesión activa (checkpoint 21/33 de la galería)
+      - name: Mantener la sesión activa (checkpoint 21/30 de la galería)
         run: sleep 600
 
-      - name: Guardar el respaldo permanente (checkpoint 21/33) — rama git, nunca caduca ni se desaloja
+      - name: Guardar el respaldo permanente (checkpoint 21/30) — rama git, nunca caduca ni se desaloja
         run: |
           cd /tmp/gallery-backup
           # Copia completa en vez de una sincronización incremental: no depende de rsync (no
@@ -1154,7 +1168,7 @@ jobs:
           committed=""
           if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
             echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 21/33 ($(date -u +%FT%TZ))"; then
+          elif git commit -q -m "Snapshot automático checkpoint 21/30 ($(date -u +%FT%TZ))"; then
             committed=1
           else
             echo "Nada que respaldar todavía (storage/ vacío)."
@@ -1162,12 +1176,12 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if git push -q origin HEAD:gallery-data; then
+              if timeout 90 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
@@ -1176,10 +1190,10 @@ jobs:
             fi
           fi
 
-      - name: Mantener la sesión activa (checkpoint 22/33 de la galería)
+      - name: Mantener la sesión activa (checkpoint 22/30 de la galería)
         run: sleep 600
 
-      - name: Guardar el respaldo permanente (checkpoint 22/33) — rama git, nunca caduca ni se desaloja
+      - name: Guardar el respaldo permanente (checkpoint 22/30) — rama git, nunca caduca ni se desaloja
         run: |
           cd /tmp/gallery-backup
           # Copia completa en vez de una sincronización incremental: no depende de rsync (no
@@ -1198,7 +1212,7 @@ jobs:
           committed=""
           if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
             echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 22/33 ($(date -u +%FT%TZ))"; then
+          elif git commit -q -m "Snapshot automático checkpoint 22/30 ($(date -u +%FT%TZ))"; then
             committed=1
           else
             echo "Nada que respaldar todavía (storage/ vacío)."
@@ -1206,12 +1220,12 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if git push -q origin HEAD:gallery-data; then
+              if timeout 90 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
@@ -1220,10 +1234,10 @@ jobs:
             fi
           fi
 
-      - name: Mantener la sesión activa (checkpoint 23/33 de la galería)
+      - name: Mantener la sesión activa (checkpoint 23/30 de la galería)
         run: sleep 600
 
-      - name: Guardar el respaldo permanente (checkpoint 23/33) — rama git, nunca caduca ni se desaloja
+      - name: Guardar el respaldo permanente (checkpoint 23/30) — rama git, nunca caduca ni se desaloja
         run: |
           cd /tmp/gallery-backup
           # Copia completa en vez de una sincronización incremental: no depende de rsync (no
@@ -1242,7 +1256,7 @@ jobs:
           committed=""
           if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
             echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 23/33 ($(date -u +%FT%TZ))"; then
+          elif git commit -q -m "Snapshot automático checkpoint 23/30 ($(date -u +%FT%TZ))"; then
             committed=1
           else
             echo "Nada que respaldar todavía (storage/ vacío)."
@@ -1250,12 +1264,12 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if git push -q origin HEAD:gallery-data; then
+              if timeout 90 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
@@ -1264,10 +1278,10 @@ jobs:
             fi
           fi
 
-      - name: Mantener la sesión activa (checkpoint 24/33 de la galería)
+      - name: Mantener la sesión activa (checkpoint 24/30 de la galería)
         run: sleep 600
 
-      - name: Guardar el respaldo permanente (checkpoint 24/33) — rama git, nunca caduca ni se desaloja
+      - name: Guardar el respaldo permanente (checkpoint 24/30) — rama git, nunca caduca ni se desaloja
         run: |
           cd /tmp/gallery-backup
           # Copia completa en vez de una sincronización incremental: no depende de rsync (no
@@ -1286,7 +1300,7 @@ jobs:
           committed=""
           if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
             echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 24/33 ($(date -u +%FT%TZ))"; then
+          elif git commit -q -m "Snapshot automático checkpoint 24/30 ($(date -u +%FT%TZ))"; then
             committed=1
           else
             echo "Nada que respaldar todavía (storage/ vacío)."
@@ -1294,12 +1308,12 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if git push -q origin HEAD:gallery-data; then
+              if timeout 90 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
@@ -1308,10 +1322,10 @@ jobs:
             fi
           fi
 
-      - name: Mantener la sesión activa (checkpoint 25/33 de la galería)
+      - name: Mantener la sesión activa (checkpoint 25/30 de la galería)
         run: sleep 600
 
-      - name: Guardar el respaldo permanente (checkpoint 25/33) — rama git, nunca caduca ni se desaloja
+      - name: Guardar el respaldo permanente (checkpoint 25/30) — rama git, nunca caduca ni se desaloja
         run: |
           cd /tmp/gallery-backup
           # Copia completa en vez de una sincronización incremental: no depende de rsync (no
@@ -1330,7 +1344,7 @@ jobs:
           committed=""
           if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
             echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 25/33 ($(date -u +%FT%TZ))"; then
+          elif git commit -q -m "Snapshot automático checkpoint 25/30 ($(date -u +%FT%TZ))"; then
             committed=1
           else
             echo "Nada que respaldar todavía (storage/ vacío)."
@@ -1338,12 +1352,12 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if git push -q origin HEAD:gallery-data; then
+              if timeout 90 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
@@ -1352,10 +1366,10 @@ jobs:
             fi
           fi
 
-      - name: Mantener la sesión activa (checkpoint 26/33 de la galería)
+      - name: Mantener la sesión activa (checkpoint 26/30 de la galería)
         run: sleep 600
 
-      - name: Guardar el respaldo permanente (checkpoint 26/33) — rama git, nunca caduca ni se desaloja
+      - name: Guardar el respaldo permanente (checkpoint 26/30) — rama git, nunca caduca ni se desaloja
         run: |
           cd /tmp/gallery-backup
           # Copia completa en vez de una sincronización incremental: no depende de rsync (no
@@ -1374,7 +1388,7 @@ jobs:
           committed=""
           if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
             echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 26/33 ($(date -u +%FT%TZ))"; then
+          elif git commit -q -m "Snapshot automático checkpoint 26/30 ($(date -u +%FT%TZ))"; then
             committed=1
           else
             echo "Nada que respaldar todavía (storage/ vacío)."
@@ -1382,12 +1396,12 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if git push -q origin HEAD:gallery-data; then
+              if timeout 90 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
@@ -1396,10 +1410,10 @@ jobs:
             fi
           fi
 
-      - name: Mantener la sesión activa (checkpoint 27/33 de la galería)
+      - name: Mantener la sesión activa (checkpoint 27/30 de la galería)
         run: sleep 600
 
-      - name: Guardar el respaldo permanente (checkpoint 27/33) — rama git, nunca caduca ni se desaloja
+      - name: Guardar el respaldo permanente (checkpoint 27/30) — rama git, nunca caduca ni se desaloja
         run: |
           cd /tmp/gallery-backup
           # Copia completa en vez de una sincronización incremental: no depende de rsync (no
@@ -1418,7 +1432,7 @@ jobs:
           committed=""
           if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
             echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 27/33 ($(date -u +%FT%TZ))"; then
+          elif git commit -q -m "Snapshot automático checkpoint 27/30 ($(date -u +%FT%TZ))"; then
             committed=1
           else
             echo "Nada que respaldar todavía (storage/ vacío)."
@@ -1426,12 +1440,12 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if git push -q origin HEAD:gallery-data; then
+              if timeout 90 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
@@ -1440,10 +1454,10 @@ jobs:
             fi
           fi
 
-      - name: Mantener la sesión activa (checkpoint 28/33 de la galería)
+      - name: Mantener la sesión activa (checkpoint 28/30 de la galería)
         run: sleep 600
 
-      - name: Guardar el respaldo permanente (checkpoint 28/33) — rama git, nunca caduca ni se desaloja
+      - name: Guardar el respaldo permanente (checkpoint 28/30) — rama git, nunca caduca ni se desaloja
         run: |
           cd /tmp/gallery-backup
           # Copia completa en vez de una sincronización incremental: no depende de rsync (no
@@ -1462,7 +1476,7 @@ jobs:
           committed=""
           if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
             echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 28/33 ($(date -u +%FT%TZ))"; then
+          elif git commit -q -m "Snapshot automático checkpoint 28/30 ($(date -u +%FT%TZ))"; then
             committed=1
           else
             echo "Nada que respaldar todavía (storage/ vacío)."
@@ -1470,12 +1484,12 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if git push -q origin HEAD:gallery-data; then
+              if timeout 90 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
@@ -1484,10 +1498,10 @@ jobs:
             fi
           fi
 
-      - name: Mantener la sesión activa (checkpoint 29/33 de la galería)
+      - name: Mantener la sesión activa (checkpoint 29/30 de la galería)
         run: sleep 600
 
-      - name: Guardar el respaldo permanente (checkpoint 29/33) — rama git, nunca caduca ni se desaloja
+      - name: Guardar el respaldo permanente (checkpoint 29/30) — rama git, nunca caduca ni se desaloja
         run: |
           cd /tmp/gallery-backup
           # Copia completa en vez de una sincronización incremental: no depende de rsync (no
@@ -1506,7 +1520,7 @@ jobs:
           committed=""
           if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
             echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 29/33 ($(date -u +%FT%TZ))"; then
+          elif git commit -q -m "Snapshot automático checkpoint 29/30 ($(date -u +%FT%TZ))"; then
             committed=1
           else
             echo "Nada que respaldar todavía (storage/ vacío)."
@@ -1514,12 +1528,12 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if git push -q origin HEAD:gallery-data; then
+              if timeout 90 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
@@ -1528,10 +1542,10 @@ jobs:
             fi
           fi
 
-      - name: Mantener la sesión activa (checkpoint 30/33 de la galería)
+      - name: Mantener la sesión activa (checkpoint 30/30 de la galería)
         run: sleep 600
 
-      - name: Guardar el respaldo permanente (checkpoint 30/33) — rama git, nunca caduca ni se desaloja
+      - name: Guardar el respaldo permanente (checkpoint 30/30) — rama git, nunca caduca ni se desaloja
         run: |
           cd /tmp/gallery-backup
           # Copia completa en vez de una sincronización incremental: no depende de rsync (no
@@ -1550,7 +1564,7 @@ jobs:
           committed=""
           if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
             echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 30/33 ($(date -u +%FT%TZ))"; then
+          elif git commit -q -m "Snapshot automático checkpoint 30/30 ($(date -u +%FT%TZ))"; then
             committed=1
           else
             echo "Nada que respaldar todavía (storage/ vacío)."
@@ -1558,12 +1572,12 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if git push -q origin HEAD:gallery-data; then
+              if timeout 90 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
@@ -1571,139 +1585,6 @@ jobs:
               echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
             fi
           fi
-
-      - name: Mantener la sesión activa (checkpoint 31/33 de la galería)
-        run: sleep 600
-
-      - name: Guardar el respaldo permanente (checkpoint 31/33) — rama git, nunca caduca ni se desaloja
-        run: |
-          cd /tmp/gallery-backup
-          # Copia completa en vez de una sincronización incremental: no depende de rsync (no
-          # viene garantizado en todos los runners) y así los archivos borrados en storage/ (p.ej.
-          # limpieza futura de vídeos ya publicados) tampoco se quedan para siempre en el respaldo.
-          rm -rf storage
-          mkdir -p storage
-          cp -a "$GITHUB_WORKSPACE/storage/." storage/
-          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
-          # pesado no rompa el guardado de TODOS los demás.
-          find storage -type f -size +95M -print | while read -r f; do
-            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
-            rm -f "$f"
-          done
-          git add -A
-          committed=""
-          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
-            echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 31/33 ($(date -u +%FT%TZ))"; then
-            committed=1
-          else
-            echo "Nada que respaldar todavía (storage/ vacío)."
-          fi
-          if [ -n "$committed" ]; then
-            ok=""
-            for attempt in 1 2 3 4; do
-              if git push -q origin HEAD:gallery-data; then
-                ok=1
-                break
-              fi
-              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              git fetch -q origin gallery-data 2>/dev/null || true
-              git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
-              sleep $((attempt * 5))
-            done
-            if [ -z "$ok" ]; then
-              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
-            fi
-          fi
-
-      - name: Mantener la sesión activa (checkpoint 32/33 de la galería)
-        run: sleep 600
-
-      - name: Guardar el respaldo permanente (checkpoint 32/33) — rama git, nunca caduca ni se desaloja
-        run: |
-          cd /tmp/gallery-backup
-          # Copia completa en vez de una sincronización incremental: no depende de rsync (no
-          # viene garantizado en todos los runners) y así los archivos borrados en storage/ (p.ej.
-          # limpieza futura de vídeos ya publicados) tampoco se quedan para siempre en el respaldo.
-          rm -rf storage
-          mkdir -p storage
-          cp -a "$GITHUB_WORKSPACE/storage/." storage/
-          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
-          # pesado no rompa el guardado de TODOS los demás.
-          find storage -type f -size +95M -print | while read -r f; do
-            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
-            rm -f "$f"
-          done
-          git add -A
-          committed=""
-          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
-            echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 32/33 ($(date -u +%FT%TZ))"; then
-            committed=1
-          else
-            echo "Nada que respaldar todavía (storage/ vacío)."
-          fi
-          if [ -n "$committed" ]; then
-            ok=""
-            for attempt in 1 2 3 4; do
-              if git push -q origin HEAD:gallery-data; then
-                ok=1
-                break
-              fi
-              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              git fetch -q origin gallery-data 2>/dev/null || true
-              git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
-              sleep $((attempt * 5))
-            done
-            if [ -z "$ok" ]; then
-              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
-            fi
-          fi
-
-      - name: Mantener la sesión activa (checkpoint 33/33 de la galería)
-        run: sleep 600
-
-      - name: Guardar el respaldo permanente (checkpoint 33/33) — rama git, nunca caduca ni se desaloja
-        run: |
-          cd /tmp/gallery-backup
-          # Copia completa en vez de una sincronización incremental: no depende de rsync (no
-          # viene garantizado en todos los runners) y así los archivos borrados en storage/ (p.ej.
-          # limpieza futura de vídeos ya publicados) tampoco se quedan para siempre en el respaldo.
-          rm -rf storage
-          mkdir -p storage
-          cp -a "$GITHUB_WORKSPACE/storage/." storage/
-          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
-          # pesado no rompa el guardado de TODOS los demás.
-          find storage -type f -size +95M -print | while read -r f; do
-            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
-            rm -f "$f"
-          done
-          git add -A
-          committed=""
-          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
-            echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 33/33 ($(date -u +%FT%TZ))"; then
-            committed=1
-          else
-            echo "Nada que respaldar todavía (storage/ vacío)."
-          fi
-          if [ -n "$committed" ]; then
-            ok=""
-            for attempt in 1 2 3 4; do
-              if git push -q origin HEAD:gallery-data; then
-                ok=1
-                break
-              fi
-              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              git fetch -q origin gallery-data 2>/dev/null || true
-              git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
-              sleep $((attempt * 5))
-            done
-            if [ -z "$ok" ]; then
-              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
-            fi
-          fi
-
       - name: Pasar el testigo a la siguiente sesión
         if: ${{ vars.SERVER_ENABLED != 'false' }}
         env:

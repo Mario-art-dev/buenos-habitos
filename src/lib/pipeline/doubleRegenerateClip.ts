@@ -11,6 +11,7 @@ import {
 import { cutSplitScreenClip, applyCustomTextOverlay, burnCustomTitleBar, doubleTopHalfHeight, extractThumbnail } from "./clip";
 import { buildCustomTextAss, buildBigCaptionsAssFromCues, defaultSplitDoubleCaptionsStyle, type CustomTextElement, type StoredCue } from "./bigCaptions";
 import { probeVideo, pickVerticalResolution } from "./probe";
+import { partLabel } from "@/lib/lang";
 
 /**
  * Reconstruye un clip de DOUBLE (pantalla dividida): vuelve a componer la parte a partir de los
@@ -54,7 +55,7 @@ export async function regenerateDoubleClip(clipId: string): Promise<void> {
       topEndSec,
       bottomSourcePath: bottomPath,
       bottomStartSec,
-      label: `Parte ${clip.rank}`,
+      label: partLabel(clip.job.contentLanguage, clip.rank),
       outPath,
       resolution,
     });

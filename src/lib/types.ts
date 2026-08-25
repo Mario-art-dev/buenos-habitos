@@ -7,7 +7,7 @@ export type JobStatus =
   | "DONE"
   | "FAILED";
 
-export type ClipStatus = "PENDING" | "RENDERING" | "READY" | "FAILED";
+export type ClipStatus = "PENDING" | "RENDERING" | "READY" | "FAILED" | "PUBLISHED";
 
 export type Platform = "YOUTUBE" | "TIKTOK";
 
