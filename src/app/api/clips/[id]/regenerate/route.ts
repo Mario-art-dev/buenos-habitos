@@ -15,7 +15,14 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
   try {
     await regenerateClip(params.id);
   } catch (err) {
-    return NextResponse.json({ error: (err as Error).message }, { status: 502 });
+    const message = (err as Error).message;
+    // Si esto era un reintento sobre un clip en FAILED, se actualiza el error guardado al motivo
+    // real de este intento — si no, la próxima vez que se abra la página seguiría mostrando el
+    // motivo del fallo anterior aunque ya no sea el que está pasando ahora.
+    if (clip.status === "FAILED") {
+      await db.clip.update({ where: { id: params.id }, data: { error: message } }).catch(() => {});
+    }
+    return NextResponse.json({ error: message }, { status: 502 });
   }
 
   const updated = await db.clip.findUniqueOrThrow({ where: { id: params.id } });

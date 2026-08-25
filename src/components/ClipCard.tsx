@@ -200,6 +200,26 @@ export default function ClipCard({ clip }: { clip: ClipData }) {
   const [note, setNote] = useState<string | null>(null);
   const [videoVersion, setVideoVersion] = useState(0);
 
+  const [clipStatus, setClipStatus] = useState(clip.status);
+  const [clipError, setClipError] = useState(clip.error ?? null);
+  const [retrying, setRetrying] = useState(false);
+
+  async function retryClip() {
+    setRetrying(true);
+    try {
+      const res = await fetch(`/api/clips/${clip.id}/regenerate`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "No se pudo reintentar");
+      setClipStatus("READY");
+      setClipError(null);
+      setVideoVersion((v) => v + 1);
+    } catch (err) {
+      setClipError((err as Error).message);
+    } finally {
+      setRetrying(false);
+    }
+  }
+
   const [editingMeta, setEditingMeta] = useState(false);
   const [savingMeta, setSavingMeta] = useState(false);
   const [metaError, setMetaError] = useState<string | null>(null);
@@ -273,12 +293,19 @@ export default function ClipCard({ clip }: { clip: ClipData }) {
     <div className="overflow-hidden rounded-2xl border border-ink-700 bg-ink-800">
       <div className="flex flex-col sm:flex-row">
         <div className="flex aspect-[9/16] w-full items-center justify-center bg-black sm:w-48 shrink-0">
-          {clip.status === "READY" && videoSrc ? (
+          {clipStatus === "READY" && videoSrc ? (
             <video src={videoSrc} poster={clip.thumbnailUrl ?? undefined} controls className="h-full w-full object-cover" />
-          ) : clip.status === "FAILED" ? (
-            <p className="p-3 text-center text-xs text-red-400">
-              Error generando el clip{clip.error ? `: ${clip.error}` : ""}
-            </p>
+          ) : clipStatus === "FAILED" ? (
+            <div className="p-3 text-center">
+              <p className="text-xs text-red-400">Error generando el clip{clipError ? `: ${clipError}` : ""}</p>
+              <button
+                disabled={retrying}
+                onClick={retryClip}
+                className="mt-2 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
+              >
+                {retrying ? "Reintentando…" : "🔁 Reintentar"}
+              </button>
+            </div>
           ) : (
             <p className="p-3 text-center text-xs text-slate-500">Generando…</p>
           )}
@@ -396,18 +423,18 @@ export default function ClipCard({ clip }: { clip: ClipData }) {
             </div>
           )}
 
-          {clip.status === "READY" && <MusicPanel clip={clip} onApplied={() => setVideoVersion((v) => v + 1)} />}
+          {clipStatus === "READY" && <MusicPanel clip={clip} onApplied={() => setVideoVersion((v) => v + 1)} />}
 
           <div className="mt-4 flex flex-wrap items-center gap-2">
             <button
-              disabled={clip.status !== "READY" || publishing === "YOUTUBE"}
+              disabled={clipStatus !== "READY" || publishing === "YOUTUBE"}
               onClick={() => publish("YOUTUBE")}
               className="rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-40"
             >
               {yt?.status === "PUBLISHED" ? "✓ Publicado en YouTube" : publishing === "YOUTUBE" ? "Subiendo…" : "Publicar en YouTube"}
             </button>
             <button
-              disabled={clip.status !== "READY" || publishing === "TIKTOK"}
+              disabled={clipStatus !== "READY" || publishing === "TIKTOK"}
               onClick={() => publish("TIKTOK")}
               className="rounded-lg bg-slate-100 px-3 py-2 text-xs font-semibold text-black disabled:opacity-40"
             >
@@ -417,7 +444,7 @@ export default function ClipCard({ clip }: { clip: ClipData }) {
                   ? "Subiendo…"
                   : "Publicar en TikTok"}
             </button>
-            {clip.status === "READY" && (
+            {clipStatus === "READY" && (
               <a
                 href={`/api/clips/${clip.id}/download`}
                 className="rounded-lg border border-ink-600 px-3 py-2 text-xs font-semibold text-slate-200 hover:border-brand-500"
@@ -425,7 +452,7 @@ export default function ClipCard({ clip }: { clip: ClipData }) {
                 ⬇ Descargar
               </a>
             )}
-            {clip.status === "READY" && (
+            {clipStatus === "READY" && (
               <Link
                 href={`/clips/${clip.id}/edit`}
                 className="rounded-lg border border-ink-600 px-3 py-2 text-xs font-semibold text-slate-200 hover:border-brand-500"
