@@ -1,0 +1,104 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Big,Comic Neue,77,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,6,0,5,60,60,0,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.03,0:00:00.85,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}TENGO{\c&HFFFFFF&\fscx100\fscy100} QUE INICIAR EL
+Dialogue: 0,0:00:00.85,0:00:00.97,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}TENGO {\c&H66FF00&\fscx125\fscy125}QUE{\c&HFFFFFF&\fscx100\fscy100} INICIAR EL
+Dialogue: 0,0:00:00.97,0:00:01.31,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}TENGO QUE {\c&H66FF00&\fscx125\fscy125}INICIAR{\c&HFFFFFF&\fscx100\fscy100} EL
+Dialogue: 0,0:00:01.31,0:00:01.43,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}TENGO QUE INICIAR {\c&H66FF00&\fscx125\fscy125}EL{\c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 0,0:00:01.43,0:00:01.67,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}OBS.{\c&HFFFFFF&\fscx100\fscy100} TENGO DELAY.
+Dialogue: 0,0:00:01.67,0:00:01.93,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}OBS. TENGO DELAY.
+Dialogue: 0,0:00:01.93,0:00:02.09,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}OBS. {\c&H66FF00&\fscx125\fscy125}TENGO{\c&HFFFFFF&\fscx100\fscy100} DELAY.
+Dialogue: 0,0:00:02.09,0:00:02.31,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}OBS. TENGO {\c&H66FF00&\fscx125\fscy125}DELAY.{\c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 0,0:00:02.71,0:00:03.03,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}TÚ{\c&HFFFFFF&\fscx100\fscy100} ESTÁS DE COÑA.
+Dialogue: 0,0:00:03.03,0:00:03.17,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}TÚ {\c&H66FF00&\fscx125\fscy125}ESTÁS{\c&HFFFFFF&\fscx100\fscy100} DE COÑA.
+Dialogue: 0,0:00:03.17,0:00:03.35,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}TÚ ESTÁS {\c&H66FF00&\fscx125\fscy125}DE{\c&HFFFFFF&\fscx100\fscy100} COÑA.
+Dialogue: 0,0:00:03.35,0:00:03.59,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}TÚ ESTÁS DE {\c&H66FF00&\fscx125\fscy125}COÑA.{\c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 0,0:00:04.87,0:00:05.35,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}PERO...{\c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 0,0:00:15.50,0:00:15.98,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}ME{\c&HFFFFFF&\fscx100\fscy100} TENGO QUE CAMBIAR
+Dialogue: 0,0:00:15.98,0:00:16.14,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}ME {\c&H66FF00&\fscx125\fscy125}TENGO{\c&HFFFFFF&\fscx100\fscy100} QUE CAMBIAR
+Dialogue: 0,0:00:16.14,0:00:16.24,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}ME TENGO {\c&H66FF00&\fscx125\fscy125}QUE{\c&HFFFFFF&\fscx100\fscy100} CAMBIAR
+Dialogue: 0,0:00:16.24,0:00:16.48,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}ME TENGO QUE {\c&H66FF00&\fscx125\fscy125}CAMBIAR{\c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 0,0:00:16.48,0:00:16.64,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}DE{\c&HFFFFFF&\fscx100\fscy100} FREGANCIA.
+Dialogue: 0,0:00:16.64,0:00:17.08,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}DE {\c&H66FF00&\fscx125\fscy125}FREGANCIA.{\c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 0,0:00:17.62,0:00:17.86,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}ME{\c&HFFFFFF&\fscx100\fscy100} TENGO QUE CAMBIAR
+Dialogue: 0,0:00:17.86,0:00:18.08,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}ME {\c&H66FF00&\fscx125\fscy125}TENGO{\c&HFFFFFF&\fscx100\fscy100} QUE CAMBIAR
+Dialogue: 0,0:00:18.08,0:00:18.20,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}ME TENGO {\c&H66FF00&\fscx125\fscy125}QUE{\c&HFFFFFF&\fscx100\fscy100} CAMBIAR
+Dialogue: 0,0:00:18.20,0:00:18.44,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}ME TENGO QUE {\c&H66FF00&\fscx125\fscy125}CAMBIAR{\c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 0,0:00:18.44,0:00:18.62,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}DE{\c&HFFFFFF&\fscx100\fscy100} FREGANCIA, CHAT.
+Dialogue: 0,0:00:18.62,0:00:19.08,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}DE {\c&H66FF00&\fscx125\fscy125}FREGANCIA,{\c&HFFFFFF&\fscx100\fscy100} CHAT.
+Dialogue: 0,0:00:19.08,0:00:19.20,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}DE FREGANCIA, CHAT.
+Dialogue: 0,0:00:19.20,0:00:19.32,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}DE FREGANCIA, {\c&H66FF00&\fscx125\fscy125}CHAT.{\c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 0,0:00:19.82,0:00:19.88,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}ME{\c&HFFFFFF&\fscx100\fscy100} TENGO QUE CA...
+Dialogue: 0,0:00:19.88,0:00:20.12,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}ME {\c&H66FF00&\fscx125\fscy125}TENGO{\c&HFFFFFF&\fscx100\fscy100} QUE CA...
+Dialogue: 0,0:00:20.12,0:00:20.26,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}ME TENGO {\c&H66FF00&\fscx125\fscy125}QUE{\c&HFFFFFF&\fscx100\fscy100} CA...
+Dialogue: 0,0:00:20.26,0:00:20.54,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}ME TENGO QUE {\c&H66FF00&\fscx125\fscy125}CA...{\c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 0,0:00:20.54,0:00:20.82,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}PERO{\c&HFFFFFF&\fscx100\fscy100} PORQUE HA VENIDO
+Dialogue: 0,0:00:20.82,0:00:21.06,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}PERO {\c&H66FF00&\fscx125\fscy125}PORQUE{\c&HFFFFFF&\fscx100\fscy100} HA VENIDO
+Dialogue: 0,0:00:21.06,0:00:21.16,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}PERO PORQUE {\c&H66FF00&\fscx125\fscy125}HA{\c&HFFFFFF&\fscx100\fscy100} VENIDO
+Dialogue: 0,0:00:21.16,0:00:21.36,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}PERO PORQUE HA {\c&H66FF00&\fscx125\fscy125}VENIDO{\c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 0,0:00:21.36,0:00:21.50,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}EL{\c&HFFFFFF&\fscx100\fscy100} RUBIUS. HACERME ASÍ
+Dialogue: 0,0:00:21.50,0:00:21.84,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}EL {\c&H66FF00&\fscx125\fscy125}RUBIUS.{\c&HFFFFFF&\fscx100\fscy100} HACERME ASÍ
+Dialogue: 0,0:00:21.84,0:00:22.18,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}EL RUBIUS. HACERME ASÍ
+Dialogue: 0,0:00:22.18,0:00:22.44,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}EL RUBIUS. {\c&H66FF00&\fscx125\fscy125}HACERME{\c&HFFFFFF&\fscx100\fscy100} ASÍ
+Dialogue: 0,0:00:22.44,0:00:22.74,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}EL RUBIUS. HACERME {\c&H66FF00&\fscx125\fscy125}ASÍ{\c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 0,0:00:22.74,0:00:22.88,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}EN{\c&HFFFFFF&\fscx100\fscy100} EL ARBUSTO.
+Dialogue: 0,0:00:22.88,0:00:22.98,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}EN {\c&H66FF00&\fscx125\fscy125}EL{\c&HFFFFFF&\fscx100\fscy100} ARBUSTO.
+Dialogue: 0,0:00:22.98,0:00:23.30,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}EN EL {\c&H66FF00&\fscx125\fscy125}ARBUSTO.{\c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 0,0:00:24.02,0:00:24.30,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}¿POR{\c&HFFFFFF&\fscx100\fscy100} QUÉ, BRO?
+Dialogue: 0,0:00:24.30,0:00:24.48,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}¿POR {\c&H66FF00&\fscx125\fscy125}QUÉ,{\c&HFFFFFF&\fscx100\fscy100} BRO?
+Dialogue: 0,0:00:24.48,0:00:24.56,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}¿POR QUÉ, BRO?
+Dialogue: 0,0:00:24.56,0:00:24.68,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}¿POR QUÉ, {\c&H66FF00&\fscx125\fscy125}BRO?{\c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 0,0:00:25.90,0:00:26.04,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}QUE{\c&HFFFFFF&\fscx100\fscy100} INDICIOS ESTABA DE
+Dialogue: 0,0:00:26.04,0:00:26.52,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}QUE {\c&H66FF00&\fscx125\fscy125}INDICIOS{\c&HFFFFFF&\fscx100\fscy100} ESTABA DE
+Dialogue: 0,0:00:26.52,0:00:26.78,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}QUE INDICIOS {\c&H66FF00&\fscx125\fscy125}ESTABA{\c&HFFFFFF&\fscx100\fscy100} DE
+Dialogue: 0,0:00:26.78,0:00:26.94,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}QUE INDICIOS ESTABA {\c&H66FF00&\fscx125\fscy125}DE{\c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 0,0:00:26.94,0:00:27.14,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}YO{\c&HFFFFFF&\fscx100\fscy100} DANDO COMO ARBUSTO
+Dialogue: 0,0:00:27.14,0:00:27.58,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}YO {\c&H66FF00&\fscx125\fscy125}DANDO{\c&HFFFFFF&\fscx100\fscy100} COMO ARBUSTO
+Dialogue: 0,0:00:27.58,0:00:27.88,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}YO DANDO {\c&H66FF00&\fscx125\fscy125}COMO{\c&HFFFFFF&\fscx100\fscy100} ARBUSTO
+Dialogue: 0,0:00:27.88,0:00:28.34,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}YO DANDO COMO {\c&H66FF00&\fscx125\fscy125}ARBUSTO{\c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 0,0:00:28.34,0:00:29.00,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}INANO...{\c&HFFFFFF&\fscx100\fscy100} Y... INMÓVIL.
+Dialogue: 0,0:00:29.00,0:00:29.44,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}INANO... {\c&H66FF00&\fscx125\fscy125}Y...{\c&HFFFFFF&\fscx100\fscy100} INMÓVIL.
+Dialogue: 0,0:00:29.44,0:00:30.06,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}INANO... Y... {\c&H66FF00&\fscx125\fscy125}INMÓVIL.{\c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 0,0:00:30.46,0:00:30.58,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}Y{\c&HFFFFFF&\fscx100\fscy100} SIN VIDA ALGUNA.
+Dialogue: 0,0:00:30.58,0:00:30.76,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}Y {\c&H66FF00&\fscx125\fscy125}SIN{\c&HFFFFFF&\fscx100\fscy100} VIDA ALGUNA.
+Dialogue: 0,0:00:30.76,0:00:30.98,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}Y SIN {\c&H66FF00&\fscx125\fscy125}VIDA{\c&HFFFFFF&\fscx100\fscy100} ALGUNA.
+Dialogue: 0,0:00:30.98,0:00:31.42,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}Y SIN VIDA {\c&H66FF00&\fscx125\fscy125}ALGUNA.{\c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 0,0:00:31.88,0:00:32.00,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}PARA{\c&HFFFFFF&\fscx100\fscy100} QUE VEGA EL
+Dialogue: 0,0:00:32.00,0:00:32.16,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}PARA {\c&H66FF00&\fscx125\fscy125}QUE{\c&HFFFFFF&\fscx100\fscy100} VEGA EL
+Dialogue: 0,0:00:32.16,0:00:32.40,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}PARA QUE {\c&H66FF00&\fscx125\fscy125}VEGA{\c&HFFFFFF&\fscx100\fscy100} EL
+Dialogue: 0,0:00:32.40,0:00:32.52,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}PARA QUE VEGA {\c&H66FF00&\fscx125\fscy125}EL{\c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 0,0:00:32.52,0:00:32.92,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}RUBIUS.{\c&HFFFFFF&\fscx100\fscy100} ¡AH, NI FÁCIL!
+Dialogue: 0,0:00:32.92,0:00:33.24,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}RUBIUS. ¡AH, NI FÁCIL!
+Dialogue: 0,0:00:33.24,0:00:33.36,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}RUBIUS. {\c&H66FF00&\fscx125\fscy125}¡AH,{\c&HFFFFFF&\fscx100\fscy100} NI FÁCIL!
+Dialogue: 0,0:00:33.36,0:00:33.38,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}RUBIUS. ¡AH, NI FÁCIL!
+Dialogue: 0,0:00:33.38,0:00:33.56,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}RUBIUS. ¡AH, {\c&H66FF00&\fscx125\fscy125}NI{\c&HFFFFFF&\fscx100\fscy100} FÁCIL!
+Dialogue: 0,0:00:33.56,0:00:33.78,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}RUBIUS. ¡AH, NI {\c&H66FF00&\fscx125\fscy125}FÁCIL!{\c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 0,0:00:34.06,0:00:34.30,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}¡DALGA{\c&HFFFFFF&\fscx100\fscy100} CON CARIDAD! ¡DE
+Dialogue: 0,0:00:34.30,0:00:34.66,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}¡DALGA {\c&H66FF00&\fscx125\fscy125}CON{\c&HFFFFFF&\fscx100\fscy100} CARIDAD! ¡DE
+Dialogue: 0,0:00:34.66,0:00:35.08,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}¡DALGA CON {\c&H66FF00&\fscx125\fscy125}CARIDAD!{\c&HFFFFFF&\fscx100\fscy100} ¡DE
+Dialogue: 0,0:00:35.08,0:00:35.28,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}¡DALGA CON CARIDAD! ¡DE
+Dialogue: 0,0:00:35.28,0:00:35.40,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}¡DALGA CON CARIDAD! {\c&H66FF00&\fscx125\fscy125}¡DE{\c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 0,0:00:35.40,0:00:35.52,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}PARA{\c&HFFFFFF&\fscx100\fscy100} VER! ¡EH!
+Dialogue: 0,0:00:35.52,0:00:35.72,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}PARA {\c&H66FF00&\fscx125\fscy125}VER!{\c&HFFFFFF&\fscx100\fscy100} ¡EH!
+Dialogue: 0,0:00:35.72,0:00:35.98,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}PARA VER! {\c&H66FF00&\fscx125\fscy125}¡EH!{\c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 0,0:00:36.90,0:00:37.38,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}¡EGUNTA!{\c&HFFFFFF&\fscx100\fscy100} ACABO DE QUITARLE
+Dialogue: 0,0:00:37.38,0:00:37.48,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}¡EGUNTA! ACABO DE QUITARLE
+Dialogue: 0,0:00:37.48,0:00:37.94,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}¡EGUNTA! {\c&H66FF00&\fscx125\fscy125}ACABO{\c&HFFFFFF&\fscx100\fscy100} DE QUITARLE
+Dialogue: 0,0:00:37.94,0:00:38.16,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}¡EGUNTA! ACABO {\c&H66FF00&\fscx125\fscy125}DE{\c&HFFFFFF&\fscx100\fscy100} QUITARLE
+Dialogue: 0,0:00:38.16,0:00:38.74,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}¡EGUNTA! ACABO DE {\c&H66FF00&\fscx125\fscy125}QUITARLE{\c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 0,0:00:38.74,0:00:38.80,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}A{\c&HFFFFFF&\fscx100\fscy100} UN ENEMIGO 30.
+Dialogue: 0,0:00:38.80,0:00:38.94,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}A {\c&H66FF00&\fscx125\fscy125}UN{\c&HFFFFFF&\fscx100\fscy100} ENEMIGO 30.
+Dialogue: 0,0:00:38.94,0:00:39.44,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}A UN {\c&H66FF00&\fscx125\fscy125}ENEMIGO{\c&HFFFFFF&\fscx100\fscy100} 30.
+Dialogue: 0,0:00:39.44,0:00:40.00,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}A UN ENEMIGO {\c&H66FF00&\fscx125\fscy125}30.{\c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 0,0:01:05.85,0:01:06.33,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}VALE,{\c&HFFFFFF&\fscx100\fscy100} MIRA.
+Dialogue: 0,0:01:06.33,0:01:06.39,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}VALE, MIRA.
+Dialogue: 0,0:01:06.39,0:01:06.55,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}VALE, {\c&H66FF00&\fscx125\fscy125}MIRA.{\c&HFFFFFF&\fscx100\fscy100}
