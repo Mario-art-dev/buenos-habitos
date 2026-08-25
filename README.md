@@ -494,14 +494,18 @@ Desde **Ajustes** dentro de la app, pulsa "Conectar YouTube" y autoriza tu cuent
 3. Añade como URI de redirección: `{TU_URL_ACTUAL}/api/auth/tiktok/callback`
    (ver el aviso de "Servidor temporal" justo abajo — **importante** si usas el modo sin servidor propio).
 4. Copia el Client Key y el Client Secret a `TIKTOK_CLIENT_KEY` / `TIKTOK_CLIENT_SECRET`.
-5. **Importante**: hasta que TikTok audite y apruebe tu app para "Direct Post" (puede tardar
-   varias semanas), el "Content Posting API" solo permite subir vídeos a tu propia bandeja de
-   borradores (inbox), no publicarlos directamente en público. Esta app ya está montada así:
-   cuando pulsas "Enviar a TikTok", el vídeo llega como borrador privado a tu cuenta y lo
-   publicas tú con un toque desde la app de TikTok. En cuanto TikTok apruebe tu solicitud de
-   auditoría, activa el scope `video.publish` en el panel de tu app (Scopes) y añádelo de vuelta a
-   `SCOPES` en `src/lib/social/tiktok.ts`, y cambia la URL
-   (`INBOX_UPLOAD_INIT_URL` → el endpoint de publicación directa) para que se publique solo.
+5. Activa el scope `video.publish` (dentro de "Content Posting API") en el panel de tu app —
+   en **Sandbox**, no en Production, mientras la app no esté auditada por TikTok — y pulsa
+   "Apply changes" para guardarlo. Añade también tu propia cuenta de TikTok como **Target user**
+   en los ajustes de Sandbox: sin eso, ninguna llamada del Content Posting API funciona, aunque
+   el scope esté activado.
+6. **Importante**: esta app ya publica directamente (Content Posting API, `video.publish`, ver
+   `src/lib/social/tiktok.ts`) en vez de dejar el vídeo como borrador manual en el inbox. Antes de
+   publicar, consulta qué niveles de privacidad tiene disponibles la cuenta
+   (`creator_info/query/`) y usa el mejor: mientras la app no esté auditada por TikTok, el único
+   nivel disponible es `SELF_ONLY` (el vídeo se publica de verdad, pero solo lo ves tú, el dueño
+   de la cuenta) — en cuanto TikTok apruebe la auditoría de tu app, empiezan a aparecer también
+   `MUTUAL_FOLLOW_FRIENDS`/`PUBLIC_TO_EVERYONE` y se usan solos, sin tocar nada más.
 
 ⚠️ **Si usas el modo "Servidor temporal" (sin servidor propio, ver más abajo): la URL de tu
 web cambia cada vez que se reinicia la sesión** (túnel de Cloudflare, subdominio nuevo al
