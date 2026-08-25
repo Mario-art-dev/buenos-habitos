@@ -38,10 +38,14 @@ async function schedulerTickSafe() {
 
 async function main() {
   console.log("[worker] Escenas Virales Studio — worker iniciado");
-  // recupera jobs que quedaron a medias si el worker se reinició
+  // Recupera jobs que quedaron a medias si el worker se reinició, y también reintenta
+  // automáticamente los que se quedaron en FAILED — pedido explícito: al arrancar una nueva
+  // sesión de 6h no hay que esperar a que el usuario pulse "Reintentar" a mano. claimNextPendingJob()
+  // los recoge de uno en uno por orden de creación, así que tras reintentar este ya sigue solo con
+  // el resto de la cola sin ningún cambio adicional.
   await db.job.updateMany({
-    where: { status: { in: ["DOWNLOADING", "TRANSCRIBING", "ANALYZING", "CLIPPING"] } },
-    data: { status: "PENDING", statusMessage: "Reintentando tras reinicio del worker…" },
+    where: { status: { in: ["DOWNLOADING", "TRANSCRIBING", "ANALYZING", "CLIPPING", "FAILED"] } },
+    data: { status: "PENDING", error: null, statusMessage: "Reintentando automáticamente tras reinicio de la sesión…" },
   });
 
   setInterval(jobTick, config.pipeline.workerPollIntervalMs);
