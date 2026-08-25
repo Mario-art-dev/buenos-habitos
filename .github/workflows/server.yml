@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   actions: write
 
 concurrency:
@@ -20,43 +20,50 @@ jobs:
       - name: Descargar el código
         uses: actions/checkout@v4
 
-      - name: Restaurar la galería de la sesión anterior
-        # "restore" (no "actions/cache@v4" a secas): solo queremos RECUPERAR el último checkpoint
-        # guardado por la sesión anterior, nunca que este paso guarde uno nuevo por su cuenta al
-        # terminar el job — ya hay guardado explícito propio más abajo (uno por checkpoint, con
-        # limpieza del anterior). Con "actions/cache@v4" normal, su propio guardado automático al
-        # final (bajo la clave única de ESTE run, sin limpiar nunca) se quedaba huérfano para
-        # siempre en cada sesión que terminaba bien — con el tiempo iba acumulando caché sin
-        # límite y podía acabar desalojando (por el tope de 10GB del repo) el checkpoint de verdad
-        # que hacía falta para recuperar la galería.
+      - name: Restaurar la galería desde el respaldo permanente (rama git "gallery-data")
+        # POR QUÉ YA NO SE USA "actions/cache" PARA ESTO (aunque sea más rápido): confirmado con
+        # logs reales, no adivinado, que la caché de GitHub Actions NUNCA fue almacenamiento
+        # duradero de verdad, por mucho que se separara la base de datos de los vídeos (fix
+        # anterior, insuficiente): tiene un tope de 10GB por repositorio con desalojo automático
+        # (un solo checkpoint de ~12GB ya lo supera él solo y se acaba desalojando ENTERO sin
+        # avisar) y además cada entrada caduca sola a los 7 días sin usarse, pase lo que pase con
+        # el tamaño. Así se perdieron los ~40 shorts de la sesión temporal 89: cuando se
+        # comprobó, la caché ya había desaparecido por completo ("Cache not found for input
+        # keys" total) — y no hay forma de deshacer eso, la caché no guarda versiones.
         #
-        # Bug real confirmado (con logs reales, no adivinado): un checkpoint de ~12GB llegó a
-        # guardarse bien (confirmado byte a byte) y a restaurarse bien en la sesión siguiente
-        # (confirmado también), pero UNA sesión más tarde ya no quedaba NINGÚN checkpoint —
-        # "Cache not found for input keys" total. GitHub Actions limita la caché a 10GB por
-        # repositorio en total; un solo checkpoint de 12GB ya supera ese tope él solo, así que
-        # tarde o temprano se desaloja ENTERO sin avisar, aunque el guardado en su momento
-        # pareciera ir bien. Por eso la base de datos (unos pocos MB) va aparte, en su PROPIA
-        # caché — así sobrevive aunque la de los vídeos (que sí puede crecer sin límite real) se
-        # acabe desalojando por peso.
-        uses: actions/cache/restore@v4
-        with:
-          path: storage
-          key: escenas-storage-${{ github.run_id }}
-          restore-keys: |
-            escenas-storage-
+        # El arreglo de verdad: en vez de una caché de build (pensada para ser desechable),
+        # storage/ (la base de datos Y los vídeos) se respalda en una rama de git normal
+        # ("gallery-data") de este mismo repositorio, con un commit real por checkpoint. Una
+        # rama de git NO caduca nunca y NO se desaloja por peso — es simplemente parte del
+        # historial del repositorio hasta que alguien la borre a mano. Es el único mecanismo
+        # gratuito (cero tarjeta, cero cuenta de pago) que da persistencia de verdad aquí.
+        run: |
+          set -e
+          git config --global user.email "actions@github.com"
+          git config --global user.name "Escenas Virales Bot"
+          mkdir -p storage
+          REMOTE_URL="https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          rm -rf /tmp/gallery-backup
+          if git clone --branch gallery-data --single-branch --depth 1 "$REMOTE_URL" /tmp/gallery-backup 2>/tmp/gallery-clone.log; then
+            echo "Rama de respaldo permanente encontrada, restaurando..."
+            if [ -d /tmp/gallery-backup/storage ]; then
+              cp -a /tmp/gallery-backup/storage/. storage/
+              echo "Restaurado en storage/: $(du -sh storage 2>/dev/null | cut -f1)"
+            else
+              echo "La rama de respaldo existe pero todavía no tiene ninguna carpeta storage/ guardada."
+            fi
+          else
+            echo "Todavía no existe la rama de respaldo 'gallery-data' (primera vez que arranca este mecanismo, o el historial anterior a este cambio se perdió por el bug de la caché ya descrito arriba)."
+            cat /tmp/gallery-clone.log || true
+            mkdir -p /tmp/gallery-backup
+            cd /tmp/gallery-backup
+            git init -q -b gallery-data
+            git remote add origin "$REMOTE_URL"
+          fi
 
-      - name: Restaurar la base de datos por separado (nunca se desaloja por peso de los vídeos)
-        uses: actions/cache/restore@v4
-        with:
-          path: storage/app.db
-          key: escenas-db-${{ github.run_id }}
-          restore-keys: |
-            escenas-db-
-
-      - name: Diagnóstico — comprobar que la base de datos restaurada existe de verdad
+      - name: Diagnóstico — comprobar qué hay realmente en storage/ tras restaurar
         # Deja constancia en el log de qué hay EXACTAMENTE en storage/ justo después de restaurar
-        # (los dos pasos de arriba), para poder confirmar de un vistazo que esta vez sí ha llegado.
+        # (paso de arriba), para poder confirmar de un vistazo si esta vez sí ha llegado algo.
         run: |
           echo "--- contenido de storage/ ---"
           ls -la storage/ 2>&1 || echo "(storage/ no existe)"
@@ -139,7 +146,7 @@ jobs:
             exit 1
           fi
 
-      - name: Preparar la base de datos (reutilizando la de la caché si existe)
+      - name: Preparar la base de datos (reutilizando la del respaldo si existe)
         run: npx prisma generate && npx prisma db push
         env:
           DATABASE_URL: "file:./storage/app.db"
@@ -238,674 +245,1464 @@ jobs:
           echo "Esta URL cambiará dentro de ~5h30min, cuando esta sesión pase el testigo a la siguiente." >> "$GITHUB_STEP_SUMMARY"
           echo "[cloudflared] URL pública: $URL"
 
-      # El guardado automático de la galería (paso "Post Restaurar...") ya NO existe (ver el paso
-      # de arriba, que usa "restore" en vez de "cache@v4" a secas) — el ÚNICO guardado real pasa
-      # por aquí: un snapshot manual cada 10 minutos, cada uno borrando el anterior nada más
-      # guardar el siguiente. Así, tanto si el job termina limpio como si se CANCELA a mitad de
-      # sesión (p.ej. al reiniciar el servidor manualmente tras subir código nuevo) o se cae por
-      # cualquier otro motivo, como mucho se pierden los últimos 10 min de shorts generados en vez
-      # de la sesión entera (~5h30min).
-      #
-      # Cada checkpoint guarda DOS cachés independientes: la de siempre (todo storage/, incluidos
-      # los vídeos — puede pesar varios GB y con el tiempo puede acabar desalojada por el tope de
-      # 10GB del repositorio, confirmado con un caso real) y una aparte solo para storage/app.db
-      # (unos pocos MB, prácticamente nunca en riesgo de desalojo) — así la base de datos (los
-      # registros de cada short, lo que alimenta la galería) sobrevive aunque la de los vídeos se
-      # llegue a perder por peso.
+      # A partir de aquí: el ÚNICO guardado real de la galería. Cada 10 minutos se hace un commit
+      # de verdad con el contenido actual de storage/ (base de datos + vídeos) a la rama de git
+      # "gallery-data" — nunca caduca, nunca se desaloja por peso, sobrevive a que esta sesión
+      # temporal termine, se cancele o se caiga por cualquier motivo (como mucho se pierden los
+      # últimos 10 minutos de shorts generados, no la sesión entera). Ya NO se usa
+      # "actions/cache" para esto — motivo completo en el primer paso de este archivo.
+
       - name: Mantener la sesión activa (checkpoint 1/33 de la galería)
         run: sleep 600
 
-      - name: Guardar la galería (checkpoint 1/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage
-          key: escenas-storage-${{ github.run_id }}-1
-
-      - name: Guardar la base de datos por separado (checkpoint 1/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage/app.db
-          key: escenas-db-${{ github.run_id }}-1
+      - name: Guardar el respaldo permanente (checkpoint 1/33) — rama git, nunca caduca ni se desaloja
+        run: |
+          cd /tmp/gallery-backup
+          # Copia completa en vez de una sincronización incremental: no depende de rsync (no
+          # viene garantizado en todos los runners) y así los archivos borrados en storage/ (p.ej.
+          # limpieza futura de vídeos ya publicados) tampoco se quedan para siempre en el respaldo.
+          rm -rf storage
+          mkdir -p storage
+          cp -a "$GITHUB_WORKSPACE/storage/." storage/
+          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
+          # pesado no rompa el guardado de TODOS los demás.
+          find storage -type f -size +95M -print | while read -r f; do
+            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            rm -f "$f"
+          done
+          git add -A
+          committed=""
+          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
+            echo "Sin cambios nuevos que respaldar."
+          elif git commit -q -m "Snapshot automático checkpoint 1/33 ($(date -u +%FT%TZ))"; then
+            committed=1
+          else
+            echo "Nada que respaldar todavía (storage/ vacío)."
+          fi
+          if [ -n "$committed" ]; then
+            ok=""
+            for attempt in 1 2 3 4; do
+              if git push -q origin HEAD:gallery-data; then
+                ok=1
+                break
+              fi
+              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
+              git fetch -q origin gallery-data 2>/dev/null || true
+              git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
+              sleep $((attempt * 5))
+            done
+            if [ -z "$ok" ]; then
+              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+            fi
+          fi
 
       - name: Mantener la sesión activa (checkpoint 2/33 de la galería)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: sleep 600
+
+      - name: Guardar el respaldo permanente (checkpoint 2/33) — rama git, nunca caduca ni se desaloja
         run: |
-          sleep 600
-          gh cache delete "escenas-storage-${{ github.run_id }}-1" || true
-          gh cache delete "escenas-db-${{ github.run_id }}-1" || true
-
-      - name: Guardar la galería (checkpoint 2/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage
-          key: escenas-storage-${{ github.run_id }}-2
-
-      - name: Guardar la base de datos por separado (checkpoint 2/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage/app.db
-          key: escenas-db-${{ github.run_id }}-2
+          cd /tmp/gallery-backup
+          # Copia completa en vez de una sincronización incremental: no depende de rsync (no
+          # viene garantizado en todos los runners) y así los archivos borrados en storage/ (p.ej.
+          # limpieza futura de vídeos ya publicados) tampoco se quedan para siempre en el respaldo.
+          rm -rf storage
+          mkdir -p storage
+          cp -a "$GITHUB_WORKSPACE/storage/." storage/
+          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
+          # pesado no rompa el guardado de TODOS los demás.
+          find storage -type f -size +95M -print | while read -r f; do
+            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            rm -f "$f"
+          done
+          git add -A
+          committed=""
+          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
+            echo "Sin cambios nuevos que respaldar."
+          elif git commit -q -m "Snapshot automático checkpoint 2/33 ($(date -u +%FT%TZ))"; then
+            committed=1
+          else
+            echo "Nada que respaldar todavía (storage/ vacío)."
+          fi
+          if [ -n "$committed" ]; then
+            ok=""
+            for attempt in 1 2 3 4; do
+              if git push -q origin HEAD:gallery-data; then
+                ok=1
+                break
+              fi
+              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
+              git fetch -q origin gallery-data 2>/dev/null || true
+              git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
+              sleep $((attempt * 5))
+            done
+            if [ -z "$ok" ]; then
+              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+            fi
+          fi
 
       - name: Mantener la sesión activa (checkpoint 3/33 de la galería)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: sleep 600
+
+      - name: Guardar el respaldo permanente (checkpoint 3/33) — rama git, nunca caduca ni se desaloja
         run: |
-          sleep 600
-          gh cache delete "escenas-storage-${{ github.run_id }}-2" || true
-          gh cache delete "escenas-db-${{ github.run_id }}-2" || true
-
-      - name: Guardar la galería (checkpoint 3/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage
-          key: escenas-storage-${{ github.run_id }}-3
-
-      - name: Guardar la base de datos por separado (checkpoint 3/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage/app.db
-          key: escenas-db-${{ github.run_id }}-3
+          cd /tmp/gallery-backup
+          # Copia completa en vez de una sincronización incremental: no depende de rsync (no
+          # viene garantizado en todos los runners) y así los archivos borrados en storage/ (p.ej.
+          # limpieza futura de vídeos ya publicados) tampoco se quedan para siempre en el respaldo.
+          rm -rf storage
+          mkdir -p storage
+          cp -a "$GITHUB_WORKSPACE/storage/." storage/
+          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
+          # pesado no rompa el guardado de TODOS los demás.
+          find storage -type f -size +95M -print | while read -r f; do
+            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            rm -f "$f"
+          done
+          git add -A
+          committed=""
+          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
+            echo "Sin cambios nuevos que respaldar."
+          elif git commit -q -m "Snapshot automático checkpoint 3/33 ($(date -u +%FT%TZ))"; then
+            committed=1
+          else
+            echo "Nada que respaldar todavía (storage/ vacío)."
+          fi
+          if [ -n "$committed" ]; then
+            ok=""
+            for attempt in 1 2 3 4; do
+              if git push -q origin HEAD:gallery-data; then
+                ok=1
+                break
+              fi
+              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
+              git fetch -q origin gallery-data 2>/dev/null || true
+              git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
+              sleep $((attempt * 5))
+            done
+            if [ -z "$ok" ]; then
+              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+            fi
+          fi
 
       - name: Mantener la sesión activa (checkpoint 4/33 de la galería)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: sleep 600
+
+      - name: Guardar el respaldo permanente (checkpoint 4/33) — rama git, nunca caduca ni se desaloja
         run: |
-          sleep 600
-          gh cache delete "escenas-storage-${{ github.run_id }}-3" || true
-          gh cache delete "escenas-db-${{ github.run_id }}-3" || true
-
-      - name: Guardar la galería (checkpoint 4/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage
-          key: escenas-storage-${{ github.run_id }}-4
-
-      - name: Guardar la base de datos por separado (checkpoint 4/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage/app.db
-          key: escenas-db-${{ github.run_id }}-4
+          cd /tmp/gallery-backup
+          # Copia completa en vez de una sincronización incremental: no depende de rsync (no
+          # viene garantizado en todos los runners) y así los archivos borrados en storage/ (p.ej.
+          # limpieza futura de vídeos ya publicados) tampoco se quedan para siempre en el respaldo.
+          rm -rf storage
+          mkdir -p storage
+          cp -a "$GITHUB_WORKSPACE/storage/." storage/
+          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
+          # pesado no rompa el guardado de TODOS los demás.
+          find storage -type f -size +95M -print | while read -r f; do
+            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            rm -f "$f"
+          done
+          git add -A
+          committed=""
+          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
+            echo "Sin cambios nuevos que respaldar."
+          elif git commit -q -m "Snapshot automático checkpoint 4/33 ($(date -u +%FT%TZ))"; then
+            committed=1
+          else
+            echo "Nada que respaldar todavía (storage/ vacío)."
+          fi
+          if [ -n "$committed" ]; then
+            ok=""
+            for attempt in 1 2 3 4; do
+              if git push -q origin HEAD:gallery-data; then
+                ok=1
+                break
+              fi
+              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
+              git fetch -q origin gallery-data 2>/dev/null || true
+              git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
+              sleep $((attempt * 5))
+            done
+            if [ -z "$ok" ]; then
+              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+            fi
+          fi
 
       - name: Mantener la sesión activa (checkpoint 5/33 de la galería)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: sleep 600
+
+      - name: Guardar el respaldo permanente (checkpoint 5/33) — rama git, nunca caduca ni se desaloja
         run: |
-          sleep 600
-          gh cache delete "escenas-storage-${{ github.run_id }}-4" || true
-          gh cache delete "escenas-db-${{ github.run_id }}-4" || true
-
-      - name: Guardar la galería (checkpoint 5/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage
-          key: escenas-storage-${{ github.run_id }}-5
-
-      - name: Guardar la base de datos por separado (checkpoint 5/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage/app.db
-          key: escenas-db-${{ github.run_id }}-5
+          cd /tmp/gallery-backup
+          # Copia completa en vez de una sincronización incremental: no depende de rsync (no
+          # viene garantizado en todos los runners) y así los archivos borrados en storage/ (p.ej.
+          # limpieza futura de vídeos ya publicados) tampoco se quedan para siempre en el respaldo.
+          rm -rf storage
+          mkdir -p storage
+          cp -a "$GITHUB_WORKSPACE/storage/." storage/
+          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
+          # pesado no rompa el guardado de TODOS los demás.
+          find storage -type f -size +95M -print | while read -r f; do
+            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            rm -f "$f"
+          done
+          git add -A
+          committed=""
+          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
+            echo "Sin cambios nuevos que respaldar."
+          elif git commit -q -m "Snapshot automático checkpoint 5/33 ($(date -u +%FT%TZ))"; then
+            committed=1
+          else
+            echo "Nada que respaldar todavía (storage/ vacío)."
+          fi
+          if [ -n "$committed" ]; then
+            ok=""
+            for attempt in 1 2 3 4; do
+              if git push -q origin HEAD:gallery-data; then
+                ok=1
+                break
+              fi
+              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
+              git fetch -q origin gallery-data 2>/dev/null || true
+              git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
+              sleep $((attempt * 5))
+            done
+            if [ -z "$ok" ]; then
+              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+            fi
+          fi
 
       - name: Mantener la sesión activa (checkpoint 6/33 de la galería)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: sleep 600
+
+      - name: Guardar el respaldo permanente (checkpoint 6/33) — rama git, nunca caduca ni se desaloja
         run: |
-          sleep 600
-          gh cache delete "escenas-storage-${{ github.run_id }}-5" || true
-          gh cache delete "escenas-db-${{ github.run_id }}-5" || true
-
-      - name: Guardar la galería (checkpoint 6/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage
-          key: escenas-storage-${{ github.run_id }}-6
-
-      - name: Guardar la base de datos por separado (checkpoint 6/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage/app.db
-          key: escenas-db-${{ github.run_id }}-6
+          cd /tmp/gallery-backup
+          # Copia completa en vez de una sincronización incremental: no depende de rsync (no
+          # viene garantizado en todos los runners) y así los archivos borrados en storage/ (p.ej.
+          # limpieza futura de vídeos ya publicados) tampoco se quedan para siempre en el respaldo.
+          rm -rf storage
+          mkdir -p storage
+          cp -a "$GITHUB_WORKSPACE/storage/." storage/
+          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
+          # pesado no rompa el guardado de TODOS los demás.
+          find storage -type f -size +95M -print | while read -r f; do
+            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            rm -f "$f"
+          done
+          git add -A
+          committed=""
+          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
+            echo "Sin cambios nuevos que respaldar."
+          elif git commit -q -m "Snapshot automático checkpoint 6/33 ($(date -u +%FT%TZ))"; then
+            committed=1
+          else
+            echo "Nada que respaldar todavía (storage/ vacío)."
+          fi
+          if [ -n "$committed" ]; then
+            ok=""
+            for attempt in 1 2 3 4; do
+              if git push -q origin HEAD:gallery-data; then
+                ok=1
+                break
+              fi
+              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
+              git fetch -q origin gallery-data 2>/dev/null || true
+              git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
+              sleep $((attempt * 5))
+            done
+            if [ -z "$ok" ]; then
+              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+            fi
+          fi
 
       - name: Mantener la sesión activa (checkpoint 7/33 de la galería)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: sleep 600
+
+      - name: Guardar el respaldo permanente (checkpoint 7/33) — rama git, nunca caduca ni se desaloja
         run: |
-          sleep 600
-          gh cache delete "escenas-storage-${{ github.run_id }}-6" || true
-          gh cache delete "escenas-db-${{ github.run_id }}-6" || true
-
-      - name: Guardar la galería (checkpoint 7/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage
-          key: escenas-storage-${{ github.run_id }}-7
-
-      - name: Guardar la base de datos por separado (checkpoint 7/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage/app.db
-          key: escenas-db-${{ github.run_id }}-7
+          cd /tmp/gallery-backup
+          # Copia completa en vez de una sincronización incremental: no depende de rsync (no
+          # viene garantizado en todos los runners) y así los archivos borrados en storage/ (p.ej.
+          # limpieza futura de vídeos ya publicados) tampoco se quedan para siempre en el respaldo.
+          rm -rf storage
+          mkdir -p storage
+          cp -a "$GITHUB_WORKSPACE/storage/." storage/
+          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
+          # pesado no rompa el guardado de TODOS los demás.
+          find storage -type f -size +95M -print | while read -r f; do
+            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            rm -f "$f"
+          done
+          git add -A
+          committed=""
+          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
+            echo "Sin cambios nuevos que respaldar."
+          elif git commit -q -m "Snapshot automático checkpoint 7/33 ($(date -u +%FT%TZ))"; then
+            committed=1
+          else
+            echo "Nada que respaldar todavía (storage/ vacío)."
+          fi
+          if [ -n "$committed" ]; then
+            ok=""
+            for attempt in 1 2 3 4; do
+              if git push -q origin HEAD:gallery-data; then
+                ok=1
+                break
+              fi
+              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
+              git fetch -q origin gallery-data 2>/dev/null || true
+              git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
+              sleep $((attempt * 5))
+            done
+            if [ -z "$ok" ]; then
+              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+            fi
+          fi
 
       - name: Mantener la sesión activa (checkpoint 8/33 de la galería)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: sleep 600
+
+      - name: Guardar el respaldo permanente (checkpoint 8/33) — rama git, nunca caduca ni se desaloja
         run: |
-          sleep 600
-          gh cache delete "escenas-storage-${{ github.run_id }}-7" || true
-          gh cache delete "escenas-db-${{ github.run_id }}-7" || true
-
-      - name: Guardar la galería (checkpoint 8/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage
-          key: escenas-storage-${{ github.run_id }}-8
-
-      - name: Guardar la base de datos por separado (checkpoint 8/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage/app.db
-          key: escenas-db-${{ github.run_id }}-8
+          cd /tmp/gallery-backup
+          # Copia completa en vez de una sincronización incremental: no depende de rsync (no
+          # viene garantizado en todos los runners) y así los archivos borrados en storage/ (p.ej.
+          # limpieza futura de vídeos ya publicados) tampoco se quedan para siempre en el respaldo.
+          rm -rf storage
+          mkdir -p storage
+          cp -a "$GITHUB_WORKSPACE/storage/." storage/
+          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
+          # pesado no rompa el guardado de TODOS los demás.
+          find storage -type f -size +95M -print | while read -r f; do
+            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            rm -f "$f"
+          done
+          git add -A
+          committed=""
+          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
+            echo "Sin cambios nuevos que respaldar."
+          elif git commit -q -m "Snapshot automático checkpoint 8/33 ($(date -u +%FT%TZ))"; then
+            committed=1
+          else
+            echo "Nada que respaldar todavía (storage/ vacío)."
+          fi
+          if [ -n "$committed" ]; then
+            ok=""
+            for attempt in 1 2 3 4; do
+              if git push -q origin HEAD:gallery-data; then
+                ok=1
+                break
+              fi
+              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
+              git fetch -q origin gallery-data 2>/dev/null || true
+              git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
+              sleep $((attempt * 5))
+            done
+            if [ -z "$ok" ]; then
+              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+            fi
+          fi
 
       - name: Mantener la sesión activa (checkpoint 9/33 de la galería)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: sleep 600
+
+      - name: Guardar el respaldo permanente (checkpoint 9/33) — rama git, nunca caduca ni se desaloja
         run: |
-          sleep 600
-          gh cache delete "escenas-storage-${{ github.run_id }}-8" || true
-          gh cache delete "escenas-db-${{ github.run_id }}-8" || true
-
-      - name: Guardar la galería (checkpoint 9/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage
-          key: escenas-storage-${{ github.run_id }}-9
-
-      - name: Guardar la base de datos por separado (checkpoint 9/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage/app.db
-          key: escenas-db-${{ github.run_id }}-9
+          cd /tmp/gallery-backup
+          # Copia completa en vez de una sincronización incremental: no depende de rsync (no
+          # viene garantizado en todos los runners) y así los archivos borrados en storage/ (p.ej.
+          # limpieza futura de vídeos ya publicados) tampoco se quedan para siempre en el respaldo.
+          rm -rf storage
+          mkdir -p storage
+          cp -a "$GITHUB_WORKSPACE/storage/." storage/
+          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
+          # pesado no rompa el guardado de TODOS los demás.
+          find storage -type f -size +95M -print | while read -r f; do
+            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            rm -f "$f"
+          done
+          git add -A
+          committed=""
+          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
+            echo "Sin cambios nuevos que respaldar."
+          elif git commit -q -m "Snapshot automático checkpoint 9/33 ($(date -u +%FT%TZ))"; then
+            committed=1
+          else
+            echo "Nada que respaldar todavía (storage/ vacío)."
+          fi
+          if [ -n "$committed" ]; then
+            ok=""
+            for attempt in 1 2 3 4; do
+              if git push -q origin HEAD:gallery-data; then
+                ok=1
+                break
+              fi
+              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
+              git fetch -q origin gallery-data 2>/dev/null || true
+              git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
+              sleep $((attempt * 5))
+            done
+            if [ -z "$ok" ]; then
+              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+            fi
+          fi
 
       - name: Mantener la sesión activa (checkpoint 10/33 de la galería)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: sleep 600
+
+      - name: Guardar el respaldo permanente (checkpoint 10/33) — rama git, nunca caduca ni se desaloja
         run: |
-          sleep 600
-          gh cache delete "escenas-storage-${{ github.run_id }}-9" || true
-          gh cache delete "escenas-db-${{ github.run_id }}-9" || true
-
-      - name: Guardar la galería (checkpoint 10/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage
-          key: escenas-storage-${{ github.run_id }}-10
-
-      - name: Guardar la base de datos por separado (checkpoint 10/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage/app.db
-          key: escenas-db-${{ github.run_id }}-10
+          cd /tmp/gallery-backup
+          # Copia completa en vez de una sincronización incremental: no depende de rsync (no
+          # viene garantizado en todos los runners) y así los archivos borrados en storage/ (p.ej.
+          # limpieza futura de vídeos ya publicados) tampoco se quedan para siempre en el respaldo.
+          rm -rf storage
+          mkdir -p storage
+          cp -a "$GITHUB_WORKSPACE/storage/." storage/
+          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
+          # pesado no rompa el guardado de TODOS los demás.
+          find storage -type f -size +95M -print | while read -r f; do
+            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            rm -f "$f"
+          done
+          git add -A
+          committed=""
+          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
+            echo "Sin cambios nuevos que respaldar."
+          elif git commit -q -m "Snapshot automático checkpoint 10/33 ($(date -u +%FT%TZ))"; then
+            committed=1
+          else
+            echo "Nada que respaldar todavía (storage/ vacío)."
+          fi
+          if [ -n "$committed" ]; then
+            ok=""
+            for attempt in 1 2 3 4; do
+              if git push -q origin HEAD:gallery-data; then
+                ok=1
+                break
+              fi
+              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
+              git fetch -q origin gallery-data 2>/dev/null || true
+              git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
+              sleep $((attempt * 5))
+            done
+            if [ -z "$ok" ]; then
+              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+            fi
+          fi
 
       - name: Mantener la sesión activa (checkpoint 11/33 de la galería)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: sleep 600
+
+      - name: Guardar el respaldo permanente (checkpoint 11/33) — rama git, nunca caduca ni se desaloja
         run: |
-          sleep 600
-          gh cache delete "escenas-storage-${{ github.run_id }}-10" || true
-          gh cache delete "escenas-db-${{ github.run_id }}-10" || true
-
-      - name: Guardar la galería (checkpoint 11/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage
-          key: escenas-storage-${{ github.run_id }}-11
-
-      - name: Guardar la base de datos por separado (checkpoint 11/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage/app.db
-          key: escenas-db-${{ github.run_id }}-11
+          cd /tmp/gallery-backup
+          # Copia completa en vez de una sincronización incremental: no depende de rsync (no
+          # viene garantizado en todos los runners) y así los archivos borrados en storage/ (p.ej.
+          # limpieza futura de vídeos ya publicados) tampoco se quedan para siempre en el respaldo.
+          rm -rf storage
+          mkdir -p storage
+          cp -a "$GITHUB_WORKSPACE/storage/." storage/
+          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
+          # pesado no rompa el guardado de TODOS los demás.
+          find storage -type f -size +95M -print | while read -r f; do
+            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            rm -f "$f"
+          done
+          git add -A
+          committed=""
+          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
+            echo "Sin cambios nuevos que respaldar."
+          elif git commit -q -m "Snapshot automático checkpoint 11/33 ($(date -u +%FT%TZ))"; then
+            committed=1
+          else
+            echo "Nada que respaldar todavía (storage/ vacío)."
+          fi
+          if [ -n "$committed" ]; then
+            ok=""
+            for attempt in 1 2 3 4; do
+              if git push -q origin HEAD:gallery-data; then
+                ok=1
+                break
+              fi
+              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
+              git fetch -q origin gallery-data 2>/dev/null || true
+              git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
+              sleep $((attempt * 5))
+            done
+            if [ -z "$ok" ]; then
+              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+            fi
+          fi
 
       - name: Mantener la sesión activa (checkpoint 12/33 de la galería)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: sleep 600
+
+      - name: Guardar el respaldo permanente (checkpoint 12/33) — rama git, nunca caduca ni se desaloja
         run: |
-          sleep 600
-          gh cache delete "escenas-storage-${{ github.run_id }}-11" || true
-          gh cache delete "escenas-db-${{ github.run_id }}-11" || true
-
-      - name: Guardar la galería (checkpoint 12/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage
-          key: escenas-storage-${{ github.run_id }}-12
-
-      - name: Guardar la base de datos por separado (checkpoint 12/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage/app.db
-          key: escenas-db-${{ github.run_id }}-12
+          cd /tmp/gallery-backup
+          # Copia completa en vez de una sincronización incremental: no depende de rsync (no
+          # viene garantizado en todos los runners) y así los archivos borrados en storage/ (p.ej.
+          # limpieza futura de vídeos ya publicados) tampoco se quedan para siempre en el respaldo.
+          rm -rf storage
+          mkdir -p storage
+          cp -a "$GITHUB_WORKSPACE/storage/." storage/
+          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
+          # pesado no rompa el guardado de TODOS los demás.
+          find storage -type f -size +95M -print | while read -r f; do
+            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            rm -f "$f"
+          done
+          git add -A
+          committed=""
+          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
+            echo "Sin cambios nuevos que respaldar."
+          elif git commit -q -m "Snapshot automático checkpoint 12/33 ($(date -u +%FT%TZ))"; then
+            committed=1
+          else
+            echo "Nada que respaldar todavía (storage/ vacío)."
+          fi
+          if [ -n "$committed" ]; then
+            ok=""
+            for attempt in 1 2 3 4; do
+              if git push -q origin HEAD:gallery-data; then
+                ok=1
+                break
+              fi
+              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
+              git fetch -q origin gallery-data 2>/dev/null || true
+              git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
+              sleep $((attempt * 5))
+            done
+            if [ -z "$ok" ]; then
+              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+            fi
+          fi
 
       - name: Mantener la sesión activa (checkpoint 13/33 de la galería)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: sleep 600
+
+      - name: Guardar el respaldo permanente (checkpoint 13/33) — rama git, nunca caduca ni se desaloja
         run: |
-          sleep 600
-          gh cache delete "escenas-storage-${{ github.run_id }}-12" || true
-          gh cache delete "escenas-db-${{ github.run_id }}-12" || true
-
-      - name: Guardar la galería (checkpoint 13/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage
-          key: escenas-storage-${{ github.run_id }}-13
-
-      - name: Guardar la base de datos por separado (checkpoint 13/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage/app.db
-          key: escenas-db-${{ github.run_id }}-13
+          cd /tmp/gallery-backup
+          # Copia completa en vez de una sincronización incremental: no depende de rsync (no
+          # viene garantizado en todos los runners) y así los archivos borrados en storage/ (p.ej.
+          # limpieza futura de vídeos ya publicados) tampoco se quedan para siempre en el respaldo.
+          rm -rf storage
+          mkdir -p storage
+          cp -a "$GITHUB_WORKSPACE/storage/." storage/
+          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
+          # pesado no rompa el guardado de TODOS los demás.
+          find storage -type f -size +95M -print | while read -r f; do
+            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            rm -f "$f"
+          done
+          git add -A
+          committed=""
+          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
+            echo "Sin cambios nuevos que respaldar."
+          elif git commit -q -m "Snapshot automático checkpoint 13/33 ($(date -u +%FT%TZ))"; then
+            committed=1
+          else
+            echo "Nada que respaldar todavía (storage/ vacío)."
+          fi
+          if [ -n "$committed" ]; then
+            ok=""
+            for attempt in 1 2 3 4; do
+              if git push -q origin HEAD:gallery-data; then
+                ok=1
+                break
+              fi
+              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
+              git fetch -q origin gallery-data 2>/dev/null || true
+              git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
+              sleep $((attempt * 5))
+            done
+            if [ -z "$ok" ]; then
+              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+            fi
+          fi
 
       - name: Mantener la sesión activa (checkpoint 14/33 de la galería)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: sleep 600
+
+      - name: Guardar el respaldo permanente (checkpoint 14/33) — rama git, nunca caduca ni se desaloja
         run: |
-          sleep 600
-          gh cache delete "escenas-storage-${{ github.run_id }}-13" || true
-          gh cache delete "escenas-db-${{ github.run_id }}-13" || true
-
-      - name: Guardar la galería (checkpoint 14/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage
-          key: escenas-storage-${{ github.run_id }}-14
-
-      - name: Guardar la base de datos por separado (checkpoint 14/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage/app.db
-          key: escenas-db-${{ github.run_id }}-14
+          cd /tmp/gallery-backup
+          # Copia completa en vez de una sincronización incremental: no depende de rsync (no
+          # viene garantizado en todos los runners) y así los archivos borrados en storage/ (p.ej.
+          # limpieza futura de vídeos ya publicados) tampoco se quedan para siempre en el respaldo.
+          rm -rf storage
+          mkdir -p storage
+          cp -a "$GITHUB_WORKSPACE/storage/." storage/
+          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
+          # pesado no rompa el guardado de TODOS los demás.
+          find storage -type f -size +95M -print | while read -r f; do
+            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            rm -f "$f"
+          done
+          git add -A
+          committed=""
+          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
+            echo "Sin cambios nuevos que respaldar."
+          elif git commit -q -m "Snapshot automático checkpoint 14/33 ($(date -u +%FT%TZ))"; then
+            committed=1
+          else
+            echo "Nada que respaldar todavía (storage/ vacío)."
+          fi
+          if [ -n "$committed" ]; then
+            ok=""
+            for attempt in 1 2 3 4; do
+              if git push -q origin HEAD:gallery-data; then
+                ok=1
+                break
+              fi
+              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
+              git fetch -q origin gallery-data 2>/dev/null || true
+              git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
+              sleep $((attempt * 5))
+            done
+            if [ -z "$ok" ]; then
+              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+            fi
+          fi
 
       - name: Mantener la sesión activa (checkpoint 15/33 de la galería)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: sleep 600
+
+      - name: Guardar el respaldo permanente (checkpoint 15/33) — rama git, nunca caduca ni se desaloja
         run: |
-          sleep 600
-          gh cache delete "escenas-storage-${{ github.run_id }}-14" || true
-          gh cache delete "escenas-db-${{ github.run_id }}-14" || true
-
-      - name: Guardar la galería (checkpoint 15/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage
-          key: escenas-storage-${{ github.run_id }}-15
-
-      - name: Guardar la base de datos por separado (checkpoint 15/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage/app.db
-          key: escenas-db-${{ github.run_id }}-15
+          cd /tmp/gallery-backup
+          # Copia completa en vez de una sincronización incremental: no depende de rsync (no
+          # viene garantizado en todos los runners) y así los archivos borrados en storage/ (p.ej.
+          # limpieza futura de vídeos ya publicados) tampoco se quedan para siempre en el respaldo.
+          rm -rf storage
+          mkdir -p storage
+          cp -a "$GITHUB_WORKSPACE/storage/." storage/
+          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
+          # pesado no rompa el guardado de TODOS los demás.
+          find storage -type f -size +95M -print | while read -r f; do
+            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            rm -f "$f"
+          done
+          git add -A
+          committed=""
+          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
+            echo "Sin cambios nuevos que respaldar."
+          elif git commit -q -m "Snapshot automático checkpoint 15/33 ($(date -u +%FT%TZ))"; then
+            committed=1
+          else
+            echo "Nada que respaldar todavía (storage/ vacío)."
+          fi
+          if [ -n "$committed" ]; then
+            ok=""
+            for attempt in 1 2 3 4; do
+              if git push -q origin HEAD:gallery-data; then
+                ok=1
+                break
+              fi
+              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
+              git fetch -q origin gallery-data 2>/dev/null || true
+              git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
+              sleep $((attempt * 5))
+            done
+            if [ -z "$ok" ]; then
+              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+            fi
+          fi
 
       - name: Mantener la sesión activa (checkpoint 16/33 de la galería)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: sleep 600
+
+      - name: Guardar el respaldo permanente (checkpoint 16/33) — rama git, nunca caduca ni se desaloja
         run: |
-          sleep 600
-          gh cache delete "escenas-storage-${{ github.run_id }}-15" || true
-          gh cache delete "escenas-db-${{ github.run_id }}-15" || true
-
-      - name: Guardar la galería (checkpoint 16/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage
-          key: escenas-storage-${{ github.run_id }}-16
-
-      - name: Guardar la base de datos por separado (checkpoint 16/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage/app.db
-          key: escenas-db-${{ github.run_id }}-16
+          cd /tmp/gallery-backup
+          # Copia completa en vez de una sincronización incremental: no depende de rsync (no
+          # viene garantizado en todos los runners) y así los archivos borrados en storage/ (p.ej.
+          # limpieza futura de vídeos ya publicados) tampoco se quedan para siempre en el respaldo.
+          rm -rf storage
+          mkdir -p storage
+          cp -a "$GITHUB_WORKSPACE/storage/." storage/
+          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
+          # pesado no rompa el guardado de TODOS los demás.
+          find storage -type f -size +95M -print | while read -r f; do
+            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            rm -f "$f"
+          done
+          git add -A
+          committed=""
+          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
+            echo "Sin cambios nuevos que respaldar."
+          elif git commit -q -m "Snapshot automático checkpoint 16/33 ($(date -u +%FT%TZ))"; then
+            committed=1
+          else
+            echo "Nada que respaldar todavía (storage/ vacío)."
+          fi
+          if [ -n "$committed" ]; then
+            ok=""
+            for attempt in 1 2 3 4; do
+              if git push -q origin HEAD:gallery-data; then
+                ok=1
+                break
+              fi
+              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
+              git fetch -q origin gallery-data 2>/dev/null || true
+              git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
+              sleep $((attempt * 5))
+            done
+            if [ -z "$ok" ]; then
+              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+            fi
+          fi
 
       - name: Mantener la sesión activa (checkpoint 17/33 de la galería)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: sleep 600
+
+      - name: Guardar el respaldo permanente (checkpoint 17/33) — rama git, nunca caduca ni se desaloja
         run: |
-          sleep 600
-          gh cache delete "escenas-storage-${{ github.run_id }}-16" || true
-          gh cache delete "escenas-db-${{ github.run_id }}-16" || true
-
-      - name: Guardar la galería (checkpoint 17/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage
-          key: escenas-storage-${{ github.run_id }}-17
-
-      - name: Guardar la base de datos por separado (checkpoint 17/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage/app.db
-          key: escenas-db-${{ github.run_id }}-17
+          cd /tmp/gallery-backup
+          # Copia completa en vez de una sincronización incremental: no depende de rsync (no
+          # viene garantizado en todos los runners) y así los archivos borrados en storage/ (p.ej.
+          # limpieza futura de vídeos ya publicados) tampoco se quedan para siempre en el respaldo.
+          rm -rf storage
+          mkdir -p storage
+          cp -a "$GITHUB_WORKSPACE/storage/." storage/
+          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
+          # pesado no rompa el guardado de TODOS los demás.
+          find storage -type f -size +95M -print | while read -r f; do
+            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            rm -f "$f"
+          done
+          git add -A
+          committed=""
+          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
+            echo "Sin cambios nuevos que respaldar."
+          elif git commit -q -m "Snapshot automático checkpoint 17/33 ($(date -u +%FT%TZ))"; then
+            committed=1
+          else
+            echo "Nada que respaldar todavía (storage/ vacío)."
+          fi
+          if [ -n "$committed" ]; then
+            ok=""
+            for attempt in 1 2 3 4; do
+              if git push -q origin HEAD:gallery-data; then
+                ok=1
+                break
+              fi
+              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
+              git fetch -q origin gallery-data 2>/dev/null || true
+              git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
+              sleep $((attempt * 5))
+            done
+            if [ -z "$ok" ]; then
+              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+            fi
+          fi
 
       - name: Mantener la sesión activa (checkpoint 18/33 de la galería)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: sleep 600
+
+      - name: Guardar el respaldo permanente (checkpoint 18/33) — rama git, nunca caduca ni se desaloja
         run: |
-          sleep 600
-          gh cache delete "escenas-storage-${{ github.run_id }}-17" || true
-          gh cache delete "escenas-db-${{ github.run_id }}-17" || true
-
-      - name: Guardar la galería (checkpoint 18/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage
-          key: escenas-storage-${{ github.run_id }}-18
-
-      - name: Guardar la base de datos por separado (checkpoint 18/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage/app.db
-          key: escenas-db-${{ github.run_id }}-18
+          cd /tmp/gallery-backup
+          # Copia completa en vez de una sincronización incremental: no depende de rsync (no
+          # viene garantizado en todos los runners) y así los archivos borrados en storage/ (p.ej.
+          # limpieza futura de vídeos ya publicados) tampoco se quedan para siempre en el respaldo.
+          rm -rf storage
+          mkdir -p storage
+          cp -a "$GITHUB_WORKSPACE/storage/." storage/
+          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
+          # pesado no rompa el guardado de TODOS los demás.
+          find storage -type f -size +95M -print | while read -r f; do
+            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            rm -f "$f"
+          done
+          git add -A
+          committed=""
+          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
+            echo "Sin cambios nuevos que respaldar."
+          elif git commit -q -m "Snapshot automático checkpoint 18/33 ($(date -u +%FT%TZ))"; then
+            committed=1
+          else
+            echo "Nada que respaldar todavía (storage/ vacío)."
+          fi
+          if [ -n "$committed" ]; then
+            ok=""
+            for attempt in 1 2 3 4; do
+              if git push -q origin HEAD:gallery-data; then
+                ok=1
+                break
+              fi
+              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
+              git fetch -q origin gallery-data 2>/dev/null || true
+              git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
+              sleep $((attempt * 5))
+            done
+            if [ -z "$ok" ]; then
+              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+            fi
+          fi
 
       - name: Mantener la sesión activa (checkpoint 19/33 de la galería)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: sleep 600
+
+      - name: Guardar el respaldo permanente (checkpoint 19/33) — rama git, nunca caduca ni se desaloja
         run: |
-          sleep 600
-          gh cache delete "escenas-storage-${{ github.run_id }}-18" || true
-          gh cache delete "escenas-db-${{ github.run_id }}-18" || true
-
-      - name: Guardar la galería (checkpoint 19/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage
-          key: escenas-storage-${{ github.run_id }}-19
-
-      - name: Guardar la base de datos por separado (checkpoint 19/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage/app.db
-          key: escenas-db-${{ github.run_id }}-19
+          cd /tmp/gallery-backup
+          # Copia completa en vez de una sincronización incremental: no depende de rsync (no
+          # viene garantizado en todos los runners) y así los archivos borrados en storage/ (p.ej.
+          # limpieza futura de vídeos ya publicados) tampoco se quedan para siempre en el respaldo.
+          rm -rf storage
+          mkdir -p storage
+          cp -a "$GITHUB_WORKSPACE/storage/." storage/
+          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
+          # pesado no rompa el guardado de TODOS los demás.
+          find storage -type f -size +95M -print | while read -r f; do
+            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            rm -f "$f"
+          done
+          git add -A
+          committed=""
+          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
+            echo "Sin cambios nuevos que respaldar."
+          elif git commit -q -m "Snapshot automático checkpoint 19/33 ($(date -u +%FT%TZ))"; then
+            committed=1
+          else
+            echo "Nada que respaldar todavía (storage/ vacío)."
+          fi
+          if [ -n "$committed" ]; then
+            ok=""
+            for attempt in 1 2 3 4; do
+              if git push -q origin HEAD:gallery-data; then
+                ok=1
+                break
+              fi
+              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
+              git fetch -q origin gallery-data 2>/dev/null || true
+              git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
+              sleep $((attempt * 5))
+            done
+            if [ -z "$ok" ]; then
+              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+            fi
+          fi
 
       - name: Mantener la sesión activa (checkpoint 20/33 de la galería)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: sleep 600
+
+      - name: Guardar el respaldo permanente (checkpoint 20/33) — rama git, nunca caduca ni se desaloja
         run: |
-          sleep 600
-          gh cache delete "escenas-storage-${{ github.run_id }}-19" || true
-          gh cache delete "escenas-db-${{ github.run_id }}-19" || true
-
-      - name: Guardar la galería (checkpoint 20/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage
-          key: escenas-storage-${{ github.run_id }}-20
-
-      - name: Guardar la base de datos por separado (checkpoint 20/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage/app.db
-          key: escenas-db-${{ github.run_id }}-20
+          cd /tmp/gallery-backup
+          # Copia completa en vez de una sincronización incremental: no depende de rsync (no
+          # viene garantizado en todos los runners) y así los archivos borrados en storage/ (p.ej.
+          # limpieza futura de vídeos ya publicados) tampoco se quedan para siempre en el respaldo.
+          rm -rf storage
+          mkdir -p storage
+          cp -a "$GITHUB_WORKSPACE/storage/." storage/
+          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
+          # pesado no rompa el guardado de TODOS los demás.
+          find storage -type f -size +95M -print | while read -r f; do
+            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            rm -f "$f"
+          done
+          git add -A
+          committed=""
+          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
+            echo "Sin cambios nuevos que respaldar."
+          elif git commit -q -m "Snapshot automático checkpoint 20/33 ($(date -u +%FT%TZ))"; then
+            committed=1
+          else
+            echo "Nada que respaldar todavía (storage/ vacío)."
+          fi
+          if [ -n "$committed" ]; then
+            ok=""
+            for attempt in 1 2 3 4; do
+              if git push -q origin HEAD:gallery-data; then
+                ok=1
+                break
+              fi
+              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
+              git fetch -q origin gallery-data 2>/dev/null || true
+              git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
+              sleep $((attempt * 5))
+            done
+            if [ -z "$ok" ]; then
+              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+            fi
+          fi
 
       - name: Mantener la sesión activa (checkpoint 21/33 de la galería)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: sleep 600
+
+      - name: Guardar el respaldo permanente (checkpoint 21/33) — rama git, nunca caduca ni se desaloja
         run: |
-          sleep 600
-          gh cache delete "escenas-storage-${{ github.run_id }}-20" || true
-          gh cache delete "escenas-db-${{ github.run_id }}-20" || true
-
-      - name: Guardar la galería (checkpoint 21/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage
-          key: escenas-storage-${{ github.run_id }}-21
-
-      - name: Guardar la base de datos por separado (checkpoint 21/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage/app.db
-          key: escenas-db-${{ github.run_id }}-21
+          cd /tmp/gallery-backup
+          # Copia completa en vez de una sincronización incremental: no depende de rsync (no
+          # viene garantizado en todos los runners) y así los archivos borrados en storage/ (p.ej.
+          # limpieza futura de vídeos ya publicados) tampoco se quedan para siempre en el respaldo.
+          rm -rf storage
+          mkdir -p storage
+          cp -a "$GITHUB_WORKSPACE/storage/." storage/
+          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
+          # pesado no rompa el guardado de TODOS los demás.
+          find storage -type f -size +95M -print | while read -r f; do
+            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            rm -f "$f"
+          done
+          git add -A
+          committed=""
+          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
+            echo "Sin cambios nuevos que respaldar."
+          elif git commit -q -m "Snapshot automático checkpoint 21/33 ($(date -u +%FT%TZ))"; then
+            committed=1
+          else
+            echo "Nada que respaldar todavía (storage/ vacío)."
+          fi
+          if [ -n "$committed" ]; then
+            ok=""
+            for attempt in 1 2 3 4; do
+              if git push -q origin HEAD:gallery-data; then
+                ok=1
+                break
+              fi
+              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
+              git fetch -q origin gallery-data 2>/dev/null || true
+              git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
+              sleep $((attempt * 5))
+            done
+            if [ -z "$ok" ]; then
+              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+            fi
+          fi
 
       - name: Mantener la sesión activa (checkpoint 22/33 de la galería)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: sleep 600
+
+      - name: Guardar el respaldo permanente (checkpoint 22/33) — rama git, nunca caduca ni se desaloja
         run: |
-          sleep 600
-          gh cache delete "escenas-storage-${{ github.run_id }}-21" || true
-          gh cache delete "escenas-db-${{ github.run_id }}-21" || true
-
-      - name: Guardar la galería (checkpoint 22/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage
-          key: escenas-storage-${{ github.run_id }}-22
-
-      - name: Guardar la base de datos por separado (checkpoint 22/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage/app.db
-          key: escenas-db-${{ github.run_id }}-22
+          cd /tmp/gallery-backup
+          # Copia completa en vez de una sincronización incremental: no depende de rsync (no
+          # viene garantizado en todos los runners) y así los archivos borrados en storage/ (p.ej.
+          # limpieza futura de vídeos ya publicados) tampoco se quedan para siempre en el respaldo.
+          rm -rf storage
+          mkdir -p storage
+          cp -a "$GITHUB_WORKSPACE/storage/." storage/
+          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
+          # pesado no rompa el guardado de TODOS los demás.
+          find storage -type f -size +95M -print | while read -r f; do
+            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            rm -f "$f"
+          done
+          git add -A
+          committed=""
+          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
+            echo "Sin cambios nuevos que respaldar."
+          elif git commit -q -m "Snapshot automático checkpoint 22/33 ($(date -u +%FT%TZ))"; then
+            committed=1
+          else
+            echo "Nada que respaldar todavía (storage/ vacío)."
+          fi
+          if [ -n "$committed" ]; then
+            ok=""
+            for attempt in 1 2 3 4; do
+              if git push -q origin HEAD:gallery-data; then
+                ok=1
+                break
+              fi
+              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
+              git fetch -q origin gallery-data 2>/dev/null || true
+              git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
+              sleep $((attempt * 5))
+            done
+            if [ -z "$ok" ]; then
+              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+            fi
+          fi
 
       - name: Mantener la sesión activa (checkpoint 23/33 de la galería)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: sleep 600
+
+      - name: Guardar el respaldo permanente (checkpoint 23/33) — rama git, nunca caduca ni se desaloja
         run: |
-          sleep 600
-          gh cache delete "escenas-storage-${{ github.run_id }}-22" || true
-          gh cache delete "escenas-db-${{ github.run_id }}-22" || true
-
-      - name: Guardar la galería (checkpoint 23/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage
-          key: escenas-storage-${{ github.run_id }}-23
-
-      - name: Guardar la base de datos por separado (checkpoint 23/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage/app.db
-          key: escenas-db-${{ github.run_id }}-23
+          cd /tmp/gallery-backup
+          # Copia completa en vez de una sincronización incremental: no depende de rsync (no
+          # viene garantizado en todos los runners) y así los archivos borrados en storage/ (p.ej.
+          # limpieza futura de vídeos ya publicados) tampoco se quedan para siempre en el respaldo.
+          rm -rf storage
+          mkdir -p storage
+          cp -a "$GITHUB_WORKSPACE/storage/." storage/
+          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
+          # pesado no rompa el guardado de TODOS los demás.
+          find storage -type f -size +95M -print | while read -r f; do
+            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            rm -f "$f"
+          done
+          git add -A
+          committed=""
+          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
+            echo "Sin cambios nuevos que respaldar."
+          elif git commit -q -m "Snapshot automático checkpoint 23/33 ($(date -u +%FT%TZ))"; then
+            committed=1
+          else
+            echo "Nada que respaldar todavía (storage/ vacío)."
+          fi
+          if [ -n "$committed" ]; then
+            ok=""
+            for attempt in 1 2 3 4; do
+              if git push -q origin HEAD:gallery-data; then
+                ok=1
+                break
+              fi
+              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
+              git fetch -q origin gallery-data 2>/dev/null || true
+              git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
+              sleep $((attempt * 5))
+            done
+            if [ -z "$ok" ]; then
+              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+            fi
+          fi
 
       - name: Mantener la sesión activa (checkpoint 24/33 de la galería)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: sleep 600
+
+      - name: Guardar el respaldo permanente (checkpoint 24/33) — rama git, nunca caduca ni se desaloja
         run: |
-          sleep 600
-          gh cache delete "escenas-storage-${{ github.run_id }}-23" || true
-          gh cache delete "escenas-db-${{ github.run_id }}-23" || true
-
-      - name: Guardar la galería (checkpoint 24/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage
-          key: escenas-storage-${{ github.run_id }}-24
-
-      - name: Guardar la base de datos por separado (checkpoint 24/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage/app.db
-          key: escenas-db-${{ github.run_id }}-24
+          cd /tmp/gallery-backup
+          # Copia completa en vez de una sincronización incremental: no depende de rsync (no
+          # viene garantizado en todos los runners) y así los archivos borrados en storage/ (p.ej.
+          # limpieza futura de vídeos ya publicados) tampoco se quedan para siempre en el respaldo.
+          rm -rf storage
+          mkdir -p storage
+          cp -a "$GITHUB_WORKSPACE/storage/." storage/
+          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
+          # pesado no rompa el guardado de TODOS los demás.
+          find storage -type f -size +95M -print | while read -r f; do
+            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            rm -f "$f"
+          done
+          git add -A
+          committed=""
+          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
+            echo "Sin cambios nuevos que respaldar."
+          elif git commit -q -m "Snapshot automático checkpoint 24/33 ($(date -u +%FT%TZ))"; then
+            committed=1
+          else
+            echo "Nada que respaldar todavía (storage/ vacío)."
+          fi
+          if [ -n "$committed" ]; then
+            ok=""
+            for attempt in 1 2 3 4; do
+              if git push -q origin HEAD:gallery-data; then
+                ok=1
+                break
+              fi
+              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
+              git fetch -q origin gallery-data 2>/dev/null || true
+              git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
+              sleep $((attempt * 5))
+            done
+            if [ -z "$ok" ]; then
+              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+            fi
+          fi
 
       - name: Mantener la sesión activa (checkpoint 25/33 de la galería)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: sleep 600
+
+      - name: Guardar el respaldo permanente (checkpoint 25/33) — rama git, nunca caduca ni se desaloja
         run: |
-          sleep 600
-          gh cache delete "escenas-storage-${{ github.run_id }}-24" || true
-          gh cache delete "escenas-db-${{ github.run_id }}-24" || true
-
-      - name: Guardar la galería (checkpoint 25/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage
-          key: escenas-storage-${{ github.run_id }}-25
-
-      - name: Guardar la base de datos por separado (checkpoint 25/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage/app.db
-          key: escenas-db-${{ github.run_id }}-25
+          cd /tmp/gallery-backup
+          # Copia completa en vez de una sincronización incremental: no depende de rsync (no
+          # viene garantizado en todos los runners) y así los archivos borrados en storage/ (p.ej.
+          # limpieza futura de vídeos ya publicados) tampoco se quedan para siempre en el respaldo.
+          rm -rf storage
+          mkdir -p storage
+          cp -a "$GITHUB_WORKSPACE/storage/." storage/
+          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
+          # pesado no rompa el guardado de TODOS los demás.
+          find storage -type f -size +95M -print | while read -r f; do
+            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            rm -f "$f"
+          done
+          git add -A
+          committed=""
+          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
+            echo "Sin cambios nuevos que respaldar."
+          elif git commit -q -m "Snapshot automático checkpoint 25/33 ($(date -u +%FT%TZ))"; then
+            committed=1
+          else
+            echo "Nada que respaldar todavía (storage/ vacío)."
+          fi
+          if [ -n "$committed" ]; then
+            ok=""
+            for attempt in 1 2 3 4; do
+              if git push -q origin HEAD:gallery-data; then
+                ok=1
+                break
+              fi
+              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
+              git fetch -q origin gallery-data 2>/dev/null || true
+              git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
+              sleep $((attempt * 5))
+            done
+            if [ -z "$ok" ]; then
+              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+            fi
+          fi
 
       - name: Mantener la sesión activa (checkpoint 26/33 de la galería)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: sleep 600
+
+      - name: Guardar el respaldo permanente (checkpoint 26/33) — rama git, nunca caduca ni se desaloja
         run: |
-          sleep 600
-          gh cache delete "escenas-storage-${{ github.run_id }}-25" || true
-          gh cache delete "escenas-db-${{ github.run_id }}-25" || true
-
-      - name: Guardar la galería (checkpoint 26/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage
-          key: escenas-storage-${{ github.run_id }}-26
-
-      - name: Guardar la base de datos por separado (checkpoint 26/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage/app.db
-          key: escenas-db-${{ github.run_id }}-26
+          cd /tmp/gallery-backup
+          # Copia completa en vez de una sincronización incremental: no depende de rsync (no
+          # viene garantizado en todos los runners) y así los archivos borrados en storage/ (p.ej.
+          # limpieza futura de vídeos ya publicados) tampoco se quedan para siempre en el respaldo.
+          rm -rf storage
+          mkdir -p storage
+          cp -a "$GITHUB_WORKSPACE/storage/." storage/
+          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
+          # pesado no rompa el guardado de TODOS los demás.
+          find storage -type f -size +95M -print | while read -r f; do
+            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            rm -f "$f"
+          done
+          git add -A
+          committed=""
+          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
+            echo "Sin cambios nuevos que respaldar."
+          elif git commit -q -m "Snapshot automático checkpoint 26/33 ($(date -u +%FT%TZ))"; then
+            committed=1
+          else
+            echo "Nada que respaldar todavía (storage/ vacío)."
+          fi
+          if [ -n "$committed" ]; then
+            ok=""
+            for attempt in 1 2 3 4; do
+              if git push -q origin HEAD:gallery-data; then
+                ok=1
+                break
+              fi
+              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
+              git fetch -q origin gallery-data 2>/dev/null || true
+              git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
+              sleep $((attempt * 5))
+            done
+            if [ -z "$ok" ]; then
+              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+            fi
+          fi
 
       - name: Mantener la sesión activa (checkpoint 27/33 de la galería)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: sleep 600
+
+      - name: Guardar el respaldo permanente (checkpoint 27/33) — rama git, nunca caduca ni se desaloja
         run: |
-          sleep 600
-          gh cache delete "escenas-storage-${{ github.run_id }}-26" || true
-          gh cache delete "escenas-db-${{ github.run_id }}-26" || true
-
-      - name: Guardar la galería (checkpoint 27/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage
-          key: escenas-storage-${{ github.run_id }}-27
-
-      - name: Guardar la base de datos por separado (checkpoint 27/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage/app.db
-          key: escenas-db-${{ github.run_id }}-27
+          cd /tmp/gallery-backup
+          # Copia completa en vez de una sincronización incremental: no depende de rsync (no
+          # viene garantizado en todos los runners) y así los archivos borrados en storage/ (p.ej.
+          # limpieza futura de vídeos ya publicados) tampoco se quedan para siempre en el respaldo.
+          rm -rf storage
+          mkdir -p storage
+          cp -a "$GITHUB_WORKSPACE/storage/." storage/
+          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
+          # pesado no rompa el guardado de TODOS los demás.
+          find storage -type f -size +95M -print | while read -r f; do
+            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            rm -f "$f"
+          done
+          git add -A
+          committed=""
+          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
+            echo "Sin cambios nuevos que respaldar."
+          elif git commit -q -m "Snapshot automático checkpoint 27/33 ($(date -u +%FT%TZ))"; then
+            committed=1
+          else
+            echo "Nada que respaldar todavía (storage/ vacío)."
+          fi
+          if [ -n "$committed" ]; then
+            ok=""
+            for attempt in 1 2 3 4; do
+              if git push -q origin HEAD:gallery-data; then
+                ok=1
+                break
+              fi
+              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
+              git fetch -q origin gallery-data 2>/dev/null || true
+              git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
+              sleep $((attempt * 5))
+            done
+            if [ -z "$ok" ]; then
+              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+            fi
+          fi
 
       - name: Mantener la sesión activa (checkpoint 28/33 de la galería)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: sleep 600
+
+      - name: Guardar el respaldo permanente (checkpoint 28/33) — rama git, nunca caduca ni se desaloja
         run: |
-          sleep 600
-          gh cache delete "escenas-storage-${{ github.run_id }}-27" || true
-          gh cache delete "escenas-db-${{ github.run_id }}-27" || true
-
-      - name: Guardar la galería (checkpoint 28/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage
-          key: escenas-storage-${{ github.run_id }}-28
-
-      - name: Guardar la base de datos por separado (checkpoint 28/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage/app.db
-          key: escenas-db-${{ github.run_id }}-28
+          cd /tmp/gallery-backup
+          # Copia completa en vez de una sincronización incremental: no depende de rsync (no
+          # viene garantizado en todos los runners) y así los archivos borrados en storage/ (p.ej.
+          # limpieza futura de vídeos ya publicados) tampoco se quedan para siempre en el respaldo.
+          rm -rf storage
+          mkdir -p storage
+          cp -a "$GITHUB_WORKSPACE/storage/." storage/
+          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
+          # pesado no rompa el guardado de TODOS los demás.
+          find storage -type f -size +95M -print | while read -r f; do
+            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            rm -f "$f"
+          done
+          git add -A
+          committed=""
+          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
+            echo "Sin cambios nuevos que respaldar."
+          elif git commit -q -m "Snapshot automático checkpoint 28/33 ($(date -u +%FT%TZ))"; then
+            committed=1
+          else
+            echo "Nada que respaldar todavía (storage/ vacío)."
+          fi
+          if [ -n "$committed" ]; then
+            ok=""
+            for attempt in 1 2 3 4; do
+              if git push -q origin HEAD:gallery-data; then
+                ok=1
+                break
+              fi
+              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
+              git fetch -q origin gallery-data 2>/dev/null || true
+              git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
+              sleep $((attempt * 5))
+            done
+            if [ -z "$ok" ]; then
+              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+            fi
+          fi
 
       - name: Mantener la sesión activa (checkpoint 29/33 de la galería)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: sleep 600
+
+      - name: Guardar el respaldo permanente (checkpoint 29/33) — rama git, nunca caduca ni se desaloja
         run: |
-          sleep 600
-          gh cache delete "escenas-storage-${{ github.run_id }}-28" || true
-          gh cache delete "escenas-db-${{ github.run_id }}-28" || true
-
-      - name: Guardar la galería (checkpoint 29/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage
-          key: escenas-storage-${{ github.run_id }}-29
-
-      - name: Guardar la base de datos por separado (checkpoint 29/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage/app.db
-          key: escenas-db-${{ github.run_id }}-29
+          cd /tmp/gallery-backup
+          # Copia completa en vez de una sincronización incremental: no depende de rsync (no
+          # viene garantizado en todos los runners) y así los archivos borrados en storage/ (p.ej.
+          # limpieza futura de vídeos ya publicados) tampoco se quedan para siempre en el respaldo.
+          rm -rf storage
+          mkdir -p storage
+          cp -a "$GITHUB_WORKSPACE/storage/." storage/
+          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
+          # pesado no rompa el guardado de TODOS los demás.
+          find storage -type f -size +95M -print | while read -r f; do
+            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            rm -f "$f"
+          done
+          git add -A
+          committed=""
+          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
+            echo "Sin cambios nuevos que respaldar."
+          elif git commit -q -m "Snapshot automático checkpoint 29/33 ($(date -u +%FT%TZ))"; then
+            committed=1
+          else
+            echo "Nada que respaldar todavía (storage/ vacío)."
+          fi
+          if [ -n "$committed" ]; then
+            ok=""
+            for attempt in 1 2 3 4; do
+              if git push -q origin HEAD:gallery-data; then
+                ok=1
+                break
+              fi
+              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
+              git fetch -q origin gallery-data 2>/dev/null || true
+              git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
+              sleep $((attempt * 5))
+            done
+            if [ -z "$ok" ]; then
+              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+            fi
+          fi
 
       - name: Mantener la sesión activa (checkpoint 30/33 de la galería)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: sleep 600
+
+      - name: Guardar el respaldo permanente (checkpoint 30/33) — rama git, nunca caduca ni se desaloja
         run: |
-          sleep 600
-          gh cache delete "escenas-storage-${{ github.run_id }}-29" || true
-          gh cache delete "escenas-db-${{ github.run_id }}-29" || true
-
-      - name: Guardar la galería (checkpoint 30/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage
-          key: escenas-storage-${{ github.run_id }}-30
-
-      - name: Guardar la base de datos por separado (checkpoint 30/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage/app.db
-          key: escenas-db-${{ github.run_id }}-30
+          cd /tmp/gallery-backup
+          # Copia completa en vez de una sincronización incremental: no depende de rsync (no
+          # viene garantizado en todos los runners) y así los archivos borrados en storage/ (p.ej.
+          # limpieza futura de vídeos ya publicados) tampoco se quedan para siempre en el respaldo.
+          rm -rf storage
+          mkdir -p storage
+          cp -a "$GITHUB_WORKSPACE/storage/." storage/
+          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
+          # pesado no rompa el guardado de TODOS los demás.
+          find storage -type f -size +95M -print | while read -r f; do
+            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            rm -f "$f"
+          done
+          git add -A
+          committed=""
+          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
+            echo "Sin cambios nuevos que respaldar."
+          elif git commit -q -m "Snapshot automático checkpoint 30/33 ($(date -u +%FT%TZ))"; then
+            committed=1
+          else
+            echo "Nada que respaldar todavía (storage/ vacío)."
+          fi
+          if [ -n "$committed" ]; then
+            ok=""
+            for attempt in 1 2 3 4; do
+              if git push -q origin HEAD:gallery-data; then
+                ok=1
+                break
+              fi
+              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
+              git fetch -q origin gallery-data 2>/dev/null || true
+              git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
+              sleep $((attempt * 5))
+            done
+            if [ -z "$ok" ]; then
+              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+            fi
+          fi
 
       - name: Mantener la sesión activa (checkpoint 31/33 de la galería)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: sleep 600
+
+      - name: Guardar el respaldo permanente (checkpoint 31/33) — rama git, nunca caduca ni se desaloja
         run: |
-          sleep 600
-          gh cache delete "escenas-storage-${{ github.run_id }}-30" || true
-          gh cache delete "escenas-db-${{ github.run_id }}-30" || true
-
-      - name: Guardar la galería (checkpoint 31/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage
-          key: escenas-storage-${{ github.run_id }}-31
-
-      - name: Guardar la base de datos por separado (checkpoint 31/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage/app.db
-          key: escenas-db-${{ github.run_id }}-31
+          cd /tmp/gallery-backup
+          # Copia completa en vez de una sincronización incremental: no depende de rsync (no
+          # viene garantizado en todos los runners) y así los archivos borrados en storage/ (p.ej.
+          # limpieza futura de vídeos ya publicados) tampoco se quedan para siempre en el respaldo.
+          rm -rf storage
+          mkdir -p storage
+          cp -a "$GITHUB_WORKSPACE/storage/." storage/
+          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
+          # pesado no rompa el guardado de TODOS los demás.
+          find storage -type f -size +95M -print | while read -r f; do
+            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            rm -f "$f"
+          done
+          git add -A
+          committed=""
+          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
+            echo "Sin cambios nuevos que respaldar."
+          elif git commit -q -m "Snapshot automático checkpoint 31/33 ($(date -u +%FT%TZ))"; then
+            committed=1
+          else
+            echo "Nada que respaldar todavía (storage/ vacío)."
+          fi
+          if [ -n "$committed" ]; then
+            ok=""
+            for attempt in 1 2 3 4; do
+              if git push -q origin HEAD:gallery-data; then
+                ok=1
+                break
+              fi
+              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
+              git fetch -q origin gallery-data 2>/dev/null || true
+              git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
+              sleep $((attempt * 5))
+            done
+            if [ -z "$ok" ]; then
+              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+            fi
+          fi
 
       - name: Mantener la sesión activa (checkpoint 32/33 de la galería)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: sleep 600
+
+      - name: Guardar el respaldo permanente (checkpoint 32/33) — rama git, nunca caduca ni se desaloja
         run: |
-          sleep 600
-          gh cache delete "escenas-storage-${{ github.run_id }}-31" || true
-          gh cache delete "escenas-db-${{ github.run_id }}-31" || true
-
-      - name: Guardar la galería (checkpoint 32/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage
-          key: escenas-storage-${{ github.run_id }}-32
-
-      - name: Guardar la base de datos por separado (checkpoint 32/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage/app.db
-          key: escenas-db-${{ github.run_id }}-32
+          cd /tmp/gallery-backup
+          # Copia completa en vez de una sincronización incremental: no depende de rsync (no
+          # viene garantizado en todos los runners) y así los archivos borrados en storage/ (p.ej.
+          # limpieza futura de vídeos ya publicados) tampoco se quedan para siempre en el respaldo.
+          rm -rf storage
+          mkdir -p storage
+          cp -a "$GITHUB_WORKSPACE/storage/." storage/
+          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
+          # pesado no rompa el guardado de TODOS los demás.
+          find storage -type f -size +95M -print | while read -r f; do
+            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            rm -f "$f"
+          done
+          git add -A
+          committed=""
+          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
+            echo "Sin cambios nuevos que respaldar."
+          elif git commit -q -m "Snapshot automático checkpoint 32/33 ($(date -u +%FT%TZ))"; then
+            committed=1
+          else
+            echo "Nada que respaldar todavía (storage/ vacío)."
+          fi
+          if [ -n "$committed" ]; then
+            ok=""
+            for attempt in 1 2 3 4; do
+              if git push -q origin HEAD:gallery-data; then
+                ok=1
+                break
+              fi
+              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
+              git fetch -q origin gallery-data 2>/dev/null || true
+              git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
+              sleep $((attempt * 5))
+            done
+            if [ -z "$ok" ]; then
+              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+            fi
+          fi
 
       - name: Mantener la sesión activa (checkpoint 33/33 de la galería)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: sleep 600
+
+      - name: Guardar el respaldo permanente (checkpoint 33/33) — rama git, nunca caduca ni se desaloja
         run: |
-          sleep 600
-          gh cache delete "escenas-storage-${{ github.run_id }}-32" || true
-          gh cache delete "escenas-db-${{ github.run_id }}-32" || true
-
-      - name: Guardar la galería (checkpoint 33/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage
-          key: escenas-storage-${{ github.run_id }}-33
-
-      - name: Guardar la base de datos por separado (checkpoint 33/33)
-        uses: actions/cache/save@v4
-        with:
-          path: storage/app.db
-          key: escenas-db-${{ github.run_id }}-33
+          cd /tmp/gallery-backup
+          # Copia completa en vez de una sincronización incremental: no depende de rsync (no
+          # viene garantizado en todos los runners) y así los archivos borrados en storage/ (p.ej.
+          # limpieza futura de vídeos ya publicados) tampoco se quedan para siempre en el respaldo.
+          rm -rf storage
+          mkdir -p storage
+          cp -a "$GITHUB_WORKSPACE/storage/." storage/
+          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
+          # pesado no rompa el guardado de TODOS los demás.
+          find storage -type f -size +95M -print | while read -r f; do
+            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            rm -f "$f"
+          done
+          git add -A
+          committed=""
+          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
+            echo "Sin cambios nuevos que respaldar."
+          elif git commit -q -m "Snapshot automático checkpoint 33/33 ($(date -u +%FT%TZ))"; then
+            committed=1
+          else
+            echo "Nada que respaldar todavía (storage/ vacío)."
+          fi
+          if [ -n "$committed" ]; then
+            ok=""
+            for attempt in 1 2 3 4; do
+              if git push -q origin HEAD:gallery-data; then
+                ok=1
+                break
+              fi
+              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
+              git fetch -q origin gallery-data 2>/dev/null || true
+              git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
+              sleep $((attempt * 5))
+            done
+            if [ -z "$ok" ]; then
+              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+            fi
+          fi
 
       - name: Pasar el testigo a la siguiente sesión
         if: ${{ vars.SERVER_ENABLED != 'false' }}
