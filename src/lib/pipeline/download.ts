@@ -11,6 +11,10 @@ export interface DownloadResult {
   // rankingAnalyze.ts groupIntoRankings). undefined si el vídeo se subió como archivo directo
   // (sin pasar por yt-dlp, no hay forma de saberlo).
   uploader?: string;
+  // URL real del vídeo resuelto (yt-dlp %(webpage_url)s) — solo lo devuelve downloadAudioOnly.
+  // Necesario cuando la "url" de entrada es una búsqueda ("ytsearch1:...", ver musicApply.ts
+  // autoApplyRecommendedMusic) para poder guardar un enlace de verdad en vez de la búsqueda.
+  resolvedUrl?: string;
 }
 
 // El cliente "web" por defecto de YouTube exige ahora resolver un reto en JavaScript y es el
@@ -84,7 +88,12 @@ export async function downloadSourceVideo(url: string, outputPath: string): Prom
   };
 }
 
-/** Descarga solo el audio (mp3) de un vídeo de YouTube, p.ej. para usar una canción como banda sonora. */
+/**
+ * Descarga solo el audio (mp3) de un vídeo de YouTube, p.ej. para usar una canción como banda
+ * sonora. `url` acepta tanto un enlace normal como una búsqueda de yt-dlp (p.ej. "ytsearch1:algo
+ * official audio"), en cuyo caso resolvedUrl devuelve el enlace real del vídeo elegido — ver
+ * autoApplyRecommendedMusic en musicApply.ts.
+ */
 export async function downloadAudioOnly(url: string, outputPath: string): Promise<DownloadResult> {
   const outNoExt = outputPath.replace(/\.mp3$/i, "");
   const { stdout } = await runYtdlpWithRetry([
@@ -97,13 +106,14 @@ export async function downloadAudioOnly(url: string, outputPath: string): Promis
     "-o",
     `${outNoExt}.%(ext)s`,
     "--print",
-    "after_move:%(title)s|||%(duration)s",
+    "after_move:%(title)s|||%(duration)s|||%(webpage_url)s",
   ]);
 
-  const [title, durationRaw] = stdout.trim().split("|||");
+  const [title, durationRaw, resolvedUrl] = stdout.trim().split("|||");
   return {
     title: title || "Canción sin título",
     durationSec: Number(durationRaw) || 0,
+    resolvedUrl: resolvedUrl || undefined,
   };
 }
 

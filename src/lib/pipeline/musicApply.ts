@@ -1,10 +1,9 @@
 import fs from "fs";
 import { db } from "@/lib/db";
-import { config } from "@/lib/config";
-import { run } from "./exec";
 import { mixBackgroundMusic, extractAudioSegment, extractThumbnail } from "./clip";
 import { probeVideo } from "./probe";
 import { regenerateClip } from "./regenerateClip";
+import { downloadAudioOnly } from "./download";
 import { clipVideoPath, clipThumbnailPath, clipAssembledPath, musicSegmentPath } from "@/lib/storagePaths";
 
 export interface ApplyMusicParams {
@@ -12,21 +11,24 @@ export interface ApplyMusicParams {
   musicStartSec: number;
 }
 
+interface CleanBase {
+  jobId: string;
+  finalPath: string;
+  thumbPath: string;
+  basePath: string;
+}
+
 /**
- * Aplica (o quita) música de fondo a un clip YA generado, de cualquier modo — no solo Rankings.
- * La música es siempre opt-in: nunca se queda pegada si el usuario la desactiva, y se puede
- * cambiar cuantas veces se quiera sin que se vaya acumulando sobre sí misma, porque siempre se
- * mezcla sobre una versión LIMPIA (sin música) del clip, no sobre el resultado de la vez anterior:
+ * Deja lista una versión LIMPIA (sin música) del clip sobre la que mezclar — nunca se mezcla
+ * sobre el resultado de una mezcla anterior, para poder cambiar de canción cuantas veces se
+ * quiera sin que se vaya acumulando sobre sí misma:
  * - RANKING ya guarda esa versión limpia de forma persistente (`clipAssembledPath`, montada antes
  *   de mezclar música — ver rankingPipeline.ts).
  * - SINGLE/SPLIT no tienen ese archivo intermedio guardado (regenerateClip.ts no deja rastros
  *   temporales), así que la forma correcta de conseguir una base limpia es regenerar el clip desde
  *   cero (regenerateClip ya reconstruye exactamente el clip sin música, a partir de lo guardado).
  */
-export async function applyMusicToClip(
-  clipId: string,
-  params: ApplyMusicParams | null
-): Promise<{ filePath: string; thumbnailPath: string }> {
+async function resolveCleanBase(clipId: string): Promise<CleanBase> {
   const clip = await db.clip.findUniqueOrThrow({ where: { id: clipId }, include: { job: true } });
   const jobId = clip.jobId;
   const finalPath = clipVideoPath(jobId, clipId);
@@ -39,38 +41,25 @@ export async function applyMusicToClip(
       throw new Error("El vídeo de ranking todavía no está montado.");
     }
   } else {
-    // regenerateClip ya deja finalPath limpio (sin música) y actualizada la base de datos.
     await regenerateClip(clipId);
     basePath = finalPath;
   }
 
-  if (!params) {
-    if (basePath !== finalPath) {
-      fs.copyFileSync(basePath, finalPath);
-      await extractThumbnail(finalPath, thumbPath, 2.2);
-    }
-    await db.clip.update({
-      where: { id: clipId },
-      data: { musicEnabled: false, musicSourceUrl: null, musicStartSec: null, filePath: finalPath, thumbnailPath: thumbPath },
-    });
-    return { filePath: finalPath, thumbnailPath: thumbPath };
-  }
+  return { jobId, finalPath, thumbPath, basePath };
+}
 
-  const rawAudioPath = `${musicSegmentPath(jobId, clipId)}.source.m4a`;
-  await run(config.ytdlpPath, [
-    params.musicSourceUrl,
-    "-f",
-    "bestaudio",
-    "--extract-audio",
-    "--audio-format",
-    "m4a",
-    "-o",
-    rawAudioPath,
-  ]);
-
+/** Recorta el tramo de audio ya descargado, lo mezcla de fondo y guarda el resultado en el clip. */
+async function mixDownloadedAudioIntoClip(
+  clipId: string,
+  base: CleanBase,
+  rawAudioPath: string,
+  startSec: number,
+  sourceUrlToStore: string
+): Promise<{ filePath: string; thumbnailPath: string }> {
+  const { jobId, finalPath, thumbPath, basePath } = base;
   const { durationSec } = await probeVideo(basePath);
   const segmentPath = musicSegmentPath(jobId, clipId);
-  await extractAudioSegment(rawAudioPath, params.musicStartSec, durationSec, segmentPath);
+  await extractAudioSegment(rawAudioPath, startSec, durationSec, segmentPath);
 
   // Se mezcla siempre a un archivo temporal distinto del de entrada — en SINGLE/SPLIT basePath y
   // finalPath son la MISMA ruta, y hacer que ffmpeg lea y escriba el mismo archivo a la vez lo
@@ -88,12 +77,81 @@ export async function applyMusicToClip(
     where: { id: clipId },
     data: {
       musicEnabled: true,
-      musicSourceUrl: params.musicSourceUrl,
-      musicStartSec: params.musicStartSec,
+      musicSourceUrl: sourceUrlToStore,
+      musicStartSec: startSec,
       filePath: finalPath,
       thumbnailPath: thumbPath,
     },
   });
 
   return { filePath: finalPath, thumbnailPath: thumbPath };
+}
+
+/**
+ * Aplica (o quita) música de fondo a un clip YA generado, de cualquier modo — no solo Rankings.
+ * La música es siempre opt-in: nunca se queda pegada si el usuario la desactiva.
+ */
+export async function applyMusicToClip(
+  clipId: string,
+  params: ApplyMusicParams | null
+): Promise<{ filePath: string; thumbnailPath: string }> {
+  const base = await resolveCleanBase(clipId);
+  const { finalPath, thumbPath, basePath, jobId } = base;
+
+  if (!params) {
+    if (basePath !== finalPath) {
+      fs.copyFileSync(basePath, finalPath);
+      await extractThumbnail(finalPath, thumbPath, 2.2);
+    }
+    await db.clip.update({
+      where: { id: clipId },
+      data: { musicEnabled: false, musicSourceUrl: null, musicStartSec: null, filePath: finalPath, thumbnailPath: thumbPath },
+    });
+    return { filePath: finalPath, thumbnailPath: thumbPath };
+  }
+
+  // downloadAudioOnly (no una llamada suelta a yt-dlp) porque YouTube bloquea las peticiones
+  // "a pelo" desde la IP de datacenter del runner igual que bloqueaba la descarga del vídeo
+  // fuente (ver ytExtractorArgs/runYtdlpWithRetry en download.ts) — bug real: este enlace de
+  // música nunca llevó esa protección, así que fallaba en el servidor aunque funcionara en local.
+  const rawAudioPath = `${musicSegmentPath(jobId, clipId)}.source.mp3`;
+  await downloadAudioOnly(params.musicSourceUrl, rawAudioPath);
+
+  return mixDownloadedAudioIntoClip(clipId, base, rawAudioPath, params.musicStartSec, params.musicSourceUrl);
+}
+
+/** "1:15" o "1:15-2:00" (se coge solo el primer número) -> segundos. */
+function parseSuggestedStartSec(section: string | null | undefined): number {
+  if (!section) return 0;
+  const match = section.match(/(\d+):(\d{2})/);
+  if (!match) return 0;
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+/**
+ * "Aplicar la sugerencia automáticamente": en vez de que el usuario tenga que buscar la canción
+ * que recomendó la IA y pegar el enlace a mano, se busca ella misma en YouTube (con yt-dlp, el
+ * mismo motor que ya usa toda la app — no hace falta ninguna cuenta ni API de pago tipo Spotify,
+ * cuya API tampoco permite descargar canciones completas por sus condiciones de uso) y se aplica
+ * con el minuto que la IA ya sugirió (musicSuggestedSection). Pedido explícito: "que tú cojas la
+ * canción, en qué minuto y todo". "ytsearch1:" ya descarga el mejor resultado en la misma llamada
+ * (no hace falta una búsqueda aparte y luego otra descarga), y downloadAudioOnly devuelve el
+ * enlace real del vídeo elegido (resolvedUrl) para guardarlo como si se hubiera pegado a mano.
+ */
+export async function autoApplyRecommendedMusic(clipId: string): Promise<{ filePath: string; thumbnailPath: string }> {
+  const clip = await db.clip.findUniqueOrThrow({ where: { id: clipId } });
+  if (!clip.musicQuery) {
+    throw new Error("Este clip no tiene ninguna canción recomendada por la IA.");
+  }
+
+  const base = await resolveCleanBase(clipId);
+  const rawAudioPath = `${musicSegmentPath(base.jobId, clipId)}.source.mp3`;
+  const result = await downloadAudioOnly(`ytsearch1:${clip.musicQuery} official audio`, rawAudioPath);
+  if (!result.resolvedUrl) {
+    fs.rmSync(rawAudioPath, { force: true });
+    throw new Error(`No se encontró ninguna canción en YouTube para "${clip.musicQuery}".`);
+  }
+
+  const startSec = parseSuggestedStartSec(clip.musicSuggestedSection);
+  return mixDownloadedAudioIntoClip(clipId, base, rawAudioPath, startSec, result.resolvedUrl);
 }
