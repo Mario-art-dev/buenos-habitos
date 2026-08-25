@@ -23,16 +23,23 @@ const DEFAULT_PARTS_COUNT = 4;
 /**
  * Resuelve el vídeo de ABAJO (fijo/decorativo, p.ej. gameplay de coche) igual que
  * resolveSourceVideo resuelve el de arriba: archivo subido si lo hay, si no lo descarga de la URL.
+ * Mismo motivo que resolveSourceVideo (ver download.ts) para comprobar que el archivo sigue
+ * existiendo: los archivos de más de 95MB no se respaldan entre sesiones.
  */
 async function resolveBottomVideo(
   job: { bottomVideoUrl: string | null; bottomVideoFilePath: string | null },
   outputPath: string
 ): Promise<{ durationSec: number }> {
-  if (job.bottomVideoFilePath) {
+  if (job.bottomVideoFilePath && fs.existsSync(job.bottomVideoFilePath)) {
     const info = await probeVideo(job.bottomVideoFilePath);
     return { durationSec: info.durationSec };
   }
   if (!job.bottomVideoUrl) {
+    if (job.bottomVideoFilePath) {
+      throw new Error(
+        "El vídeo de abajo que subiste se perdió al reiniciarse la sesión (no se pudo respaldar por su tamaño) y no tiene un enlace de origen para volver a descargarlo. Elimina este trabajo y vuelve a subir el vídeo en uno nuevo."
+      );
+    }
     throw new Error("Este trabajo no tiene ni URL ni archivo para el vídeo de abajo.");
   }
   const { durationSec } = await downloadSourceVideo(job.bottomVideoUrl, outputPath);

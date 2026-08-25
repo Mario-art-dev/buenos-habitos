@@ -1,3 +1,4 @@
+import fs from "fs";
 import { config } from "@/lib/config";
 import { run } from "./exec";
 import { probeVideo } from "./probe";
@@ -121,16 +122,28 @@ export async function downloadAudioOnly(url: string, outputPath: string): Promis
  * Resuelve el vídeo fuente de un job: si ya se subió un archivo directamente (sin pasar por
  * YouTube), simplemente lo usa tal cual; si no, lo descarga con yt-dlp desde `sourceUrl`.
  * Útil como alternativa cuando yt-dlp no puede descargar (p.ej. bloqueo de IP de datacenter).
+ *
+ * `sourceFilePath` puede apuntar a un archivo que ya no existe en disco: los vídeos fuente suelen
+ * pesar más de 95MB y el respaldo por checkpoints (rama git gallery-data) excluye los archivos que
+ * superan ese tamaño, así que tras un reinicio de sesión la fila del job sobrevive pero el archivo
+ * no. Si hay `sourceUrl` de todas formas se puede volver a descargar; si el vídeo se subió a mano
+ * (sin URL), no hay forma de recuperarlo y hay que decirlo claro en vez de dejar que reviente
+ * ffprobe con un "No such file or directory" críptico.
  */
 export async function resolveSourceVideo(
   job: { sourceUrl: string | null; sourceFilePath: string | null; sourceTitle: string | null },
   outputPath: string
 ): Promise<DownloadResult> {
-  if (job.sourceFilePath) {
+  if (job.sourceFilePath && fs.existsSync(job.sourceFilePath)) {
     const info = await probeVideo(job.sourceFilePath);
     return { title: job.sourceTitle ?? "Vídeo subido", durationSec: info.durationSec };
   }
   if (!job.sourceUrl) {
+    if (job.sourceFilePath) {
+      throw new Error(
+        "El vídeo que subiste se perdió al reiniciarse la sesión (no se pudo respaldar por su tamaño) y no tiene un enlace de origen para volver a descargarlo. Elimina este trabajo y vuelve a subir el vídeo en uno nuevo."
+      );
+    }
     throw new Error("Este trabajo no tiene ni URL ni archivo de vídeo fuente.");
   }
   return downloadSourceVideo(job.sourceUrl, outputPath);
