@@ -77,6 +77,18 @@ jobs:
             echo "Rama de respaldo permanente encontrada, restaurando..."
             if [ -d /tmp/gallery-backup/storage ]; then
               cp -a /tmp/gallery-backup/storage/. storage/
+              # Los archivos de más de 95MB se trocean en partes de <100MB antes de cada checkpoint
+              # (git rechaza cualquier archivo de más de 100MB) — aquí se reensamblan enteros otra
+              # vez antes de que la app los use. Antes esos vídeos simplemente se excluían del
+              # respaldo y se perdían para siempre en cuanto la sesión se reiniciaba, aunque fueran
+              # el vídeo fuente de un trabajo subido a mano (sin enlace para volver a descargarlo) —
+              # el caso normal de este canal, no una excepción.
+              find storage -type f -name "*.part0000" -print | while read -r first; do
+                orig="${first%.part0000}"
+                echo "Reensamblando '$orig' desde sus partes..."
+                cat "${orig}".part* > "$orig"
+                rm -f "${orig}".part*
+              done
               echo "Restaurado en storage/: $(du -sh storage 2>/dev/null | cut -f1)"
             else
               echo "La rama de respaldo existe pero todavía no tiene ninguna carpeta storage/ guardada."
@@ -322,6 +334,20 @@ jobs:
       # anterior basado en caché — porque nunca se estaba respaldando el archivo real. Arreglo:
       # DATABASE_URL ahora usa una ruta absoluta ("file:${{ github.workspace }}/storage/app.db") en
       # los tres pasos que la usan, para que coincida de verdad con lo que este mecanismo respalda.
+      #
+      # CUARTO BUG REAL CONFIRMADO Y CORREGIDO (mismo día): los vídeos fuente de más de 95MB
+      # (git rechaza cualquier archivo de más de 100MB) simplemente se EXCLUÍAN del respaldo, así
+      # que se perdían para siempre en cuanto la sesión se reiniciaba. Para un trabajo con enlace
+      # (YouTube, etc.) esto ya no importa — resolveSourceVideo() lo vuelve a descargar solo si
+      # falta (ver src/lib/pipeline/download.ts). Pero para un trabajo SUBIDO A MANO (sin enlace de
+      # origen, el caso normal de este canal, no una excepción) no hay ningún sitio del que volver
+      # a descargarlo: se perdía sin remedio, con casi todos los trabajos acabando en error justo
+      # después de cada reinicio automático. Arreglo: en vez de excluir el archivo grande del
+      # checkpoint, se trocea en partes de 90MB (bajo el límite de git) que sí se pueden respaldar
+      # normalmente, y se reensamblan enteras (byte a byte, verificado con sha256 en pruebas reales
+      # antes de desplegarlo) justo después de restaurar la rama de respaldo, antes de arrancar la
+      # web/worker — ver el paso "Restaurar la galería..." arriba y el trocedo en cada checkpoint
+      # de abajo.
 
 
 
@@ -337,10 +363,13 @@ jobs:
           rm -rf storage
           mkdir -p storage
           cp -a "$GITHUB_WORKSPACE/storage/." storage/
-          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
-          # pesado no rompa el guardado de TODOS los demás.
+          # git rechaza de raíz cualquier archivo de más de 100MB: los troceamos en partes de
+          # 90MB (se reensamblan enteros al restaurar, ver el paso de arriba) en vez de excluirlos
+          # del respaldo como antes — eso perdía para siempre cualquier vídeo subido a mano (sin
+          # enlace de origen para volver a descargarlo) en cuanto se reiniciaba la sesión.
           find storage -type f -size +95M -print | while read -r f; do
-            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            echo "'$f' pesa más de 95MB: troceando en partes de 90MB para poder respaldarlo entero."
+            split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
           git add -A
@@ -381,10 +410,13 @@ jobs:
           rm -rf storage
           mkdir -p storage
           cp -a "$GITHUB_WORKSPACE/storage/." storage/
-          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
-          # pesado no rompa el guardado de TODOS los demás.
+          # git rechaza de raíz cualquier archivo de más de 100MB: los troceamos en partes de
+          # 90MB (se reensamblan enteros al restaurar, ver el paso de arriba) en vez de excluirlos
+          # del respaldo como antes — eso perdía para siempre cualquier vídeo subido a mano (sin
+          # enlace de origen para volver a descargarlo) en cuanto se reiniciaba la sesión.
           find storage -type f -size +95M -print | while read -r f; do
-            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            echo "'$f' pesa más de 95MB: troceando en partes de 90MB para poder respaldarlo entero."
+            split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
           git add -A
@@ -425,10 +457,13 @@ jobs:
           rm -rf storage
           mkdir -p storage
           cp -a "$GITHUB_WORKSPACE/storage/." storage/
-          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
-          # pesado no rompa el guardado de TODOS los demás.
+          # git rechaza de raíz cualquier archivo de más de 100MB: los troceamos en partes de
+          # 90MB (se reensamblan enteros al restaurar, ver el paso de arriba) en vez de excluirlos
+          # del respaldo como antes — eso perdía para siempre cualquier vídeo subido a mano (sin
+          # enlace de origen para volver a descargarlo) en cuanto se reiniciaba la sesión.
           find storage -type f -size +95M -print | while read -r f; do
-            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            echo "'$f' pesa más de 95MB: troceando en partes de 90MB para poder respaldarlo entero."
+            split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
           git add -A
@@ -469,10 +504,13 @@ jobs:
           rm -rf storage
           mkdir -p storage
           cp -a "$GITHUB_WORKSPACE/storage/." storage/
-          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
-          # pesado no rompa el guardado de TODOS los demás.
+          # git rechaza de raíz cualquier archivo de más de 100MB: los troceamos en partes de
+          # 90MB (se reensamblan enteros al restaurar, ver el paso de arriba) en vez de excluirlos
+          # del respaldo como antes — eso perdía para siempre cualquier vídeo subido a mano (sin
+          # enlace de origen para volver a descargarlo) en cuanto se reiniciaba la sesión.
           find storage -type f -size +95M -print | while read -r f; do
-            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            echo "'$f' pesa más de 95MB: troceando en partes de 90MB para poder respaldarlo entero."
+            split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
           git add -A
@@ -513,10 +551,13 @@ jobs:
           rm -rf storage
           mkdir -p storage
           cp -a "$GITHUB_WORKSPACE/storage/." storage/
-          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
-          # pesado no rompa el guardado de TODOS los demás.
+          # git rechaza de raíz cualquier archivo de más de 100MB: los troceamos en partes de
+          # 90MB (se reensamblan enteros al restaurar, ver el paso de arriba) en vez de excluirlos
+          # del respaldo como antes — eso perdía para siempre cualquier vídeo subido a mano (sin
+          # enlace de origen para volver a descargarlo) en cuanto se reiniciaba la sesión.
           find storage -type f -size +95M -print | while read -r f; do
-            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            echo "'$f' pesa más de 95MB: troceando en partes de 90MB para poder respaldarlo entero."
+            split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
           git add -A
@@ -557,10 +598,13 @@ jobs:
           rm -rf storage
           mkdir -p storage
           cp -a "$GITHUB_WORKSPACE/storage/." storage/
-          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
-          # pesado no rompa el guardado de TODOS los demás.
+          # git rechaza de raíz cualquier archivo de más de 100MB: los troceamos en partes de
+          # 90MB (se reensamblan enteros al restaurar, ver el paso de arriba) en vez de excluirlos
+          # del respaldo como antes — eso perdía para siempre cualquier vídeo subido a mano (sin
+          # enlace de origen para volver a descargarlo) en cuanto se reiniciaba la sesión.
           find storage -type f -size +95M -print | while read -r f; do
-            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            echo "'$f' pesa más de 95MB: troceando en partes de 90MB para poder respaldarlo entero."
+            split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
           git add -A
@@ -601,10 +645,13 @@ jobs:
           rm -rf storage
           mkdir -p storage
           cp -a "$GITHUB_WORKSPACE/storage/." storage/
-          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
-          # pesado no rompa el guardado de TODOS los demás.
+          # git rechaza de raíz cualquier archivo de más de 100MB: los troceamos en partes de
+          # 90MB (se reensamblan enteros al restaurar, ver el paso de arriba) en vez de excluirlos
+          # del respaldo como antes — eso perdía para siempre cualquier vídeo subido a mano (sin
+          # enlace de origen para volver a descargarlo) en cuanto se reiniciaba la sesión.
           find storage -type f -size +95M -print | while read -r f; do
-            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            echo "'$f' pesa más de 95MB: troceando en partes de 90MB para poder respaldarlo entero."
+            split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
           git add -A
@@ -645,10 +692,13 @@ jobs:
           rm -rf storage
           mkdir -p storage
           cp -a "$GITHUB_WORKSPACE/storage/." storage/
-          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
-          # pesado no rompa el guardado de TODOS los demás.
+          # git rechaza de raíz cualquier archivo de más de 100MB: los troceamos en partes de
+          # 90MB (se reensamblan enteros al restaurar, ver el paso de arriba) en vez de excluirlos
+          # del respaldo como antes — eso perdía para siempre cualquier vídeo subido a mano (sin
+          # enlace de origen para volver a descargarlo) en cuanto se reiniciaba la sesión.
           find storage -type f -size +95M -print | while read -r f; do
-            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            echo "'$f' pesa más de 95MB: troceando en partes de 90MB para poder respaldarlo entero."
+            split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
           git add -A
@@ -689,10 +739,13 @@ jobs:
           rm -rf storage
           mkdir -p storage
           cp -a "$GITHUB_WORKSPACE/storage/." storage/
-          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
-          # pesado no rompa el guardado de TODOS los demás.
+          # git rechaza de raíz cualquier archivo de más de 100MB: los troceamos en partes de
+          # 90MB (se reensamblan enteros al restaurar, ver el paso de arriba) en vez de excluirlos
+          # del respaldo como antes — eso perdía para siempre cualquier vídeo subido a mano (sin
+          # enlace de origen para volver a descargarlo) en cuanto se reiniciaba la sesión.
           find storage -type f -size +95M -print | while read -r f; do
-            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            echo "'$f' pesa más de 95MB: troceando en partes de 90MB para poder respaldarlo entero."
+            split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
           git add -A
@@ -733,10 +786,13 @@ jobs:
           rm -rf storage
           mkdir -p storage
           cp -a "$GITHUB_WORKSPACE/storage/." storage/
-          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
-          # pesado no rompa el guardado de TODOS los demás.
+          # git rechaza de raíz cualquier archivo de más de 100MB: los troceamos en partes de
+          # 90MB (se reensamblan enteros al restaurar, ver el paso de arriba) en vez de excluirlos
+          # del respaldo como antes — eso perdía para siempre cualquier vídeo subido a mano (sin
+          # enlace de origen para volver a descargarlo) en cuanto se reiniciaba la sesión.
           find storage -type f -size +95M -print | while read -r f; do
-            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            echo "'$f' pesa más de 95MB: troceando en partes de 90MB para poder respaldarlo entero."
+            split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
           git add -A
@@ -777,10 +833,13 @@ jobs:
           rm -rf storage
           mkdir -p storage
           cp -a "$GITHUB_WORKSPACE/storage/." storage/
-          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
-          # pesado no rompa el guardado de TODOS los demás.
+          # git rechaza de raíz cualquier archivo de más de 100MB: los troceamos en partes de
+          # 90MB (se reensamblan enteros al restaurar, ver el paso de arriba) en vez de excluirlos
+          # del respaldo como antes — eso perdía para siempre cualquier vídeo subido a mano (sin
+          # enlace de origen para volver a descargarlo) en cuanto se reiniciaba la sesión.
           find storage -type f -size +95M -print | while read -r f; do
-            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            echo "'$f' pesa más de 95MB: troceando en partes de 90MB para poder respaldarlo entero."
+            split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
           git add -A
@@ -821,10 +880,13 @@ jobs:
           rm -rf storage
           mkdir -p storage
           cp -a "$GITHUB_WORKSPACE/storage/." storage/
-          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
-          # pesado no rompa el guardado de TODOS los demás.
+          # git rechaza de raíz cualquier archivo de más de 100MB: los troceamos en partes de
+          # 90MB (se reensamblan enteros al restaurar, ver el paso de arriba) en vez de excluirlos
+          # del respaldo como antes — eso perdía para siempre cualquier vídeo subido a mano (sin
+          # enlace de origen para volver a descargarlo) en cuanto se reiniciaba la sesión.
           find storage -type f -size +95M -print | while read -r f; do
-            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            echo "'$f' pesa más de 95MB: troceando en partes de 90MB para poder respaldarlo entero."
+            split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
           git add -A
@@ -865,10 +927,13 @@ jobs:
           rm -rf storage
           mkdir -p storage
           cp -a "$GITHUB_WORKSPACE/storage/." storage/
-          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
-          # pesado no rompa el guardado de TODOS los demás.
+          # git rechaza de raíz cualquier archivo de más de 100MB: los troceamos en partes de
+          # 90MB (se reensamblan enteros al restaurar, ver el paso de arriba) en vez de excluirlos
+          # del respaldo como antes — eso perdía para siempre cualquier vídeo subido a mano (sin
+          # enlace de origen para volver a descargarlo) en cuanto se reiniciaba la sesión.
           find storage -type f -size +95M -print | while read -r f; do
-            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            echo "'$f' pesa más de 95MB: troceando en partes de 90MB para poder respaldarlo entero."
+            split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
           git add -A
@@ -909,10 +974,13 @@ jobs:
           rm -rf storage
           mkdir -p storage
           cp -a "$GITHUB_WORKSPACE/storage/." storage/
-          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
-          # pesado no rompa el guardado de TODOS los demás.
+          # git rechaza de raíz cualquier archivo de más de 100MB: los troceamos en partes de
+          # 90MB (se reensamblan enteros al restaurar, ver el paso de arriba) en vez de excluirlos
+          # del respaldo como antes — eso perdía para siempre cualquier vídeo subido a mano (sin
+          # enlace de origen para volver a descargarlo) en cuanto se reiniciaba la sesión.
           find storage -type f -size +95M -print | while read -r f; do
-            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            echo "'$f' pesa más de 95MB: troceando en partes de 90MB para poder respaldarlo entero."
+            split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
           git add -A
@@ -953,10 +1021,13 @@ jobs:
           rm -rf storage
           mkdir -p storage
           cp -a "$GITHUB_WORKSPACE/storage/." storage/
-          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
-          # pesado no rompa el guardado de TODOS los demás.
+          # git rechaza de raíz cualquier archivo de más de 100MB: los troceamos en partes de
+          # 90MB (se reensamblan enteros al restaurar, ver el paso de arriba) en vez de excluirlos
+          # del respaldo como antes — eso perdía para siempre cualquier vídeo subido a mano (sin
+          # enlace de origen para volver a descargarlo) en cuanto se reiniciaba la sesión.
           find storage -type f -size +95M -print | while read -r f; do
-            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            echo "'$f' pesa más de 95MB: troceando en partes de 90MB para poder respaldarlo entero."
+            split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
           git add -A
@@ -997,10 +1068,13 @@ jobs:
           rm -rf storage
           mkdir -p storage
           cp -a "$GITHUB_WORKSPACE/storage/." storage/
-          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
-          # pesado no rompa el guardado de TODOS los demás.
+          # git rechaza de raíz cualquier archivo de más de 100MB: los troceamos en partes de
+          # 90MB (se reensamblan enteros al restaurar, ver el paso de arriba) en vez de excluirlos
+          # del respaldo como antes — eso perdía para siempre cualquier vídeo subido a mano (sin
+          # enlace de origen para volver a descargarlo) en cuanto se reiniciaba la sesión.
           find storage -type f -size +95M -print | while read -r f; do
-            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            echo "'$f' pesa más de 95MB: troceando en partes de 90MB para poder respaldarlo entero."
+            split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
           git add -A
@@ -1041,10 +1115,13 @@ jobs:
           rm -rf storage
           mkdir -p storage
           cp -a "$GITHUB_WORKSPACE/storage/." storage/
-          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
-          # pesado no rompa el guardado de TODOS los demás.
+          # git rechaza de raíz cualquier archivo de más de 100MB: los troceamos en partes de
+          # 90MB (se reensamblan enteros al restaurar, ver el paso de arriba) en vez de excluirlos
+          # del respaldo como antes — eso perdía para siempre cualquier vídeo subido a mano (sin
+          # enlace de origen para volver a descargarlo) en cuanto se reiniciaba la sesión.
           find storage -type f -size +95M -print | while read -r f; do
-            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            echo "'$f' pesa más de 95MB: troceando en partes de 90MB para poder respaldarlo entero."
+            split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
           git add -A
@@ -1085,10 +1162,13 @@ jobs:
           rm -rf storage
           mkdir -p storage
           cp -a "$GITHUB_WORKSPACE/storage/." storage/
-          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
-          # pesado no rompa el guardado de TODOS los demás.
+          # git rechaza de raíz cualquier archivo de más de 100MB: los troceamos en partes de
+          # 90MB (se reensamblan enteros al restaurar, ver el paso de arriba) en vez de excluirlos
+          # del respaldo como antes — eso perdía para siempre cualquier vídeo subido a mano (sin
+          # enlace de origen para volver a descargarlo) en cuanto se reiniciaba la sesión.
           find storage -type f -size +95M -print | while read -r f; do
-            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            echo "'$f' pesa más de 95MB: troceando en partes de 90MB para poder respaldarlo entero."
+            split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
           git add -A
@@ -1129,10 +1209,13 @@ jobs:
           rm -rf storage
           mkdir -p storage
           cp -a "$GITHUB_WORKSPACE/storage/." storage/
-          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
-          # pesado no rompa el guardado de TODOS los demás.
+          # git rechaza de raíz cualquier archivo de más de 100MB: los troceamos en partes de
+          # 90MB (se reensamblan enteros al restaurar, ver el paso de arriba) en vez de excluirlos
+          # del respaldo como antes — eso perdía para siempre cualquier vídeo subido a mano (sin
+          # enlace de origen para volver a descargarlo) en cuanto se reiniciaba la sesión.
           find storage -type f -size +95M -print | while read -r f; do
-            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            echo "'$f' pesa más de 95MB: troceando en partes de 90MB para poder respaldarlo entero."
+            split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
           git add -A
@@ -1173,10 +1256,13 @@ jobs:
           rm -rf storage
           mkdir -p storage
           cp -a "$GITHUB_WORKSPACE/storage/." storage/
-          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
-          # pesado no rompa el guardado de TODOS los demás.
+          # git rechaza de raíz cualquier archivo de más de 100MB: los troceamos en partes de
+          # 90MB (se reensamblan enteros al restaurar, ver el paso de arriba) en vez de excluirlos
+          # del respaldo como antes — eso perdía para siempre cualquier vídeo subido a mano (sin
+          # enlace de origen para volver a descargarlo) en cuanto se reiniciaba la sesión.
           find storage -type f -size +95M -print | while read -r f; do
-            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            echo "'$f' pesa más de 95MB: troceando en partes de 90MB para poder respaldarlo entero."
+            split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
           git add -A
@@ -1217,10 +1303,13 @@ jobs:
           rm -rf storage
           mkdir -p storage
           cp -a "$GITHUB_WORKSPACE/storage/." storage/
-          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
-          # pesado no rompa el guardado de TODOS los demás.
+          # git rechaza de raíz cualquier archivo de más de 100MB: los troceamos en partes de
+          # 90MB (se reensamblan enteros al restaurar, ver el paso de arriba) en vez de excluirlos
+          # del respaldo como antes — eso perdía para siempre cualquier vídeo subido a mano (sin
+          # enlace de origen para volver a descargarlo) en cuanto se reiniciaba la sesión.
           find storage -type f -size +95M -print | while read -r f; do
-            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            echo "'$f' pesa más de 95MB: troceando en partes de 90MB para poder respaldarlo entero."
+            split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
           git add -A
@@ -1261,10 +1350,13 @@ jobs:
           rm -rf storage
           mkdir -p storage
           cp -a "$GITHUB_WORKSPACE/storage/." storage/
-          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
-          # pesado no rompa el guardado de TODOS los demás.
+          # git rechaza de raíz cualquier archivo de más de 100MB: los troceamos en partes de
+          # 90MB (se reensamblan enteros al restaurar, ver el paso de arriba) en vez de excluirlos
+          # del respaldo como antes — eso perdía para siempre cualquier vídeo subido a mano (sin
+          # enlace de origen para volver a descargarlo) en cuanto se reiniciaba la sesión.
           find storage -type f -size +95M -print | while read -r f; do
-            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            echo "'$f' pesa más de 95MB: troceando en partes de 90MB para poder respaldarlo entero."
+            split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
           git add -A
@@ -1305,10 +1397,13 @@ jobs:
           rm -rf storage
           mkdir -p storage
           cp -a "$GITHUB_WORKSPACE/storage/." storage/
-          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
-          # pesado no rompa el guardado de TODOS los demás.
+          # git rechaza de raíz cualquier archivo de más de 100MB: los troceamos en partes de
+          # 90MB (se reensamblan enteros al restaurar, ver el paso de arriba) en vez de excluirlos
+          # del respaldo como antes — eso perdía para siempre cualquier vídeo subido a mano (sin
+          # enlace de origen para volver a descargarlo) en cuanto se reiniciaba la sesión.
           find storage -type f -size +95M -print | while read -r f; do
-            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            echo "'$f' pesa más de 95MB: troceando en partes de 90MB para poder respaldarlo entero."
+            split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
           git add -A
@@ -1349,10 +1444,13 @@ jobs:
           rm -rf storage
           mkdir -p storage
           cp -a "$GITHUB_WORKSPACE/storage/." storage/
-          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
-          # pesado no rompa el guardado de TODOS los demás.
+          # git rechaza de raíz cualquier archivo de más de 100MB: los troceamos en partes de
+          # 90MB (se reensamblan enteros al restaurar, ver el paso de arriba) en vez de excluirlos
+          # del respaldo como antes — eso perdía para siempre cualquier vídeo subido a mano (sin
+          # enlace de origen para volver a descargarlo) en cuanto se reiniciaba la sesión.
           find storage -type f -size +95M -print | while read -r f; do
-            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            echo "'$f' pesa más de 95MB: troceando en partes de 90MB para poder respaldarlo entero."
+            split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
           git add -A
@@ -1393,10 +1491,13 @@ jobs:
           rm -rf storage
           mkdir -p storage
           cp -a "$GITHUB_WORKSPACE/storage/." storage/
-          # git rechaza de raíz cualquier archivo de más de 100MB: lo excluimos para que un short
-          # pesado no rompa el guardado de TODOS los demás.
+          # git rechaza de raíz cualquier archivo de más de 100MB: los troceamos en partes de
+          # 90MB (se reensamblan enteros al restaurar, ver el paso de arriba) en vez de excluirlos
+          # del respaldo como antes — eso perdía para siempre cualquier vídeo subido a mano (sin
+          # enlace de origen para volver a descargarlo) en cuanto se reiniciaba la sesión.
           find storage -type f -size +95M -print | while read -r f; do
-            echo "Aviso: '$f' pesa más de 95MB, se excluye de este checkpoint del respaldo permanente."
+            echo "'$f' pesa más de 95MB: troceando en partes de 90MB para poder respaldarlo entero."
+            split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
           git add -A
@@ -1424,6 +1525,7 @@ jobs:
               echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
             fi
           fi
+
       - name: Pasar el testigo a la siguiente sesión
         if: ${{ vars.SERVER_ENABLED != 'false' }}
         env:
