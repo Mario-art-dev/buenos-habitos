@@ -24,13 +24,21 @@ export default function VideoInput({
   value,
   onChange,
   helpText,
+  defaultTab,
+  existingLabel,
 }: {
   label: string;
   value: VideoInputValue;
   onChange: (v: VideoInputValue) => void;
   helpText?: string;
+  // Al editar un trabajo que ya tiene un vídeo subido (sin enlace), no hay nada que "prellenar" en
+  // un <input type="file"> — en su lugar se abre directamente en la pestaña "Subir vídeo" y se
+  // avisa de que ya hay uno, para que quede claro que no hace falta volver a subirlo salvo que se
+  // quiera reemplazar.
+  defaultTab?: "url" | "upload";
+  existingLabel?: string;
 }) {
-  const [tab, setTab] = useState<"url" | "upload">(value.uploadId ? "upload" : "url");
+  const [tab, setTab] = useState<"url" | "upload">(value.uploadId ? "upload" : defaultTab ?? "url");
   const [fileName, setFileName] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -127,6 +135,11 @@ export default function VideoInput({
           )}
           {!uploading && value.uploadId && fileName && (
             <p className="mt-1 text-xs text-emerald-400">✓ {fileName} subido</p>
+          )}
+          {!uploading && !value.uploadId && existingLabel && (
+            <p className="mt-1 text-xs text-slate-400">
+              ✓ {existingLabel} — sube uno nuevo aquí solo si quieres reemplazarlo.
+            </p>
           )}
         </>
       )}
