@@ -42,12 +42,24 @@ export async function composeRanking(
   group: RankingGroup,
   sourceTitle: string,
   contentLanguage: string,
-  commentaryEnabled: boolean = config.commentary.enabled
+  commentaryEnabled: boolean = config.commentary.enabled,
+  usedTitles: string[] = []
 ): Promise<RankingComposition> {
   const provider = await getAIProvider();
   const itemsList = group.items
     .map((item, i) => `${i + 1}. ${item.label} — ${item.description} (impacto ${item.score}/100)`)
     .join("\n");
+
+  // Varios grupos del mismo job pueden compartir categoría (p.ej. el cubo genérico de sobras de
+  // groupIntoRankings) y acaban pidiendo un título a la IA con un prompt casi idéntico salvo por
+  // los puestos concretos — sin esta lista la IA repite el mismo título tipo "TOP 5 GRACIOSO..."
+  // en 2 o más vídeos del mismo job. Pedido explícito: nunca debe repetirse el título entre clips.
+  const avoidTitlesBlock =
+    usedTitles.length > 0
+      ? `\nEstos títulos ya se han usado en OTROS vídeos de este mismo ranking — no repitas ninguno ni generes uno
+casi idéntico (ni con las mismas palabras clave en el mismo orden), aunque la categoría sea la misma. Busca un
+ángulo o gancho distinto para este vídeo en concreto:\n${usedTitles.map((t) => `- "${t}"`).join("\n")}\n`
+      : "";
 
   const commentaryFields = commentaryEnabled
     ? `- "commentaryIntro": 1 frase corta (máx 15 palabras) que digas en off ANTES de empezar la cuenta atrás,
@@ -75,6 +87,7 @@ ${itemsList}
 Genera los metadatos de este vídeo de ranking:
 - "title": título corto y estratégico tipo "TOP ${group.items.length} ${group.category.toUpperCase()}..." (máx 70
   caracteres, con gancho, en ${contentLanguage}, sin comillas).
+${avoidTitlesBlock}
 - "description": descripción corta (1-2 frases) resumiendo el vídeo, adaptada al canal ${config.channel.name}.
 - "hashtags": 8 a 12 hashtags sin el símbolo #, relevantes para TikTok/YouTube Shorts y esta categoría.
 - "viralityScore": 0-100, probabilidad de que este vídeo se vuelva viral.
@@ -115,8 +128,21 @@ Devuelve SOLO este JSON:
     itemCommentary.push(`Este momento se merece este puesto en el ranking.`);
   }
 
+  // Red de seguridad: si aun con la instrucción de arriba la IA repite un título ya usado (o
+  // devuelve el título de repuesto genérico, que siempre es igual entre grupos de la misma
+  // categoría), se distingue a mano en vez de dejar dos clips con el mismo título — pedido
+  // explícito: nunca debe repetirse.
+  let title = parsed.title?.slice(0, 100) ?? `TOP ${group.items.length} ${group.category}`;
+  if (usedTitles.some((t) => t.trim().toLowerCase() === title.trim().toLowerCase())) {
+    let suffix = 2;
+    while (usedTitles.some((t) => t.trim().toLowerCase() === `${title} Vol. ${suffix}`.trim().toLowerCase())) {
+      suffix++;
+    }
+    title = `${title} Vol. ${suffix}`;
+  }
+
   return {
-    title: parsed.title?.slice(0, 100) ?? `TOP ${group.items.length} ${group.category}`,
+    title,
     description: parsed.description ?? "",
     hashtags: parsed.hashtags ?? [],
     viralityScore: Math.max(0, Math.min(100, Math.round(parsed.viralityScore ?? 50))),

@@ -102,10 +102,14 @@ export async function processRankingJob(jobId: string): Promise<void> {
     // — la web se quedaba en blanco sin ninguna pista de qué pasó. Se guarda el último error para
     // poder fallar el job entero con un mensaje claro si al final no se generó ni un solo clip.
     let lastGroupError: Error | null = null;
+    // Se van acumulando los títulos ya asignados para pasárselos a composeRanking() y que no
+    // repita ninguno entre los vídeos de este mismo job (ver rankingCompose.ts) — pedido explícito.
+    const usedTitles: string[] = [];
     for (const group of groups) {
       let clipId: string | null = null;
       try {
-        const composition = await composeRanking(group, title, contentLanguage);
+        const composition = await composeRanking(group, title, contentLanguage, config.commentary.enabled, usedTitles);
+        usedTitles.push(composition.title);
         const commentaryOn = config.commentary.enabled;
         const created = await db.clip.create({
           data: {
