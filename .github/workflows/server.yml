@@ -232,6 +232,15 @@ jobs:
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           TIKTOK_CLIENT_KEY: ${{ secrets.TIKTOK_CLIENT_KEY }}
           TIKTOK_CLIENT_SECRET: ${{ secrets.TIKTOK_CLIENT_SECRET }}
+          # Por defecto la app se queda en 6/8GB de aviso/bloqueo — un límite conservador puesto
+          # antes de comprobar cuánto disco da REALMENTE el runner. Confirmado con datos reales del
+          # propio log de una sesión completa ("df -h" tras restaurar la galería): el runner de
+          # GitHub Actions da 145GB en total con ~74GB libres de verdad en ese momento (con node_modules,
+          # Ollama, whisper, ffmpeg y 4.5GB de galería ya cargados). Subido a 25/30GB — deja de sobra
+          # margen para la copia temporal de /tmp/gallery-backup (que duplica el tamaño de storage/
+          # mientras dura cada checkpoint) sin acercarse al límite real del disco.
+          STORAGE_WARN_GB: "25"
+          STORAGE_BLOCK_GB: "30"
           TRANSCRIPTION_PROVIDER: "local"
           PYTHON_PATH: "python3"
           TTS_PROVIDER: "local"

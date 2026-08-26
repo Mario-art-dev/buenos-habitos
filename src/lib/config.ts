@@ -273,16 +273,17 @@ export const config = {
 
   storageDir: optional("STORAGE_DIR", "storage"),
 
-  // GitHub Actions limita la caché del repositorio a 10GB EN TOTAL (ver server.yml) — si
-  // storage/ (sobre todo los vídeos) crece por encima de eso, el guardado periódico entre
-  // sesiones se puede acabar desalojando sin avisar y se pierden los shorts (bug real, ya
-  // pasó una vez). Como no hay forma de saber desde aquí cuánta caché ya ocupan OTRAS cosas del
-  // repo (dependencias de npm, etc.), se deja bastante margen por debajo de los 10GB reales.
+  // Límite sobre el DISCO del runner de GitHub Actions (no sobre git/GitHub) — por encima de él
+  // ya no hay margen seguro para seguir generando shorts. Valores confirmados con datos reales
+  // (no adivinados): un "df -h" real del runner tras restaurar la galería dio 145GB en total con
+  // ~74GB libres de verdad, ya con node_modules/Ollama/whisper/ffmpeg cargados — 25/30GB deja de
+  // sobra margen para la copia temporal de /tmp/gallery-backup (duplica el tamaño de storage/
+  // mientras dura cada checkpoint, ver server.yml) sin acercarse al límite real del disco.
   // "warn" avisa en la web con tiempo de sobra para publicar/borrar; "block" impide crear
   // trabajos nuevos (a partir de ahí, seguir generando solo empeoraría las cosas) hasta que se
   // libere hueco publicando o borrando shorts antiguos.
   storageQuota: {
-    warnBytes: Number(optional("STORAGE_WARN_GB", "6")) * 1024 * 1024 * 1024,
-    blockBytes: Number(optional("STORAGE_BLOCK_GB", "8")) * 1024 * 1024 * 1024,
+    warnBytes: Number(optional("STORAGE_WARN_GB", "25")) * 1024 * 1024 * 1024,
+    blockBytes: Number(optional("STORAGE_BLOCK_GB", "30")) * 1024 * 1024 * 1024,
   },
 };
