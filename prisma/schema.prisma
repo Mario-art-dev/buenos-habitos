@@ -91,6 +91,12 @@ model Job {
   updatedAt    DateTime       @updatedAt
   clips        Clip[]
   productAssets ProductAsset[]
+
+  // Marca de "papelera": la X junto al estado en cualquier trabajo (listo, error o en proceso, ver
+  // JobList.tsx) borra sus archivos de disco (libera espacio) pero conserva la fila con esta fecha
+  // puesta, para que siga apareciendo en /deleted en vez de desaparecer sin dejar rastro. null =
+  // no borrado (comportamiento normal, sigue en sus listas de siempre).
+  deletedAt DateTime?
 }
 
 // Fotos/vídeos del producto subidos por el usuario para el modo PRODUCT, en orden de aparición.

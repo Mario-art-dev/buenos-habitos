@@ -12,8 +12,10 @@ async function connectedPlatforms(candidates: Platform[]): Promise<Platform[]> {
 }
 
 async function nextEligibleClips(limit: number) {
+  // job.deletedAt: null — un clip cuyo trabajo se borró con la X (ver JobList.tsx) no debe
+  // programarse para publicar: su archivo de vídeo ya no existe en disco.
   return db.clip.findMany({
-    where: { status: "READY", autoPublishedAt: null },
+    where: { status: "READY", autoPublishedAt: null, job: { deletedAt: null } },
     orderBy: { viralityScore: "desc" },
     take: limit,
   });
@@ -109,7 +111,7 @@ export async function publishImmediately(count: number): Promise<PublishNowResul
   }
 
   const clips = await db.clip.findMany({
-    where: { status: "READY" },
+    where: { status: "READY", job: { deletedAt: null } },
     orderBy: { createdAt: "asc" },
     take: count,
     include: { publications: { where: { status: { in: ["PUBLISHED", "DRAFT"] } } } },

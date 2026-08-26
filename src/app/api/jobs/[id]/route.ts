@@ -35,10 +35,24 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   });
 }
 
+/**
+ * Borrado "de papelera": la X junto al estado (ver JobList.tsx) o el botón Eliminar del detalle
+ * borran los archivos de disco del trabajo (libera espacio) pero NO la fila de la base de datos —
+ * se marca deletedAt en su lugar, para que deje de salir en todas las listas normales pero siga
+ * apareciendo en /deleted como registro de lo que se ha borrado. Vale para cualquier estado
+ * (listo, error o todavía en proceso) — pedido explícito.
+ */
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
-  await db.job.delete({ where: { id: params.id } });
+  const job = await db.job.findUnique({ where: { id: params.id } });
+  if (!job) {
+    return NextResponse.json({ error: "Job no encontrado" }, { status: 404 });
+  }
   fs.rmSync(jobDir(params.id), { recursive: true, force: true });
-  return NextResponse.json({ ok: true });
+  const updated = await db.job.update({
+    where: { id: params.id },
+    data: { deletedAt: new Date(), sourceFilePath: null, bottomVideoFilePath: null, coverImagePath: null },
+  });
+  return NextResponse.json({ ok: true, job: updated });
 }
 
 const UPLOAD_ID_RE = /^[a-zA-Z0-9-]{8,64}$/;

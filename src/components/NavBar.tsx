@@ -12,6 +12,7 @@ const LINKS = [
   { href: "/product", label: "Producto" },
   { href: "/song", label: "Canción" },
   { href: "/gallery", label: "Galería" },
+  { href: "/deleted", label: "Eliminados" },
   { href: "/settings", label: "Ajustes" },
 ];
 

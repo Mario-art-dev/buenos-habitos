@@ -14,6 +14,14 @@ interface JobSummary {
   clips: { id: string; viralityScore: number; status: string }[];
 }
 
+async function deleteJob(id: string): Promise<void> {
+  const res = await fetch(`/api/jobs/${id}`, { method: "DELETE" });
+  if (!res.ok) {
+    const data = await res.json().catch(() => null);
+    throw new Error(data?.error ?? "No se pudo eliminar");
+  }
+}
+
 export default function JobList({
   mode,
   emptyMessage = "Todavía no has generado ningún short. Pega un enlace arriba para empezar.",
@@ -23,6 +31,7 @@ export default function JobList({
 }) {
   const [jobs, setJobs] = useState<JobSummary[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     let stop = false;
@@ -41,6 +50,23 @@ export default function JobList({
       clearInterval(interval);
     };
   }, [mode]);
+
+  async function handleDelete(e: React.MouseEvent, id: string) {
+    // El botón vive dentro del <Link> de la fila entera — sin esto, el clic también navegaría al
+    // detalle del trabajo en vez de solo borrarlo.
+    e.preventDefault();
+    e.stopPropagation();
+    if (!confirm("¿Eliminar este vídeo? Se borra de la galería y sus archivos, pero queda registrado en Eliminados.")) return;
+    setDeletingId(id);
+    try {
+      await deleteJob(id);
+      setJobs((prev) => prev.filter((j) => j.id !== id));
+    } catch (err) {
+      alert((err as Error).message);
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   if (loaded && jobs.length === 0) {
     return <p className="mt-10 text-center text-sm text-slate-500">{emptyMessage}</p>;
@@ -65,6 +91,15 @@ export default function JobList({
               <span className="text-xs text-slate-400">{job.clips.length} vídeos</span>
             )}
             <JobStatusBadge status={job.status} />
+            <button
+              type="button"
+              disabled={deletingId === job.id}
+              onClick={(e) => handleDelete(e, job.id)}
+              aria-label="Eliminar"
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-500 hover:bg-red-500/15 hover:text-red-400 disabled:opacity-40"
+            >
+              ✕
+            </button>
           </div>
         </Link>
       ))}

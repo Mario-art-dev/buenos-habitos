@@ -44,7 +44,7 @@ async function main() {
   // los recoge de uno en uno por orden de creación, así que tras reintentar este ya sigue solo con
   // el resto de la cola sin ningún cambio adicional.
   await db.job.updateMany({
-    where: { status: { in: ["DOWNLOADING", "TRANSCRIBING", "ANALYZING", "CLIPPING", "FAILED"] } },
+    where: { status: { in: ["DOWNLOADING", "TRANSCRIBING", "ANALYZING", "CLIPPING", "FAILED"] }, deletedAt: null },
     data: { status: "PENDING", error: null, statusMessage: "Reintentando automáticamente tras reinicio de la sesión…" },
   });
 

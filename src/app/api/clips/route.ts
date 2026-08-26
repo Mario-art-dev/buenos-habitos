@@ -6,7 +6,9 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   const clips = await db.clip.findMany({
-    where: { status: "READY" },
+    // job.deletedAt: null — un clip cuyo trabajo se borró con la X (ver JobList.tsx/DELETE
+    // /api/jobs/[id]) no debe seguir saliendo aquí; sus archivos ya no existen en disco.
+    where: { status: "READY", job: { deletedAt: null } },
     orderBy: { createdAt: "desc" },
     include: {
       publications: true,

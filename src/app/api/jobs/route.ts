@@ -26,9 +26,15 @@ const createJobSchema = z.object({
 
 export async function GET(req: NextRequest) {
   const mode = req.nextUrl.searchParams.get("mode");
+  // ?deleted=1 pide la papelera (/deleted) en vez de las listas normales — por defecto los
+  // trabajos borrados (ver DELETE en /api/jobs/[id]) se excluyen de todas partes.
+  const deleted = req.nextUrl.searchParams.get("deleted") === "1";
   const jobs = await db.job.findMany({
-    where: mode ? { mode } : undefined,
-    orderBy: { createdAt: "desc" },
+    where: {
+      ...(mode && { mode }),
+      deletedAt: deleted ? { not: null } : null,
+    },
+    orderBy: deleted ? { deletedAt: "desc" } : { createdAt: "desc" },
     include: { clips: { select: { id: true, viralityScore: true, status: true } } },
   });
   return NextResponse.json({ jobs });
