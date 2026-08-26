@@ -1,0 +1,31 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Big,Comic Neue,77,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,6,0,5,60,60,0,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:00.02,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}RIGHT{\c&HFFFFFF&\fscx100\fscy100} COME ON. COME
+Dialogue: 0,0:00:00.02,0:00:00.58,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}RIGHT {\c&H66FF00&\fscx125\fscy125}COME{\c&HFFFFFF&\fscx100\fscy100} ON. COME
+Dialogue: 0,0:00:00.58,0:00:01.94,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}RIGHT COME {\c&H66FF00&\fscx125\fscy125}ON.{\c&HFFFFFF&\fscx100\fscy100} COME
+Dialogue: 0,0:00:01.94,0:00:02.10,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}RIGHT COME ON. COME
+Dialogue: 0,0:00:02.10,0:00:02.12,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}RIGHT COME ON. {\c&H66FF00&\fscx125\fscy125}COME{\c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 0,0:00:02.12,0:00:02.58,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}ON.{\c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 0,0:00:09.13,0:00:09.29,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}YOU{\c&HFFFFFF&\fscx100\fscy100} BITCH, DAMN
+Dialogue: 0,0:00:09.29,0:00:09.85,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}YOU {\c&H66FF00&\fscx125\fscy125}BITCH,{\c&HFFFFFF&\fscx100\fscy100} DAMN
+Dialogue: 0,0:00:09.85,0:00:09.93,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}YOU BITCH, DAMN
+Dialogue: 0,0:00:09.93,0:00:10.73,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}YOU BITCH, {\c&H66FF00&\fscx125\fscy125}DAMN{\c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 0,0:00:11.55,0:00:11.99,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}GO{\c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 0,0:00:13.75,0:00:14.19,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}DOWN{\c&HFFFFFF&\fscx100\fscy100} LIKE BOY.
+Dialogue: 0,0:00:14.19,0:00:14.41,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}DOWN {\c&H66FF00&\fscx125\fscy125}LIKE{\c&HFFFFFF&\fscx100\fscy100} BOY.
+Dialogue: 0,0:00:14.41,0:00:14.73,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}DOWN LIKE {\c&H66FF00&\fscx125\fscy125}BOY.{\c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 0,0:02:17.18,0:02:17.62,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}OKAY,{\c&HFFFFFF&\fscx100\fscy100} WE FRIENDS NOW
+Dialogue: 0,0:02:17.62,0:02:17.64,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}OKAY, WE FRIENDS NOW
+Dialogue: 0,0:02:17.64,0:02:17.80,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}OKAY, {\c&H66FF00&\fscx125\fscy125}WE{\c&HFFFFFF&\fscx100\fscy100} FRIENDS NOW
+Dialogue: 0,0:02:17.80,0:02:18.06,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}OKAY, WE {\c&H66FF00&\fscx125\fscy125}FRIENDS{\c&HFFFFFF&\fscx100\fscy100} NOW
+Dialogue: 0,0:02:18.06,0:02:18.40,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}OKAY, WE FRIENDS {\c&H66FF00&\fscx125\fscy125}NOW{\c&HFFFFFF&\fscx100\fscy100}

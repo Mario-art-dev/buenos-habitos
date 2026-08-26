@@ -1,0 +1,37 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Big,Comic Neue,77,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,6,0,5,60,60,0,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:00.64,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}OKAY,{\c&HFFFFFF&\fscx100\fscy100} WHY DOES GAME
+Dialogue: 0,0:00:00.64,0:00:00.84,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}OKAY, WHY DOES GAME
+Dialogue: 0,0:00:00.84,0:00:00.98,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}OKAY, {\c&H66FF00&\fscx125\fscy125}WHY{\c&HFFFFFF&\fscx100\fscy100} DOES GAME
+Dialogue: 0,0:00:00.98,0:00:01.14,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}OKAY, WHY {\c&H66FF00&\fscx125\fscy125}DOES{\c&HFFFFFF&\fscx100\fscy100} GAME
+Dialogue: 0,0:00:01.14,0:00:01.34,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}OKAY, WHY DOES {\c&H66FF00&\fscx125\fscy125}GAME{\c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 0,0:00:01.34,0:00:01.62,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}SO{\c&HFFFFFF&\fscx100\fscy100} FAR IN CHAT
+Dialogue: 0,0:00:01.62,0:00:01.88,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}SO {\c&H66FF00&\fscx125\fscy125}FAR{\c&HFFFFFF&\fscx100\fscy100} IN CHAT
+Dialogue: 0,0:00:01.88,0:00:02.14,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}SO FAR {\c&H66FF00&\fscx125\fscy125}IN{\c&HFFFFFF&\fscx100\fscy100} CHAT
+Dialogue: 0,0:00:02.14,0:00:02.22,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}SO FAR IN {\c&H66FF00&\fscx125\fscy125}CHAT{\c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 0,0:00:02.22,0:00:03.32,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}GUESS{\c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 0,0:00:45.01,0:00:45.41,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}WHAT{\c&HFFFFFF&\fscx100\fscy100} GUESS
+Dialogue: 0,0:00:45.41,0:00:46.35,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}WHAT {\c&H66FF00&\fscx125\fscy125}GUESS{\c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 0,0:00:48.43,0:00:48.95,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}WHAT?{\c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 0,0:01:32.38,0:01:32.98,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}I{\c&HFFFFFF&\fscx100\fscy100} THINK
+Dialogue: 0,0:01:32.98,0:01:33.58,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}I {\c&H66FF00&\fscx125\fscy125}THINK{\c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 0,0:01:38.70,0:01:38.92,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}IT'S{\c&HFFFFFF&\fscx100\fscy100} WRITTEN AND
+Dialogue: 0,0:01:38.92,0:01:39.10,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}IT'S {\c&H66FF00&\fscx125\fscy125}WRITTEN{\c&HFFFFFF&\fscx100\fscy100} AND
+Dialogue: 0,0:01:39.10,0:01:39.60,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}IT'S WRITTEN {\c&H66FF00&\fscx125\fscy125}AND{\c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 0,0:01:53.59,0:01:53.81,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}DO{\c&HFFFFFF&\fscx100\fscy100} YOU SUPPORT BLACK
+Dialogue: 0,0:01:53.81,0:01:53.89,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}DO {\c&H66FF00&\fscx125\fscy125}YOU{\c&HFFFFFF&\fscx100\fscy100} SUPPORT BLACK
+Dialogue: 0,0:01:53.89,0:01:54.13,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}DO YOU {\c&H66FF00&\fscx125\fscy125}SUPPORT{\c&HFFFFFF&\fscx100\fscy100} BLACK
+Dialogue: 0,0:01:54.13,0:01:54.43,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}DO YOU SUPPORT {\c&H66FF00&\fscx125\fscy125}BLACK{\c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 0,0:01:54.43,0:01:54.75,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}LIVES{\c&HFFFFFF&\fscx100\fscy100} MATTER HERE?
+Dialogue: 0,0:01:54.75,0:01:55.31,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}LIVES {\c&H66FF00&\fscx125\fscy125}MATTER{\c&HFFFFFF&\fscx100\fscy100} HERE?
+Dialogue: 0,0:01:55.31,0:01:56.19,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}LIVES MATTER {\c&H66FF00&\fscx125\fscy125}HERE?{\c&HFFFFFF&\fscx100\fscy100}
