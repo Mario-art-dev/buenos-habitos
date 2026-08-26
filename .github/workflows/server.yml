@@ -7,8 +7,16 @@ permissions:
   contents: write
   actions: write
 
+# El nombre del grupo se cambió de "escenas-server" a "escenas-server-v2" porque la sesión
+# #110 se quedó fantasma en cola (bug real del lado de GitHub: ni la API, ni la propia web de
+# GitHub, ni disable/enable del workflow consiguieron cancelarla — siempre 409 "not been queued
+# yet" pese a figurar como "queued" sin ningún job asignado durante horas). Con "cancel-in-
+# progress: false", esa sesión fantasma bloqueaba en fila a cualquier sesión nueva del mismo
+# grupo para siempre. Cambiando el nombre del grupo, las sesiones nuevas quedan en un carril
+# aparte y arrancan sin tener que esperar a que la fantasma se resuelva sola (se queda ahí
+# colgada sin gastar ningún runner real, simplemente ignorada).
 concurrency:
-  group: escenas-server
+  group: escenas-server-v2
   cancel-in-progress: false
 
 jobs:
