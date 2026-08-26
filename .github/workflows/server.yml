@@ -122,29 +122,74 @@ jobs:
         # 9a9b369, el checkpoint justo anterior al borrado); este paso los trae de vuelta al
         # storage/ ya restaurado arriba y corrige sus filas en la base de datos. Paso de un solo
         # uso: se puede quitar de aquí en cuanto se confirme que ha funcionado.
+        #
+        # BUG REAL CONFIRMADO en el primer intento (sesión #112): "git fetch --depth 1 origin
+        # <SHA suelto>" sobre un commit que no es la punta de ninguna rama no es fiable en
+        # GitHub — el paso terminaba en "success" (así que ni siquiera saltaba como fallo) pero
+        # sin traer ningún archivo de verdad, confirmado comparando la rama gallery-data antes y
+        # después: seguía en el mismo commit, cero cambios respaldados. Arreglo: en vez de pedir
+        # el SHA suelto, se empuja una rama temporal que apunte a ese mismo commit (no transfiere
+        # nada, el objeto ya está en el remoto) y se clona ESA rama superficialmente — el mismo
+        # mecanismo ya probado del paso "Restaurar la galería" de arriba. Además, ahora el paso
+        # falla de verdad (en vez de quedarse en un aviso silencioso) si al final no se recuperó
+        # ningún directorio.
         run: |
           set -e
           REMOTE_URL="https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
           OLD_COMMIT="9a9b36918b4b638199e12a299422f4e54bc56675"
+          TMP_REF="tmp-recovery-909"
+
+          git push -q "$REMOTE_URL" "$OLD_COMMIT:refs/heads/$TMP_REF"
           rm -rf /tmp/recovery-old
-          git init -q /tmp/recovery-old
-          (cd /tmp/recovery-old && git remote add origin "$REMOTE_URL" && git fetch --depth 1 origin "$OLD_COMMIT" && git checkout -q FETCH_HEAD)
+          ok=""
+          for attempt in 1 2 3; do
+            if timeout 500 git clone --branch "$TMP_REF" --single-branch --depth 1 "$REMOTE_URL" /tmp/recovery-old; then
+              ok=1
+              break
+            fi
+            echo "Fallo al clonar el commit antiguo (intento $attempt/3), reintentando..."
+            rm -rf /tmp/recovery-old
+            sleep 10
+          done
+          # Borrar la rama temporal cuanto antes, tanto si el clon salió bien como si no.
+          git push -q "$REMOTE_URL" ":refs/heads/$TMP_REF" || true
+          if [ -z "$ok" ]; then
+            echo "::error::No se pudo clonar el commit antiguo ($OLD_COMMIT) tras 3 intentos."
+            exit 1
+          fi
 
           IDS="cmt8wfp9a0000cydwxk3c7lpx cmt8zx3ww0000e1l2jpy89oi9 cmt901tu40002e1l2npjkxrza cmt902on00003e1l26oqwgtrw cmt905dbq0004e1l2113tl6a8 cmt907c930005e1l2z5fyvjya cmt908g890006e1l22cziwipy cmt9091rq0007e1l2xxbsesiv cmt90t4p0000ae1l2m9fahjef cmt90tsaz000be1l20uq45ut6 cmt911x6c000de1l2hq585vzj cmt913mzc000fe1l208fj1ryt cmt9151vr000he1l2br7ii88a cmt918jur000ie1l2dly0n3co cmt919c6g000je1l2q4ttl9yu cmt96x9ow000ne1l2nvmo1v18 cmt96zmbj000oe1l2xr5aor3u"
 
+          found=0
           for id in $IDS; do
             if [ -d "/tmp/recovery-old/storage/jobs/$id" ]; then
               echo "Restaurando archivos de $id"
               rm -rf "storage/jobs/$id"
               cp -a "/tmp/recovery-old/storage/jobs/$id" "storage/jobs/$id"
+              found=$((found + 1))
             else
               echo "AVISO: no se encontró storage/jobs/$id en el commit antiguo"
             fi
           done
+          echo "Directorios recuperados: $found de 17"
+          if [ "$found" -eq 0 ]; then
+            echo "::error::No se recuperó ningún directorio del commit antiguo — algo sigue mal, revisar antes de continuar."
+            exit 1
+          fi
 
           python3 scripts/recover_deleted_jobs.py "/tmp/recovery-old/storage/app.db" $IDS
           rm -rf /tmp/recovery-old
-          echo "Recuperación puntual completada."
+          echo "Recuperación puntual completada: $found/17 directorios."
+
+      - name: "Borrado puntual: vaciar la cola y los trabajos terminados (a petición del usuario)"
+        # Pedido explícito, sin relación con el bug de arriba: borrar TODO lo que esté activo
+        # ahora mismo (en cola, procesando, o ya terminado) tal como está justo después de la
+        # recuperación de arriba — incluye los 17 recién recuperados, ya que el usuario los quiso
+        # incluir a propósito. Reutiliza el mismo borrado "de papelera" del botón individual de la
+        # web (deletedAt en vez de borrar la fila, ver src/app/api/jobs/[id]/route.ts) así que
+        # sigue apareciendo en /deleted. Paso de un solo uso: se puede quitar de aquí una vez
+        # aplicado.
+        run: python3 scripts/purge_active_jobs.py
 
       - name: Diagnóstico — comprobar qué hay realmente en storage/ tras restaurar
         # Deja constancia en el log de qué hay EXACTAMENTE en storage/ justo después de restaurar

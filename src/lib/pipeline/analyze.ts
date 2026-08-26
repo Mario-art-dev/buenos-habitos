@@ -160,6 +160,19 @@ function parseClips(raw: string): MomentCandidate[] {
 
   for (const c of parsed.clips) {
     if (!Number.isFinite(c.startSec) || !Number.isFinite(c.endSec) || c.endSec <= c.startSec) continue;
+    // La IA a veces devuelve un candidato a medias (visto en real: el último clip de una parte,
+    // justo al límite del presupuesto de tokens de salida, con solo startSec/endSec/title y el
+    // resto ausente). Esos campos son obligatorios en la base de datos (Clip.description,
+    // Clip.viralityReason, Clip.viralityScore) — sin esta comprobación, ese único candidato roto
+    // tira TODO el vídeo con un error de Prisma en vez de simplemente descartarse él solo.
+    if (
+      typeof c.title !== "string" || c.title.trim().length === 0 ||
+      typeof c.description !== "string" || c.description.trim().length === 0 ||
+      typeof c.viralityReason !== "string" || c.viralityReason.trim().length === 0 ||
+      !Number.isFinite(c.viralityScore)
+    ) {
+      continue;
+    }
     const endSec = c.endSec - c.startSec > maxLen ? c.startSec + maxLen : c.endSec;
     if (endSec - c.startSec < minLen) continue;
     const musicRecommended = !!c.musicRecommended;
