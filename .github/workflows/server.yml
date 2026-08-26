@@ -184,11 +184,12 @@ jobs:
       - name: "Borrado puntual: vaciar la cola y los trabajos terminados (a petición del usuario)"
         # Pedido explícito, sin relación con el bug de arriba: borrar TODO lo que esté activo
         # ahora mismo (en cola, procesando, o ya terminado) tal como está justo después de la
-        # recuperación de arriba — incluye los 17 recién recuperados, ya que el usuario los quiso
-        # incluir a propósito. Reutiliza el mismo borrado "de papelera" del botón individual de la
-        # web (deletedAt en vez de borrar la fila, ver src/app/api/jobs/[id]/route.ts) así que
-        # sigue apareciendo en /deleted. Paso de un solo uso: se puede quitar de aquí una vez
-        # aplicado.
+        # recuperación de arriba, EXCEPTO los 17 recién recuperados (aclarado explícitamente por
+        # el usuario: quería recuperar esos 17 y borrar el resto, no borrarlos también — ver
+        # KEEP_IDS en purge_active_jobs.py). Reutiliza el mismo borrado "de papelera" del botón
+        # individual de la web (deletedAt en vez de borrar la fila, ver
+        # src/app/api/jobs/[id]/route.ts) así que sigue apareciendo en /deleted. Paso de un solo
+        # uso: se puede quitar de aquí una vez aplicado.
         run: python3 scripts/purge_active_jobs.py
 
       - name: Diagnóstico — comprobar qué hay realmente en storage/ tras restaurar
