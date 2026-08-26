@@ -113,6 +113,39 @@ jobs:
             exit 1
           fi
 
+      - name: "Recuperación puntual: restaurar 17 vídeos borrados por error (una sola vez)"
+        # No relacionado con el mecanismo de respaldo de arriba: 29 trabajos (17 DONE + 12 FAILED)
+        # se borraron de golpe en menos de un minuto durante la sesión #109 (confirmado con el
+        # usuario: fue un borrado manual real probando el botón nuevo de eliminar, no un bug). Se
+        # pidió recuperar solo los 17 DONE — los 12 FAILED se dejan borrados a propósito. Sus
+        # archivos siguen intactos en el historial de la propia rama "gallery-data" (commit
+        # 9a9b369, el checkpoint justo anterior al borrado); este paso los trae de vuelta al
+        # storage/ ya restaurado arriba y corrige sus filas en la base de datos. Paso de un solo
+        # uso: se puede quitar de aquí en cuanto se confirme que ha funcionado.
+        run: |
+          set -e
+          REMOTE_URL="https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          OLD_COMMIT="9a9b36918b4b638199e12a299422f4e54bc56675"
+          rm -rf /tmp/recovery-old
+          git init -q /tmp/recovery-old
+          (cd /tmp/recovery-old && git remote add origin "$REMOTE_URL" && git fetch --depth 1 origin "$OLD_COMMIT" && git checkout -q FETCH_HEAD)
+
+          IDS="cmt8wfp9a0000cydwxk3c7lpx cmt8zx3ww0000e1l2jpy89oi9 cmt901tu40002e1l2npjkxrza cmt902on00003e1l26oqwgtrw cmt905dbq0004e1l2113tl6a8 cmt907c930005e1l2z5fyvjya cmt908g890006e1l22cziwipy cmt9091rq0007e1l2xxbsesiv cmt90t4p0000ae1l2m9fahjef cmt90tsaz000be1l20uq45ut6 cmt911x6c000de1l2hq585vzj cmt913mzc000fe1l208fj1ryt cmt9151vr000he1l2br7ii88a cmt918jur000ie1l2dly0n3co cmt919c6g000je1l2q4ttl9yu cmt96x9ow000ne1l2nvmo1v18 cmt96zmbj000oe1l2xr5aor3u"
+
+          for id in $IDS; do
+            if [ -d "/tmp/recovery-old/storage/jobs/$id" ]; then
+              echo "Restaurando archivos de $id"
+              rm -rf "storage/jobs/$id"
+              cp -a "/tmp/recovery-old/storage/jobs/$id" "storage/jobs/$id"
+            else
+              echo "AVISO: no se encontró storage/jobs/$id en el commit antiguo"
+            fi
+          done
+
+          python3 scripts/recover_deleted_jobs.py "/tmp/recovery-old/storage/app.db" $IDS
+          rm -rf /tmp/recovery-old
+          echo "Recuperación puntual completada."
+
       - name: Diagnóstico — comprobar qué hay realmente en storage/ tras restaurar
         # Deja constancia en el log de qué hay EXACTAMENTE en storage/ justo después de restaurar
         # (paso de arriba), para poder confirmar de un vistazo si esta vez sí ha llegado algo.
