@@ -1,0 +1,19 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Base,Anton,108,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,4,2,5,40,40,0,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 1,0:00:00.00,0:01:35.63,Base,,0,0,0,,{\an5\3c&H000000&\bord14\shad2\fs154\pos(540,154)\c&HFFFFFF&}Ranking {\c&H0000FF&}Funniest
+Dialogue: 1,0:00:00.00,0:01:35.63,Base,,0,0,0,,{\an5\3c&H000000&\bord14\shad2\fs154\pos(540,326)\c&H00D4FF&}Gaming {\c&HFFFFFF&}Moments
+Dialogue: 0,0:00:00.00,0:00:08.47,Base,,0,0,0,,{\an4\3c&H000000&\bord16\shad3\fs144\pos(54,654)\c&H00D4FF&}1.-
+Dialogue: 0,0:00:08.47,0:01:35.63,Base,,0,0,0,,{\an4\3c&H000000&\bord16\shad3\fs144\pos(54,654)\c&H00D4FF&}1.- {\fs86\bord10}Jesus Wins
+Dialogue: 0,0:00:00.00,0:00:04.77,Base,,0,0,0,,{\an4\3c&H000000&\bord16\shad3\fs144\pos(54,810)\c&H5FE739&}2.-
+Dialogue: 0,0:00:04.77,0:01:35.63,Base,,0,0,0,,{\an4\3c&H000000&\bord16\shad3\fs144\pos(54,810)\c&H5FE739&}2.- {\fs86\bord10}Spelling Cat
+Dialogue: 0,0:00:00.00,0:01:35.63,Base,,0,0,0,,{\an4\3c&H000000&\bord16\shad3\fs144\pos(54,966)\c&H00A5FF&}3.- {\fs86\bord10}Speed Stare
