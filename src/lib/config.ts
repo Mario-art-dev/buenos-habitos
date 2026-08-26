@@ -274,16 +274,19 @@ export const config = {
   storageDir: optional("STORAGE_DIR", "storage"),
 
   // Límite sobre el DISCO del runner de GitHub Actions (no sobre git/GitHub) — por encima de él
-  // ya no hay margen seguro para seguir generando shorts. Valores confirmados con datos reales
-  // (no adivinados): un "df -h" real del runner tras restaurar la galería dio 145GB en total con
-  // ~74GB libres de verdad, ya con node_modules/Ollama/whisper/ffmpeg cargados — 25/30GB deja de
-  // sobra margen para la copia temporal de /tmp/gallery-backup (duplica el tamaño de storage/
-  // mientras dura cada checkpoint, ver server.yml) sin acercarse al límite real del disco.
+  // ya no hay margen seguro para seguir generando shorts. Puesto al máximo razonable con datos
+  // reales (no adivinados): un "df -h" real del runner tras restaurar la galería dio 145GB en
+  // total con ~62GB ya ocupados por cosas que no crecen durante la sesión (SO del runner,
+  // node_modules, Ollama, whisper, ffmpeg). De los ~83GB que quedan, cada GB de storage/ cuesta el
+  // DOBLE de disco real mientras dura un checkpoint (la copia temporal de /tmp/gallery-backup
+  // duplica su tamaño, ver server.yml), así que 35GB de bloqueo (70GB con la copia) deja ~13GB de
+  // colchón real — subir más sin ese colchón arriesga quedarse sin disco a media sesión, un fallo
+  // mucho peor (puede tirar el proceso a medio render) que este aviso controlado.
   // "warn" avisa en la web con tiempo de sobra para publicar/borrar; "block" impide crear
   // trabajos nuevos (a partir de ahí, seguir generando solo empeoraría las cosas) hasta que se
   // libere hueco publicando o borrando shorts antiguos.
   storageQuota: {
-    warnBytes: Number(optional("STORAGE_WARN_GB", "25")) * 1024 * 1024 * 1024,
-    blockBytes: Number(optional("STORAGE_BLOCK_GB", "30")) * 1024 * 1024 * 1024,
+    warnBytes: Number(optional("STORAGE_WARN_GB", "30")) * 1024 * 1024 * 1024,
+    blockBytes: Number(optional("STORAGE_BLOCK_GB", "35")) * 1024 * 1024 * 1024,
   },
 };

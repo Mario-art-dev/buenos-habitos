@@ -232,15 +232,19 @@ jobs:
           GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
           TIKTOK_CLIENT_KEY: ${{ secrets.TIKTOK_CLIENT_KEY }}
           TIKTOK_CLIENT_SECRET: ${{ secrets.TIKTOK_CLIENT_SECRET }}
-          # Por defecto la app se queda en 6/8GB de aviso/bloqueo — un límite conservador puesto
-          # antes de comprobar cuánto disco da REALMENTE el runner. Confirmado con datos reales del
-          # propio log de una sesión completa ("df -h" tras restaurar la galería): el runner de
-          # GitHub Actions da 145GB en total con ~74GB libres de verdad en ese momento (con node_modules,
-          # Ollama, whisper, ffmpeg y 4.5GB de galería ya cargados). Subido a 25/30GB — deja de sobra
-          # margen para la copia temporal de /tmp/gallery-backup (que duplica el tamaño de storage/
-          # mientras dura cada checkpoint) sin acercarse al límite real del disco.
-          STORAGE_WARN_GB: "25"
-          STORAGE_BLOCK_GB: "30"
+          # Confirmado con datos reales del propio log de una sesión completa ("df -h" tras
+          # restaurar la galería): el runner de GitHub Actions da 145GB en total, de los que ~62GB
+          # ya se van en cosas que no crecen durante la sesión (SO del runner, node_modules, Ollama,
+          # whisper, ffmpeg...). De los ~83GB que quedan, cada GB de storage/ cuesta el DOBLE de
+          # disco real mientras dura un checkpoint (la copia temporal de /tmp/gallery-backup duplica
+          # su tamaño, ver el paso de guardado más abajo) — así que el límite de bloqueo es, como
+          # mucho, la mitad de ese margen. Puesto en 30/35GB (el máximo razonable dejando ~13GB de
+          # colchón para que no crezca hasta pegado al borde: caché de apt/npm, temporales de ffmpeg
+          # durante un render pesado, objetos git acumulados en la propia rama de respaldo a lo largo
+          # de la sesión). Ir más arriba sin colchón arriesga quedarse sin disco a media sesión — un
+          # fallo mucho peor (puede tirar el proceso a medio render) que este aviso controlado.
+          STORAGE_WARN_GB: "30"
+          STORAGE_BLOCK_GB: "35"
           TRANSCRIPTION_PROVIDER: "local"
           PYTHON_PATH: "python3"
           TTS_PROVIDER: "local"
