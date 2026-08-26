@@ -301,6 +301,23 @@ jobs:
           echo "Entra con la contraseña que pusiste en el secreto \`APP_PASSWORD\`." >> "$GITHUB_STEP_SUMMARY"
           echo "Esta URL cambiará dentro de ~4h15min, cuando esta sesión pase el testigo a la siguiente." >> "$GITHUB_STEP_SUMMARY"
           echo "[cloudflared] URL pública: $URL"
+          echo "TUNNEL_URL=$URL" >> "$GITHUB_ENV"
+
+      # URL fija y permanente (buenos-habitos-eta.vercel.app) que redirige siempre al túnel de
+      # Cloudflare de la sesión activa (ver carpeta vercel-redirect/). El túnel cambia cada vez
+      # que una sesión pasa el testigo a la siguiente, así que aquí actualizamos la variable de
+      # entorno TUNNEL_URL del proyecto en Vercel vía su API y disparamos un redeploy (con un
+      # "Deploy Hook", no hace falta el token para esa parte) para que el cambio surta efecto.
+      # Si algo de esto falla (Vercel caído, secretos no configurados todavía...) NO debe tirar
+      # abajo el servidor real: el paso se marca como "no crítico" y solo avisa.
+      - name: Actualizar la URL permanente de Vercel
+        continue-on-error: true
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_DEPLOY_HOOK_URL: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
+          VERCEL_TEAM_ID: ${{ secrets.VERCEL_TEAM_ID }}
+        run: python3 scripts/update_vercel_tunnel.py
 
       # A partir de aquí: el ÚNICO guardado real de la galería. Cada 10 minutos se hace un commit
       # de verdad con el contenido actual de storage/ (base de datos + vídeos) a la rama de git
