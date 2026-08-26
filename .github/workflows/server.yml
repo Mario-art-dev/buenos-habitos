@@ -123,40 +123,41 @@ jobs:
         # storage/ ya restaurado arriba y corrige sus filas en la base de datos. Paso de un solo
         # uso: se puede quitar de aquí en cuanto se confirme que ha funcionado.
         #
-        # BUG REAL CONFIRMADO en el primer intento (sesión #112): "git fetch --depth 1 origin
-        # <SHA suelto>" sobre un commit que no es la punta de ninguna rama no es fiable en
-        # GitHub — el paso terminaba en "success" (así que ni siquiera saltaba como fallo) pero
-        # sin traer ningún archivo de verdad, confirmado comparando la rama gallery-data antes y
-        # después: seguía en el mismo commit, cero cambios respaldados. Arreglo: en vez de pedir
-        # el SHA suelto, se empuja una rama temporal que apunte a ese mismo commit (no transfiere
-        # nada, el objeto ya está en el remoto) y se clona ESA rama superficialmente — el mismo
-        # mecanismo ya probado del paso "Restaurar la galería" de arriba. Además, ahora el paso
-        # falla de verdad (en vez de quedarse en un aviso silencioso) si al final no se recuperó
-        # ningún directorio.
+        # DOS BUGS REALES CONFIRMADOS en los dos intentos anteriores (sesiones #112 y #113):
+        # 1) "git fetch --depth 1 origin <SHA suelto>" terminaba en "success" pero sin traer nada
+        #    de verdad (confirmado: la rama gallery-data no se movió en 5 checkpoints seguidos).
+        # 2) El intento de arreglo (empujar una rama temporal apuntando a ese commit) falló al
+        #    instante con "fatal: bad object" — "git push" necesita tener el objeto YA en el
+        #    repositorio LOCAL del runner para poder subirlo a un ref nuevo, y el clon superficial
+        #    de la rama de respaldo (arriba) solo trae la punta actual, nunca ese commit antiguo.
+        # Arreglo de verdad: usar la API REST de GitHub para descargar un tarball del commit
+        # exacto (GET .../tarball/{sha}) — un mecanismo totalmente distinto al protocolo git (solo
+        # HTTPS + el propio token), que no depende de tener el objeto en ningún sitio de antemano y
+        # funciona igual para cualquier SHA válido, sea o no la punta de una rama.
+        # Además: los vídeos de más de 95MB se trocean en partes (.part0000, .part0001…) antes de
+        # cada checkpoint (ver el paso de arriba) — el tarball trae esas partes sueltas tal cual,
+        # hay que reensamblarlas igual que hace el paso de arriba o los vídeos grandes quedarían
+        # rotos. Y ahora el paso falla de verdad (en vez de quedarse en un aviso silencioso) si al
+        # final no se recuperó ningún directorio.
         run: |
           set -e
-          REMOTE_URL="https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
           OLD_COMMIT="9a9b36918b4b638199e12a299422f4e54bc56675"
-          TMP_REF="tmp-recovery-909"
+          rm -rf /tmp/recovery-old /tmp/recovery-old.tar.gz
+          mkdir -p /tmp/recovery-old
+          curl -fL --retry 3 --retry-delay 10 \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/tarball/$OLD_COMMIT" \
+            -o /tmp/recovery-old.tar.gz
+          tar -xzf /tmp/recovery-old.tar.gz -C /tmp/recovery-old --strip-components=1
+          rm -f /tmp/recovery-old.tar.gz
 
-          git push -q "$REMOTE_URL" "$OLD_COMMIT:refs/heads/$TMP_REF"
-          rm -rf /tmp/recovery-old
-          ok=""
-          for attempt in 1 2 3; do
-            if timeout 500 git clone --branch "$TMP_REF" --single-branch --depth 1 "$REMOTE_URL" /tmp/recovery-old; then
-              ok=1
-              break
-            fi
-            echo "Fallo al clonar el commit antiguo (intento $attempt/3), reintentando..."
-            rm -rf /tmp/recovery-old
-            sleep 10
+          find /tmp/recovery-old/storage -type f -name "*.part0000" -print | while read -r first; do
+            orig="${first%.part0000}"
+            echo "Reensamblando '$orig' desde sus partes..."
+            cat "${orig}".part* > "$orig"
+            rm -f "${orig}".part*
           done
-          # Borrar la rama temporal cuanto antes, tanto si el clon salió bien como si no.
-          git push -q "$REMOTE_URL" ":refs/heads/$TMP_REF" || true
-          if [ -z "$ok" ]; then
-            echo "::error::No se pudo clonar el commit antiguo ($OLD_COMMIT) tras 3 intentos."
-            exit 1
-          fi
 
           IDS="cmt8wfp9a0000cydwxk3c7lpx cmt8zx3ww0000e1l2jpy89oi9 cmt901tu40002e1l2npjkxrza cmt902on00003e1l26oqwgtrw cmt905dbq0004e1l2113tl6a8 cmt907c930005e1l2z5fyvjya cmt908g890006e1l22cziwipy cmt9091rq0007e1l2xxbsesiv cmt90t4p0000ae1l2m9fahjef cmt90tsaz000be1l20uq45ut6 cmt911x6c000de1l2hq585vzj cmt913mzc000fe1l208fj1ryt cmt9151vr000he1l2br7ii88a cmt918jur000ie1l2dly0n3co cmt919c6g000je1l2q4ttl9yu cmt96x9ow000ne1l2nvmo1v18 cmt96zmbj000oe1l2xr5aor3u"
 
@@ -164,8 +165,8 @@ jobs:
           for id in $IDS; do
             if [ -d "/tmp/recovery-old/storage/jobs/$id" ]; then
               echo "Restaurando archivos de $id"
-              rm -rf "storage/jobs/$id"
-              cp -a "/tmp/recovery-old/storage/jobs/$id" "storage/jobs/$id"
+              rm -rf "$GITHUB_WORKSPACE/storage/jobs/$id"
+              cp -a "/tmp/recovery-old/storage/jobs/$id" "$GITHUB_WORKSPACE/storage/jobs/$id"
               found=$((found + 1))
             else
               echo "AVISO: no se encontró storage/jobs/$id en el commit antiguo"
