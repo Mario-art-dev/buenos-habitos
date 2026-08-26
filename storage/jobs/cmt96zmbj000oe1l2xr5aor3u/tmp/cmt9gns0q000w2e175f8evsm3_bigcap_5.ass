@@ -1,0 +1,26 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Big,Comic Neue,77,&H00FFFFFF,&H000000FF,&H00000000,&H00000000,1,0,0,0,100,100,0,0,1,6,0,5,60,60,0,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:19.79,0:00:20.47,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}YOU{\c&HFFFFFF&\fscx100\fscy100} WANT TO GIVE
+Dialogue: 0,0:00:20.47,0:00:20.53,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}YOU {\c&H66FF00&\fscx125\fscy125}WANT{\c&HFFFFFF&\fscx100\fscy100} TO GIVE
+Dialogue: 0,0:00:20.53,0:00:20.67,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}YOU WANT {\c&H66FF00&\fscx125\fscy125}TO{\c&HFFFFFF&\fscx100\fscy100} GIVE
+Dialogue: 0,0:00:20.67,0:00:21.21,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}YOU WANT TO {\c&H66FF00&\fscx125\fscy125}GIVE{\c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 0,0:00:21.21,0:00:21.51,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}IT{\c&HFFFFFF&\fscx100\fscy100} FIVE SECONDS.
+Dialogue: 0,0:00:21.51,0:00:22.35,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}IT {\c&H66FF00&\fscx125\fscy125}FIVE{\c&HFFFFFF&\fscx100\fscy100} SECONDS.
+Dialogue: 0,0:00:22.35,0:00:22.83,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}IT FIVE {\c&H66FF00&\fscx125\fscy125}SECONDS.{\c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 0,0:00:23.39,0:00:24.07,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}OKAY.{\c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 0,0:00:24.99,0:00:25.67,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}COME{\c&HFFFFFF&\fscx100\fscy100} ON DOWN.
+Dialogue: 0,0:00:25.67,0:00:25.89,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}COME {\c&H66FF00&\fscx125\fscy125}ON{\c&HFFFFFF&\fscx100\fscy100} DOWN.
+Dialogue: 0,0:00:25.89,0:00:26.19,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}COME ON {\c&H66FF00&\fscx125\fscy125}DOWN.{\c&HFFFFFF&\fscx100\fscy100}
+Dialogue: 0,0:00:26.81,0:00:27.49,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}{\c&H66FF00&\fscx125\fscy125}COME{\c&HFFFFFF&\fscx100\fscy100} ON DOWN.
+Dialogue: 0,0:00:27.49,0:00:27.87,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}COME {\c&H66FF00&\fscx125\fscy125}ON{\c&HFFFFFF&\fscx100\fscy100} DOWN.
+Dialogue: 0,0:00:27.87,0:00:28.11,Big,,0,0,0,,{\an5\pos(540,1190)\fnComic Neue\fs77\3c&H101010&\bord6\blur3\c&HFFFFFF&}COME ON {\c&H66FF00&\fscx125\fscy125}DOWN.{\c&HFFFFFF&\fscx100\fscy100}
