@@ -136,20 +136,25 @@ function MusicPanel({ clip, onApplied }: { clip: ClipData; onApplied: () => void
         </div>
       )}
       {clip.musicEnabled && (
-        <p className="mt-1 text-xs text-emerald-400">
-          ✓ Música activada{clip.musicSourceUrl ? ` · ${clip.musicSourceUrl}` : ""}
-        </p>
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          <p className="text-xs text-emerald-400">
+            ✓ Música activada{clip.musicQuery ? `: ${clip.musicQuery}` : ""}
+            {clip.musicStartSec != null ? ` · desde ${formatTime(clip.musicStartSec)}` : ""}
+          </p>
+          <button
+            disabled={loading}
+            onClick={remove}
+            className="rounded-lg border border-red-900 px-2 py-0.5 text-xs font-medium text-red-400 hover:border-red-500 disabled:opacity-40"
+          >
+            {loading ? "Quitando…" : "🗑️ Quitar canción"}
+          </button>
+        </div>
       )}
       {!open ? (
         <div className="mt-2 flex flex-wrap gap-3">
           <button onClick={() => setOpen(true)} className="text-xs text-brand-400 underline">
             {clip.musicEnabled ? "Cambiar música" : "Añadir música (pegar link de YouTube)"}
           </button>
-          {clip.musicEnabled && (
-            <button disabled={loading} onClick={remove} className="text-xs text-red-400 underline disabled:opacity-40">
-              {loading ? "Quitando…" : "Quitar música"}
-            </button>
-          )}
         </div>
       ) : (
         <div className="mt-2 space-y-2">

@@ -62,17 +62,24 @@ async function finalizeIfFullyPublished(clipId: string): Promise<void> {
  * Usado tanto por la ruta manual de publicar como por el planificador automático.
  */
 export async function publishClip(clipId: string, platform: Platform): Promise<PublishResult> {
-  const clip = await db.clip.findUnique({ where: { id: clipId }, include: { job: true } });
-  if (!clip || !clip.filePath) {
-    return { ok: false, publicationId: "", status: "FAILED", error: "El clip no está listo todavía" };
-  }
-  const contentLanguage = resolveContentLanguage(clip.job.contentLanguage);
-
-  const publication = await db.publication.create({
-    data: { clipId: clip.id, platform, status: "UPLOADING" },
-  });
-
+  // Todo lo de aquí abajo (resolver idioma, crear el registro de Publication, subir) va en el
+  // MISMO try — antes solo el tramo de la subida estaba protegido, así que un fallo inesperado en
+  // cualquiera de los pasos previos (p.ej. una llamada nativa de Intl con un código de idioma raro
+  // guardado en el job) se colaba sin capturar hasta el usuario como un error nativo en inglés,
+  // en vez de un mensaje claro — pedido explícito al ver "The string did not match the expected
+  // pattern." en la web tras pulsar "Publicar ahora".
+  let publication: { id: string } | null = null;
   try {
+    const clip = await db.clip.findUnique({ where: { id: clipId }, include: { job: true } });
+    if (!clip || !clip.filePath) {
+      return { ok: false, publicationId: "", status: "FAILED", error: "El clip no está listo todavía" };
+    }
+    const contentLanguage = resolveContentLanguage(clip.job.contentLanguage);
+
+    publication = await db.publication.create({
+      data: { clipId: clip.id, platform, status: "UPLOADING" },
+    });
+
     const existingHashtags = JSON.parse(clip.hashtags || "[]") as string[];
     const fresh = await suggestHashtags({
       platform,
@@ -123,7 +130,13 @@ export async function publishClip(clipId: string, platform: Platform): Promise<P
     };
   } catch (err) {
     const message = (err as Error).message;
-    await db.publication.update({ where: { id: publication.id }, data: { status: "FAILED", error: message } });
-    return { ok: false, publicationId: publication.id, status: "FAILED", error: message };
+    // publication puede seguir siendo null si el fallo pasó ANTES de crear el registro (p.ej.
+    // resolviendo el idioma) — no hay nada que actualizar en ese caso, solo se informa del error.
+    if (publication) {
+      await db.publication
+        .update({ where: { id: publication.id }, data: { status: "FAILED", error: message } })
+        .catch(() => {});
+    }
+    return { ok: false, publicationId: publication?.id ?? "", status: "FAILED", error: message };
   }
 }
