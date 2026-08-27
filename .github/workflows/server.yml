@@ -490,30 +490,52 @@ jobs:
             split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
-          git add -A
-          committed=""
-          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
-            echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 1/25 ($(date -u +%FT%TZ))"; then
-            committed=1
-          else
-            echo "Nada que respaldar todavía (storage/ vacío)."
-          fi
-          if [ -n "$committed" ]; then
-            ok=""
-            for attempt in 1 2 3 4; do
-              if timeout 600 git push -q origin HEAD:gallery-data; then
+
+          # QUINTO BUG REAL CONFIRMADO Y CORREGIDO (mismo día, con el error EXACTO de git en el
+          # log, tras subir el timeout a 600s sin que sirviera de nada): un solo "git push" con
+          # TODO storage/ de golpe (varios GB en una tanda, p.ej. justo tras recuperar 17 vídeos
+          # borrados) hace que el propio SERVIDOR de GitHub corte la conexión a media subida:
+          # "error: RPC failed; HTTP 500 ... send-pack: unexpected disconnect while reading
+          # sideband packet" — confirmado en los 4 intentos, cada uno tras varios minutos
+          # transfiriendo antes de fallar igual. No es un timeout que se pueda alargar más: es un
+          # límite real del lado de GitHub para una única subida enorme. Arreglo de verdad: subir
+          # en trozos pequeños — un mini-commit y un push por cada carpeta de trabajo
+          # (storage/jobs/<id>) en vez de un solo commit gigante con todo storage/. Si la sesión
+          # se corta a media cadena, lo ya subido queda a salvo igual, no hace falta llegar al final.
+          push_current() {
+            local ok=""
+            for attempt in 1 2 3; do
+              if timeout 300 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
-              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 120 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
-            if [ -z "$ok" ]; then
-              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
-            fi
+            [ -n "$ok" ]
+          }
+
+          git add -A -- storage/app.db 2>/dev/null || true
+          git add -A -- storage/.gitkeep 2>/dev/null || true
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 1/25 — base de datos ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir la base de datos de este checkpoint tras varios intentos — se reintentará en el siguiente."
+          fi
+          if [ -d storage/jobs ]; then
+            for jobdir in storage/jobs/*/; do
+              [ -d "$jobdir" ] || continue
+              git add -A -- "$jobdir"
+              if ! git diff --cached --quiet; then
+                git commit -q -m "Snapshot automático checkpoint 1/25 — $(basename "$jobdir") ($(date -u +%FT%TZ))"
+                push_current || echo "::error::Fallo al subir $(basename "$jobdir") en este checkpoint tras varios intentos — se reintentará en el siguiente."
+              fi
+            done
+          fi
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 1/25 — resto ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir el resto de este checkpoint tras varios intentos — se reintentará en el siguiente."
           fi
 
       - name: Mantener la sesión activa (checkpoint 2/25 de la galería)
@@ -537,30 +559,52 @@ jobs:
             split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
-          git add -A
-          committed=""
-          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
-            echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 2/25 ($(date -u +%FT%TZ))"; then
-            committed=1
-          else
-            echo "Nada que respaldar todavía (storage/ vacío)."
-          fi
-          if [ -n "$committed" ]; then
-            ok=""
-            for attempt in 1 2 3 4; do
-              if timeout 600 git push -q origin HEAD:gallery-data; then
+
+          # QUINTO BUG REAL CONFIRMADO Y CORREGIDO (mismo día, con el error EXACTO de git en el
+          # log, tras subir el timeout a 600s sin que sirviera de nada): un solo "git push" con
+          # TODO storage/ de golpe (varios GB en una tanda, p.ej. justo tras recuperar 17 vídeos
+          # borrados) hace que el propio SERVIDOR de GitHub corte la conexión a media subida:
+          # "error: RPC failed; HTTP 500 ... send-pack: unexpected disconnect while reading
+          # sideband packet" — confirmado en los 4 intentos, cada uno tras varios minutos
+          # transfiriendo antes de fallar igual. No es un timeout que se pueda alargar más: es un
+          # límite real del lado de GitHub para una única subida enorme. Arreglo de verdad: subir
+          # en trozos pequeños — un mini-commit y un push por cada carpeta de trabajo
+          # (storage/jobs/<id>) en vez de un solo commit gigante con todo storage/. Si la sesión
+          # se corta a media cadena, lo ya subido queda a salvo igual, no hace falta llegar al final.
+          push_current() {
+            local ok=""
+            for attempt in 1 2 3; do
+              if timeout 300 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
-              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 120 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
-            if [ -z "$ok" ]; then
-              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
-            fi
+            [ -n "$ok" ]
+          }
+
+          git add -A -- storage/app.db 2>/dev/null || true
+          git add -A -- storage/.gitkeep 2>/dev/null || true
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 2/25 — base de datos ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir la base de datos de este checkpoint tras varios intentos — se reintentará en el siguiente."
+          fi
+          if [ -d storage/jobs ]; then
+            for jobdir in storage/jobs/*/; do
+              [ -d "$jobdir" ] || continue
+              git add -A -- "$jobdir"
+              if ! git diff --cached --quiet; then
+                git commit -q -m "Snapshot automático checkpoint 2/25 — $(basename "$jobdir") ($(date -u +%FT%TZ))"
+                push_current || echo "::error::Fallo al subir $(basename "$jobdir") en este checkpoint tras varios intentos — se reintentará en el siguiente."
+              fi
+            done
+          fi
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 2/25 — resto ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir el resto de este checkpoint tras varios intentos — se reintentará en el siguiente."
           fi
 
       - name: Mantener la sesión activa (checkpoint 3/25 de la galería)
@@ -584,30 +628,52 @@ jobs:
             split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
-          git add -A
-          committed=""
-          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
-            echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 3/25 ($(date -u +%FT%TZ))"; then
-            committed=1
-          else
-            echo "Nada que respaldar todavía (storage/ vacío)."
-          fi
-          if [ -n "$committed" ]; then
-            ok=""
-            for attempt in 1 2 3 4; do
-              if timeout 600 git push -q origin HEAD:gallery-data; then
+
+          # QUINTO BUG REAL CONFIRMADO Y CORREGIDO (mismo día, con el error EXACTO de git en el
+          # log, tras subir el timeout a 600s sin que sirviera de nada): un solo "git push" con
+          # TODO storage/ de golpe (varios GB en una tanda, p.ej. justo tras recuperar 17 vídeos
+          # borrados) hace que el propio SERVIDOR de GitHub corte la conexión a media subida:
+          # "error: RPC failed; HTTP 500 ... send-pack: unexpected disconnect while reading
+          # sideband packet" — confirmado en los 4 intentos, cada uno tras varios minutos
+          # transfiriendo antes de fallar igual. No es un timeout que se pueda alargar más: es un
+          # límite real del lado de GitHub para una única subida enorme. Arreglo de verdad: subir
+          # en trozos pequeños — un mini-commit y un push por cada carpeta de trabajo
+          # (storage/jobs/<id>) en vez de un solo commit gigante con todo storage/. Si la sesión
+          # se corta a media cadena, lo ya subido queda a salvo igual, no hace falta llegar al final.
+          push_current() {
+            local ok=""
+            for attempt in 1 2 3; do
+              if timeout 300 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
-              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 120 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
-            if [ -z "$ok" ]; then
-              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
-            fi
+            [ -n "$ok" ]
+          }
+
+          git add -A -- storage/app.db 2>/dev/null || true
+          git add -A -- storage/.gitkeep 2>/dev/null || true
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 3/25 — base de datos ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir la base de datos de este checkpoint tras varios intentos — se reintentará en el siguiente."
+          fi
+          if [ -d storage/jobs ]; then
+            for jobdir in storage/jobs/*/; do
+              [ -d "$jobdir" ] || continue
+              git add -A -- "$jobdir"
+              if ! git diff --cached --quiet; then
+                git commit -q -m "Snapshot automático checkpoint 3/25 — $(basename "$jobdir") ($(date -u +%FT%TZ))"
+                push_current || echo "::error::Fallo al subir $(basename "$jobdir") en este checkpoint tras varios intentos — se reintentará en el siguiente."
+              fi
+            done
+          fi
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 3/25 — resto ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir el resto de este checkpoint tras varios intentos — se reintentará en el siguiente."
           fi
 
       - name: Mantener la sesión activa (checkpoint 4/25 de la galería)
@@ -631,30 +697,52 @@ jobs:
             split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
-          git add -A
-          committed=""
-          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
-            echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 4/25 ($(date -u +%FT%TZ))"; then
-            committed=1
-          else
-            echo "Nada que respaldar todavía (storage/ vacío)."
-          fi
-          if [ -n "$committed" ]; then
-            ok=""
-            for attempt in 1 2 3 4; do
-              if timeout 600 git push -q origin HEAD:gallery-data; then
+
+          # QUINTO BUG REAL CONFIRMADO Y CORREGIDO (mismo día, con el error EXACTO de git en el
+          # log, tras subir el timeout a 600s sin que sirviera de nada): un solo "git push" con
+          # TODO storage/ de golpe (varios GB en una tanda, p.ej. justo tras recuperar 17 vídeos
+          # borrados) hace que el propio SERVIDOR de GitHub corte la conexión a media subida:
+          # "error: RPC failed; HTTP 500 ... send-pack: unexpected disconnect while reading
+          # sideband packet" — confirmado en los 4 intentos, cada uno tras varios minutos
+          # transfiriendo antes de fallar igual. No es un timeout que se pueda alargar más: es un
+          # límite real del lado de GitHub para una única subida enorme. Arreglo de verdad: subir
+          # en trozos pequeños — un mini-commit y un push por cada carpeta de trabajo
+          # (storage/jobs/<id>) en vez de un solo commit gigante con todo storage/. Si la sesión
+          # se corta a media cadena, lo ya subido queda a salvo igual, no hace falta llegar al final.
+          push_current() {
+            local ok=""
+            for attempt in 1 2 3; do
+              if timeout 300 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
-              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 120 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
-            if [ -z "$ok" ]; then
-              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
-            fi
+            [ -n "$ok" ]
+          }
+
+          git add -A -- storage/app.db 2>/dev/null || true
+          git add -A -- storage/.gitkeep 2>/dev/null || true
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 4/25 — base de datos ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir la base de datos de este checkpoint tras varios intentos — se reintentará en el siguiente."
+          fi
+          if [ -d storage/jobs ]; then
+            for jobdir in storage/jobs/*/; do
+              [ -d "$jobdir" ] || continue
+              git add -A -- "$jobdir"
+              if ! git diff --cached --quiet; then
+                git commit -q -m "Snapshot automático checkpoint 4/25 — $(basename "$jobdir") ($(date -u +%FT%TZ))"
+                push_current || echo "::error::Fallo al subir $(basename "$jobdir") en este checkpoint tras varios intentos — se reintentará en el siguiente."
+              fi
+            done
+          fi
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 4/25 — resto ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir el resto de este checkpoint tras varios intentos — se reintentará en el siguiente."
           fi
 
       - name: Mantener la sesión activa (checkpoint 5/25 de la galería)
@@ -678,30 +766,52 @@ jobs:
             split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
-          git add -A
-          committed=""
-          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
-            echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 5/25 ($(date -u +%FT%TZ))"; then
-            committed=1
-          else
-            echo "Nada que respaldar todavía (storage/ vacío)."
-          fi
-          if [ -n "$committed" ]; then
-            ok=""
-            for attempt in 1 2 3 4; do
-              if timeout 600 git push -q origin HEAD:gallery-data; then
+
+          # QUINTO BUG REAL CONFIRMADO Y CORREGIDO (mismo día, con el error EXACTO de git en el
+          # log, tras subir el timeout a 600s sin que sirviera de nada): un solo "git push" con
+          # TODO storage/ de golpe (varios GB en una tanda, p.ej. justo tras recuperar 17 vídeos
+          # borrados) hace que el propio SERVIDOR de GitHub corte la conexión a media subida:
+          # "error: RPC failed; HTTP 500 ... send-pack: unexpected disconnect while reading
+          # sideband packet" — confirmado en los 4 intentos, cada uno tras varios minutos
+          # transfiriendo antes de fallar igual. No es un timeout que se pueda alargar más: es un
+          # límite real del lado de GitHub para una única subida enorme. Arreglo de verdad: subir
+          # en trozos pequeños — un mini-commit y un push por cada carpeta de trabajo
+          # (storage/jobs/<id>) en vez de un solo commit gigante con todo storage/. Si la sesión
+          # se corta a media cadena, lo ya subido queda a salvo igual, no hace falta llegar al final.
+          push_current() {
+            local ok=""
+            for attempt in 1 2 3; do
+              if timeout 300 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
-              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 120 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
-            if [ -z "$ok" ]; then
-              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
-            fi
+            [ -n "$ok" ]
+          }
+
+          git add -A -- storage/app.db 2>/dev/null || true
+          git add -A -- storage/.gitkeep 2>/dev/null || true
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 5/25 — base de datos ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir la base de datos de este checkpoint tras varios intentos — se reintentará en el siguiente."
+          fi
+          if [ -d storage/jobs ]; then
+            for jobdir in storage/jobs/*/; do
+              [ -d "$jobdir" ] || continue
+              git add -A -- "$jobdir"
+              if ! git diff --cached --quiet; then
+                git commit -q -m "Snapshot automático checkpoint 5/25 — $(basename "$jobdir") ($(date -u +%FT%TZ))"
+                push_current || echo "::error::Fallo al subir $(basename "$jobdir") en este checkpoint tras varios intentos — se reintentará en el siguiente."
+              fi
+            done
+          fi
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 5/25 — resto ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir el resto de este checkpoint tras varios intentos — se reintentará en el siguiente."
           fi
 
       - name: Mantener la sesión activa (checkpoint 6/25 de la galería)
@@ -725,30 +835,52 @@ jobs:
             split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
-          git add -A
-          committed=""
-          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
-            echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 6/25 ($(date -u +%FT%TZ))"; then
-            committed=1
-          else
-            echo "Nada que respaldar todavía (storage/ vacío)."
-          fi
-          if [ -n "$committed" ]; then
-            ok=""
-            for attempt in 1 2 3 4; do
-              if timeout 600 git push -q origin HEAD:gallery-data; then
+
+          # QUINTO BUG REAL CONFIRMADO Y CORREGIDO (mismo día, con el error EXACTO de git en el
+          # log, tras subir el timeout a 600s sin que sirviera de nada): un solo "git push" con
+          # TODO storage/ de golpe (varios GB en una tanda, p.ej. justo tras recuperar 17 vídeos
+          # borrados) hace que el propio SERVIDOR de GitHub corte la conexión a media subida:
+          # "error: RPC failed; HTTP 500 ... send-pack: unexpected disconnect while reading
+          # sideband packet" — confirmado en los 4 intentos, cada uno tras varios minutos
+          # transfiriendo antes de fallar igual. No es un timeout que se pueda alargar más: es un
+          # límite real del lado de GitHub para una única subida enorme. Arreglo de verdad: subir
+          # en trozos pequeños — un mini-commit y un push por cada carpeta de trabajo
+          # (storage/jobs/<id>) en vez de un solo commit gigante con todo storage/. Si la sesión
+          # se corta a media cadena, lo ya subido queda a salvo igual, no hace falta llegar al final.
+          push_current() {
+            local ok=""
+            for attempt in 1 2 3; do
+              if timeout 300 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
-              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 120 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
-            if [ -z "$ok" ]; then
-              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
-            fi
+            [ -n "$ok" ]
+          }
+
+          git add -A -- storage/app.db 2>/dev/null || true
+          git add -A -- storage/.gitkeep 2>/dev/null || true
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 6/25 — base de datos ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir la base de datos de este checkpoint tras varios intentos — se reintentará en el siguiente."
+          fi
+          if [ -d storage/jobs ]; then
+            for jobdir in storage/jobs/*/; do
+              [ -d "$jobdir" ] || continue
+              git add -A -- "$jobdir"
+              if ! git diff --cached --quiet; then
+                git commit -q -m "Snapshot automático checkpoint 6/25 — $(basename "$jobdir") ($(date -u +%FT%TZ))"
+                push_current || echo "::error::Fallo al subir $(basename "$jobdir") en este checkpoint tras varios intentos — se reintentará en el siguiente."
+              fi
+            done
+          fi
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 6/25 — resto ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir el resto de este checkpoint tras varios intentos — se reintentará en el siguiente."
           fi
 
       - name: Mantener la sesión activa (checkpoint 7/25 de la galería)
@@ -772,30 +904,52 @@ jobs:
             split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
-          git add -A
-          committed=""
-          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
-            echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 7/25 ($(date -u +%FT%TZ))"; then
-            committed=1
-          else
-            echo "Nada que respaldar todavía (storage/ vacío)."
-          fi
-          if [ -n "$committed" ]; then
-            ok=""
-            for attempt in 1 2 3 4; do
-              if timeout 600 git push -q origin HEAD:gallery-data; then
+
+          # QUINTO BUG REAL CONFIRMADO Y CORREGIDO (mismo día, con el error EXACTO de git en el
+          # log, tras subir el timeout a 600s sin que sirviera de nada): un solo "git push" con
+          # TODO storage/ de golpe (varios GB en una tanda, p.ej. justo tras recuperar 17 vídeos
+          # borrados) hace que el propio SERVIDOR de GitHub corte la conexión a media subida:
+          # "error: RPC failed; HTTP 500 ... send-pack: unexpected disconnect while reading
+          # sideband packet" — confirmado en los 4 intentos, cada uno tras varios minutos
+          # transfiriendo antes de fallar igual. No es un timeout que se pueda alargar más: es un
+          # límite real del lado de GitHub para una única subida enorme. Arreglo de verdad: subir
+          # en trozos pequeños — un mini-commit y un push por cada carpeta de trabajo
+          # (storage/jobs/<id>) en vez de un solo commit gigante con todo storage/. Si la sesión
+          # se corta a media cadena, lo ya subido queda a salvo igual, no hace falta llegar al final.
+          push_current() {
+            local ok=""
+            for attempt in 1 2 3; do
+              if timeout 300 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
-              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 120 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
-            if [ -z "$ok" ]; then
-              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
-            fi
+            [ -n "$ok" ]
+          }
+
+          git add -A -- storage/app.db 2>/dev/null || true
+          git add -A -- storage/.gitkeep 2>/dev/null || true
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 7/25 — base de datos ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir la base de datos de este checkpoint tras varios intentos — se reintentará en el siguiente."
+          fi
+          if [ -d storage/jobs ]; then
+            for jobdir in storage/jobs/*/; do
+              [ -d "$jobdir" ] || continue
+              git add -A -- "$jobdir"
+              if ! git diff --cached --quiet; then
+                git commit -q -m "Snapshot automático checkpoint 7/25 — $(basename "$jobdir") ($(date -u +%FT%TZ))"
+                push_current || echo "::error::Fallo al subir $(basename "$jobdir") en este checkpoint tras varios intentos — se reintentará en el siguiente."
+              fi
+            done
+          fi
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 7/25 — resto ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir el resto de este checkpoint tras varios intentos — se reintentará en el siguiente."
           fi
 
       - name: Mantener la sesión activa (checkpoint 8/25 de la galería)
@@ -819,30 +973,52 @@ jobs:
             split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
-          git add -A
-          committed=""
-          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
-            echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 8/25 ($(date -u +%FT%TZ))"; then
-            committed=1
-          else
-            echo "Nada que respaldar todavía (storage/ vacío)."
-          fi
-          if [ -n "$committed" ]; then
-            ok=""
-            for attempt in 1 2 3 4; do
-              if timeout 600 git push -q origin HEAD:gallery-data; then
+
+          # QUINTO BUG REAL CONFIRMADO Y CORREGIDO (mismo día, con el error EXACTO de git en el
+          # log, tras subir el timeout a 600s sin que sirviera de nada): un solo "git push" con
+          # TODO storage/ de golpe (varios GB en una tanda, p.ej. justo tras recuperar 17 vídeos
+          # borrados) hace que el propio SERVIDOR de GitHub corte la conexión a media subida:
+          # "error: RPC failed; HTTP 500 ... send-pack: unexpected disconnect while reading
+          # sideband packet" — confirmado en los 4 intentos, cada uno tras varios minutos
+          # transfiriendo antes de fallar igual. No es un timeout que se pueda alargar más: es un
+          # límite real del lado de GitHub para una única subida enorme. Arreglo de verdad: subir
+          # en trozos pequeños — un mini-commit y un push por cada carpeta de trabajo
+          # (storage/jobs/<id>) en vez de un solo commit gigante con todo storage/. Si la sesión
+          # se corta a media cadena, lo ya subido queda a salvo igual, no hace falta llegar al final.
+          push_current() {
+            local ok=""
+            for attempt in 1 2 3; do
+              if timeout 300 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
-              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 120 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
-            if [ -z "$ok" ]; then
-              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
-            fi
+            [ -n "$ok" ]
+          }
+
+          git add -A -- storage/app.db 2>/dev/null || true
+          git add -A -- storage/.gitkeep 2>/dev/null || true
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 8/25 — base de datos ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir la base de datos de este checkpoint tras varios intentos — se reintentará en el siguiente."
+          fi
+          if [ -d storage/jobs ]; then
+            for jobdir in storage/jobs/*/; do
+              [ -d "$jobdir" ] || continue
+              git add -A -- "$jobdir"
+              if ! git diff --cached --quiet; then
+                git commit -q -m "Snapshot automático checkpoint 8/25 — $(basename "$jobdir") ($(date -u +%FT%TZ))"
+                push_current || echo "::error::Fallo al subir $(basename "$jobdir") en este checkpoint tras varios intentos — se reintentará en el siguiente."
+              fi
+            done
+          fi
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 8/25 — resto ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir el resto de este checkpoint tras varios intentos — se reintentará en el siguiente."
           fi
 
       - name: Mantener la sesión activa (checkpoint 9/25 de la galería)
@@ -866,30 +1042,52 @@ jobs:
             split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
-          git add -A
-          committed=""
-          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
-            echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 9/25 ($(date -u +%FT%TZ))"; then
-            committed=1
-          else
-            echo "Nada que respaldar todavía (storage/ vacío)."
-          fi
-          if [ -n "$committed" ]; then
-            ok=""
-            for attempt in 1 2 3 4; do
-              if timeout 600 git push -q origin HEAD:gallery-data; then
+
+          # QUINTO BUG REAL CONFIRMADO Y CORREGIDO (mismo día, con el error EXACTO de git en el
+          # log, tras subir el timeout a 600s sin que sirviera de nada): un solo "git push" con
+          # TODO storage/ de golpe (varios GB en una tanda, p.ej. justo tras recuperar 17 vídeos
+          # borrados) hace que el propio SERVIDOR de GitHub corte la conexión a media subida:
+          # "error: RPC failed; HTTP 500 ... send-pack: unexpected disconnect while reading
+          # sideband packet" — confirmado en los 4 intentos, cada uno tras varios minutos
+          # transfiriendo antes de fallar igual. No es un timeout que se pueda alargar más: es un
+          # límite real del lado de GitHub para una única subida enorme. Arreglo de verdad: subir
+          # en trozos pequeños — un mini-commit y un push por cada carpeta de trabajo
+          # (storage/jobs/<id>) en vez de un solo commit gigante con todo storage/. Si la sesión
+          # se corta a media cadena, lo ya subido queda a salvo igual, no hace falta llegar al final.
+          push_current() {
+            local ok=""
+            for attempt in 1 2 3; do
+              if timeout 300 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
-              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 120 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
-            if [ -z "$ok" ]; then
-              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
-            fi
+            [ -n "$ok" ]
+          }
+
+          git add -A -- storage/app.db 2>/dev/null || true
+          git add -A -- storage/.gitkeep 2>/dev/null || true
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 9/25 — base de datos ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir la base de datos de este checkpoint tras varios intentos — se reintentará en el siguiente."
+          fi
+          if [ -d storage/jobs ]; then
+            for jobdir in storage/jobs/*/; do
+              [ -d "$jobdir" ] || continue
+              git add -A -- "$jobdir"
+              if ! git diff --cached --quiet; then
+                git commit -q -m "Snapshot automático checkpoint 9/25 — $(basename "$jobdir") ($(date -u +%FT%TZ))"
+                push_current || echo "::error::Fallo al subir $(basename "$jobdir") en este checkpoint tras varios intentos — se reintentará en el siguiente."
+              fi
+            done
+          fi
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 9/25 — resto ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir el resto de este checkpoint tras varios intentos — se reintentará en el siguiente."
           fi
 
       - name: Mantener la sesión activa (checkpoint 10/25 de la galería)
@@ -913,30 +1111,52 @@ jobs:
             split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
-          git add -A
-          committed=""
-          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
-            echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 10/25 ($(date -u +%FT%TZ))"; then
-            committed=1
-          else
-            echo "Nada que respaldar todavía (storage/ vacío)."
-          fi
-          if [ -n "$committed" ]; then
-            ok=""
-            for attempt in 1 2 3 4; do
-              if timeout 600 git push -q origin HEAD:gallery-data; then
+
+          # QUINTO BUG REAL CONFIRMADO Y CORREGIDO (mismo día, con el error EXACTO de git en el
+          # log, tras subir el timeout a 600s sin que sirviera de nada): un solo "git push" con
+          # TODO storage/ de golpe (varios GB en una tanda, p.ej. justo tras recuperar 17 vídeos
+          # borrados) hace que el propio SERVIDOR de GitHub corte la conexión a media subida:
+          # "error: RPC failed; HTTP 500 ... send-pack: unexpected disconnect while reading
+          # sideband packet" — confirmado en los 4 intentos, cada uno tras varios minutos
+          # transfiriendo antes de fallar igual. No es un timeout que se pueda alargar más: es un
+          # límite real del lado de GitHub para una única subida enorme. Arreglo de verdad: subir
+          # en trozos pequeños — un mini-commit y un push por cada carpeta de trabajo
+          # (storage/jobs/<id>) en vez de un solo commit gigante con todo storage/. Si la sesión
+          # se corta a media cadena, lo ya subido queda a salvo igual, no hace falta llegar al final.
+          push_current() {
+            local ok=""
+            for attempt in 1 2 3; do
+              if timeout 300 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
-              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 120 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
-            if [ -z "$ok" ]; then
-              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
-            fi
+            [ -n "$ok" ]
+          }
+
+          git add -A -- storage/app.db 2>/dev/null || true
+          git add -A -- storage/.gitkeep 2>/dev/null || true
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 10/25 — base de datos ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir la base de datos de este checkpoint tras varios intentos — se reintentará en el siguiente."
+          fi
+          if [ -d storage/jobs ]; then
+            for jobdir in storage/jobs/*/; do
+              [ -d "$jobdir" ] || continue
+              git add -A -- "$jobdir"
+              if ! git diff --cached --quiet; then
+                git commit -q -m "Snapshot automático checkpoint 10/25 — $(basename "$jobdir") ($(date -u +%FT%TZ))"
+                push_current || echo "::error::Fallo al subir $(basename "$jobdir") en este checkpoint tras varios intentos — se reintentará en el siguiente."
+              fi
+            done
+          fi
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 10/25 — resto ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir el resto de este checkpoint tras varios intentos — se reintentará en el siguiente."
           fi
 
       - name: Mantener la sesión activa (checkpoint 11/25 de la galería)
@@ -960,30 +1180,52 @@ jobs:
             split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
-          git add -A
-          committed=""
-          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
-            echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 11/25 ($(date -u +%FT%TZ))"; then
-            committed=1
-          else
-            echo "Nada que respaldar todavía (storage/ vacío)."
-          fi
-          if [ -n "$committed" ]; then
-            ok=""
-            for attempt in 1 2 3 4; do
-              if timeout 600 git push -q origin HEAD:gallery-data; then
+
+          # QUINTO BUG REAL CONFIRMADO Y CORREGIDO (mismo día, con el error EXACTO de git en el
+          # log, tras subir el timeout a 600s sin que sirviera de nada): un solo "git push" con
+          # TODO storage/ de golpe (varios GB en una tanda, p.ej. justo tras recuperar 17 vídeos
+          # borrados) hace que el propio SERVIDOR de GitHub corte la conexión a media subida:
+          # "error: RPC failed; HTTP 500 ... send-pack: unexpected disconnect while reading
+          # sideband packet" — confirmado en los 4 intentos, cada uno tras varios minutos
+          # transfiriendo antes de fallar igual. No es un timeout que se pueda alargar más: es un
+          # límite real del lado de GitHub para una única subida enorme. Arreglo de verdad: subir
+          # en trozos pequeños — un mini-commit y un push por cada carpeta de trabajo
+          # (storage/jobs/<id>) en vez de un solo commit gigante con todo storage/. Si la sesión
+          # se corta a media cadena, lo ya subido queda a salvo igual, no hace falta llegar al final.
+          push_current() {
+            local ok=""
+            for attempt in 1 2 3; do
+              if timeout 300 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
-              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 120 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
-            if [ -z "$ok" ]; then
-              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
-            fi
+            [ -n "$ok" ]
+          }
+
+          git add -A -- storage/app.db 2>/dev/null || true
+          git add -A -- storage/.gitkeep 2>/dev/null || true
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 11/25 — base de datos ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir la base de datos de este checkpoint tras varios intentos — se reintentará en el siguiente."
+          fi
+          if [ -d storage/jobs ]; then
+            for jobdir in storage/jobs/*/; do
+              [ -d "$jobdir" ] || continue
+              git add -A -- "$jobdir"
+              if ! git diff --cached --quiet; then
+                git commit -q -m "Snapshot automático checkpoint 11/25 — $(basename "$jobdir") ($(date -u +%FT%TZ))"
+                push_current || echo "::error::Fallo al subir $(basename "$jobdir") en este checkpoint tras varios intentos — se reintentará en el siguiente."
+              fi
+            done
+          fi
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 11/25 — resto ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir el resto de este checkpoint tras varios intentos — se reintentará en el siguiente."
           fi
 
       - name: Mantener la sesión activa (checkpoint 12/25 de la galería)
@@ -1007,30 +1249,52 @@ jobs:
             split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
-          git add -A
-          committed=""
-          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
-            echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 12/25 ($(date -u +%FT%TZ))"; then
-            committed=1
-          else
-            echo "Nada que respaldar todavía (storage/ vacío)."
-          fi
-          if [ -n "$committed" ]; then
-            ok=""
-            for attempt in 1 2 3 4; do
-              if timeout 600 git push -q origin HEAD:gallery-data; then
+
+          # QUINTO BUG REAL CONFIRMADO Y CORREGIDO (mismo día, con el error EXACTO de git en el
+          # log, tras subir el timeout a 600s sin que sirviera de nada): un solo "git push" con
+          # TODO storage/ de golpe (varios GB en una tanda, p.ej. justo tras recuperar 17 vídeos
+          # borrados) hace que el propio SERVIDOR de GitHub corte la conexión a media subida:
+          # "error: RPC failed; HTTP 500 ... send-pack: unexpected disconnect while reading
+          # sideband packet" — confirmado en los 4 intentos, cada uno tras varios minutos
+          # transfiriendo antes de fallar igual. No es un timeout que se pueda alargar más: es un
+          # límite real del lado de GitHub para una única subida enorme. Arreglo de verdad: subir
+          # en trozos pequeños — un mini-commit y un push por cada carpeta de trabajo
+          # (storage/jobs/<id>) en vez de un solo commit gigante con todo storage/. Si la sesión
+          # se corta a media cadena, lo ya subido queda a salvo igual, no hace falta llegar al final.
+          push_current() {
+            local ok=""
+            for attempt in 1 2 3; do
+              if timeout 300 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
-              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 120 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
-            if [ -z "$ok" ]; then
-              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
-            fi
+            [ -n "$ok" ]
+          }
+
+          git add -A -- storage/app.db 2>/dev/null || true
+          git add -A -- storage/.gitkeep 2>/dev/null || true
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 12/25 — base de datos ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir la base de datos de este checkpoint tras varios intentos — se reintentará en el siguiente."
+          fi
+          if [ -d storage/jobs ]; then
+            for jobdir in storage/jobs/*/; do
+              [ -d "$jobdir" ] || continue
+              git add -A -- "$jobdir"
+              if ! git diff --cached --quiet; then
+                git commit -q -m "Snapshot automático checkpoint 12/25 — $(basename "$jobdir") ($(date -u +%FT%TZ))"
+                push_current || echo "::error::Fallo al subir $(basename "$jobdir") en este checkpoint tras varios intentos — se reintentará en el siguiente."
+              fi
+            done
+          fi
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 12/25 — resto ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir el resto de este checkpoint tras varios intentos — se reintentará en el siguiente."
           fi
 
       - name: Mantener la sesión activa (checkpoint 13/25 de la galería)
@@ -1054,30 +1318,52 @@ jobs:
             split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
-          git add -A
-          committed=""
-          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
-            echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 13/25 ($(date -u +%FT%TZ))"; then
-            committed=1
-          else
-            echo "Nada que respaldar todavía (storage/ vacío)."
-          fi
-          if [ -n "$committed" ]; then
-            ok=""
-            for attempt in 1 2 3 4; do
-              if timeout 600 git push -q origin HEAD:gallery-data; then
+
+          # QUINTO BUG REAL CONFIRMADO Y CORREGIDO (mismo día, con el error EXACTO de git en el
+          # log, tras subir el timeout a 600s sin que sirviera de nada): un solo "git push" con
+          # TODO storage/ de golpe (varios GB en una tanda, p.ej. justo tras recuperar 17 vídeos
+          # borrados) hace que el propio SERVIDOR de GitHub corte la conexión a media subida:
+          # "error: RPC failed; HTTP 500 ... send-pack: unexpected disconnect while reading
+          # sideband packet" — confirmado en los 4 intentos, cada uno tras varios minutos
+          # transfiriendo antes de fallar igual. No es un timeout que se pueda alargar más: es un
+          # límite real del lado de GitHub para una única subida enorme. Arreglo de verdad: subir
+          # en trozos pequeños — un mini-commit y un push por cada carpeta de trabajo
+          # (storage/jobs/<id>) en vez de un solo commit gigante con todo storage/. Si la sesión
+          # se corta a media cadena, lo ya subido queda a salvo igual, no hace falta llegar al final.
+          push_current() {
+            local ok=""
+            for attempt in 1 2 3; do
+              if timeout 300 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
-              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 120 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
-            if [ -z "$ok" ]; then
-              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
-            fi
+            [ -n "$ok" ]
+          }
+
+          git add -A -- storage/app.db 2>/dev/null || true
+          git add -A -- storage/.gitkeep 2>/dev/null || true
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 13/25 — base de datos ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir la base de datos de este checkpoint tras varios intentos — se reintentará en el siguiente."
+          fi
+          if [ -d storage/jobs ]; then
+            for jobdir in storage/jobs/*/; do
+              [ -d "$jobdir" ] || continue
+              git add -A -- "$jobdir"
+              if ! git diff --cached --quiet; then
+                git commit -q -m "Snapshot automático checkpoint 13/25 — $(basename "$jobdir") ($(date -u +%FT%TZ))"
+                push_current || echo "::error::Fallo al subir $(basename "$jobdir") en este checkpoint tras varios intentos — se reintentará en el siguiente."
+              fi
+            done
+          fi
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 13/25 — resto ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir el resto de este checkpoint tras varios intentos — se reintentará en el siguiente."
           fi
 
       - name: Mantener la sesión activa (checkpoint 14/25 de la galería)
@@ -1101,30 +1387,52 @@ jobs:
             split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
-          git add -A
-          committed=""
-          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
-            echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 14/25 ($(date -u +%FT%TZ))"; then
-            committed=1
-          else
-            echo "Nada que respaldar todavía (storage/ vacío)."
-          fi
-          if [ -n "$committed" ]; then
-            ok=""
-            for attempt in 1 2 3 4; do
-              if timeout 600 git push -q origin HEAD:gallery-data; then
+
+          # QUINTO BUG REAL CONFIRMADO Y CORREGIDO (mismo día, con el error EXACTO de git en el
+          # log, tras subir el timeout a 600s sin que sirviera de nada): un solo "git push" con
+          # TODO storage/ de golpe (varios GB en una tanda, p.ej. justo tras recuperar 17 vídeos
+          # borrados) hace que el propio SERVIDOR de GitHub corte la conexión a media subida:
+          # "error: RPC failed; HTTP 500 ... send-pack: unexpected disconnect while reading
+          # sideband packet" — confirmado en los 4 intentos, cada uno tras varios minutos
+          # transfiriendo antes de fallar igual. No es un timeout que se pueda alargar más: es un
+          # límite real del lado de GitHub para una única subida enorme. Arreglo de verdad: subir
+          # en trozos pequeños — un mini-commit y un push por cada carpeta de trabajo
+          # (storage/jobs/<id>) en vez de un solo commit gigante con todo storage/. Si la sesión
+          # se corta a media cadena, lo ya subido queda a salvo igual, no hace falta llegar al final.
+          push_current() {
+            local ok=""
+            for attempt in 1 2 3; do
+              if timeout 300 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
-              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 120 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
-            if [ -z "$ok" ]; then
-              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
-            fi
+            [ -n "$ok" ]
+          }
+
+          git add -A -- storage/app.db 2>/dev/null || true
+          git add -A -- storage/.gitkeep 2>/dev/null || true
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 14/25 — base de datos ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir la base de datos de este checkpoint tras varios intentos — se reintentará en el siguiente."
+          fi
+          if [ -d storage/jobs ]; then
+            for jobdir in storage/jobs/*/; do
+              [ -d "$jobdir" ] || continue
+              git add -A -- "$jobdir"
+              if ! git diff --cached --quiet; then
+                git commit -q -m "Snapshot automático checkpoint 14/25 — $(basename "$jobdir") ($(date -u +%FT%TZ))"
+                push_current || echo "::error::Fallo al subir $(basename "$jobdir") en este checkpoint tras varios intentos — se reintentará en el siguiente."
+              fi
+            done
+          fi
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 14/25 — resto ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir el resto de este checkpoint tras varios intentos — se reintentará en el siguiente."
           fi
 
       - name: Mantener la sesión activa (checkpoint 15/25 de la galería)
@@ -1148,30 +1456,52 @@ jobs:
             split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
-          git add -A
-          committed=""
-          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
-            echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 15/25 ($(date -u +%FT%TZ))"; then
-            committed=1
-          else
-            echo "Nada que respaldar todavía (storage/ vacío)."
-          fi
-          if [ -n "$committed" ]; then
-            ok=""
-            for attempt in 1 2 3 4; do
-              if timeout 600 git push -q origin HEAD:gallery-data; then
+
+          # QUINTO BUG REAL CONFIRMADO Y CORREGIDO (mismo día, con el error EXACTO de git en el
+          # log, tras subir el timeout a 600s sin que sirviera de nada): un solo "git push" con
+          # TODO storage/ de golpe (varios GB en una tanda, p.ej. justo tras recuperar 17 vídeos
+          # borrados) hace que el propio SERVIDOR de GitHub corte la conexión a media subida:
+          # "error: RPC failed; HTTP 500 ... send-pack: unexpected disconnect while reading
+          # sideband packet" — confirmado en los 4 intentos, cada uno tras varios minutos
+          # transfiriendo antes de fallar igual. No es un timeout que se pueda alargar más: es un
+          # límite real del lado de GitHub para una única subida enorme. Arreglo de verdad: subir
+          # en trozos pequeños — un mini-commit y un push por cada carpeta de trabajo
+          # (storage/jobs/<id>) en vez de un solo commit gigante con todo storage/. Si la sesión
+          # se corta a media cadena, lo ya subido queda a salvo igual, no hace falta llegar al final.
+          push_current() {
+            local ok=""
+            for attempt in 1 2 3; do
+              if timeout 300 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
-              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 120 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
-            if [ -z "$ok" ]; then
-              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
-            fi
+            [ -n "$ok" ]
+          }
+
+          git add -A -- storage/app.db 2>/dev/null || true
+          git add -A -- storage/.gitkeep 2>/dev/null || true
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 15/25 — base de datos ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir la base de datos de este checkpoint tras varios intentos — se reintentará en el siguiente."
+          fi
+          if [ -d storage/jobs ]; then
+            for jobdir in storage/jobs/*/; do
+              [ -d "$jobdir" ] || continue
+              git add -A -- "$jobdir"
+              if ! git diff --cached --quiet; then
+                git commit -q -m "Snapshot automático checkpoint 15/25 — $(basename "$jobdir") ($(date -u +%FT%TZ))"
+                push_current || echo "::error::Fallo al subir $(basename "$jobdir") en este checkpoint tras varios intentos — se reintentará en el siguiente."
+              fi
+            done
+          fi
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 15/25 — resto ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir el resto de este checkpoint tras varios intentos — se reintentará en el siguiente."
           fi
 
       - name: Mantener la sesión activa (checkpoint 16/25 de la galería)
@@ -1195,30 +1525,52 @@ jobs:
             split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
-          git add -A
-          committed=""
-          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
-            echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 16/25 ($(date -u +%FT%TZ))"; then
-            committed=1
-          else
-            echo "Nada que respaldar todavía (storage/ vacío)."
-          fi
-          if [ -n "$committed" ]; then
-            ok=""
-            for attempt in 1 2 3 4; do
-              if timeout 600 git push -q origin HEAD:gallery-data; then
+
+          # QUINTO BUG REAL CONFIRMADO Y CORREGIDO (mismo día, con el error EXACTO de git en el
+          # log, tras subir el timeout a 600s sin que sirviera de nada): un solo "git push" con
+          # TODO storage/ de golpe (varios GB en una tanda, p.ej. justo tras recuperar 17 vídeos
+          # borrados) hace que el propio SERVIDOR de GitHub corte la conexión a media subida:
+          # "error: RPC failed; HTTP 500 ... send-pack: unexpected disconnect while reading
+          # sideband packet" — confirmado en los 4 intentos, cada uno tras varios minutos
+          # transfiriendo antes de fallar igual. No es un timeout que se pueda alargar más: es un
+          # límite real del lado de GitHub para una única subida enorme. Arreglo de verdad: subir
+          # en trozos pequeños — un mini-commit y un push por cada carpeta de trabajo
+          # (storage/jobs/<id>) en vez de un solo commit gigante con todo storage/. Si la sesión
+          # se corta a media cadena, lo ya subido queda a salvo igual, no hace falta llegar al final.
+          push_current() {
+            local ok=""
+            for attempt in 1 2 3; do
+              if timeout 300 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
-              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 120 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
-            if [ -z "$ok" ]; then
-              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
-            fi
+            [ -n "$ok" ]
+          }
+
+          git add -A -- storage/app.db 2>/dev/null || true
+          git add -A -- storage/.gitkeep 2>/dev/null || true
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 16/25 — base de datos ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir la base de datos de este checkpoint tras varios intentos — se reintentará en el siguiente."
+          fi
+          if [ -d storage/jobs ]; then
+            for jobdir in storage/jobs/*/; do
+              [ -d "$jobdir" ] || continue
+              git add -A -- "$jobdir"
+              if ! git diff --cached --quiet; then
+                git commit -q -m "Snapshot automático checkpoint 16/25 — $(basename "$jobdir") ($(date -u +%FT%TZ))"
+                push_current || echo "::error::Fallo al subir $(basename "$jobdir") en este checkpoint tras varios intentos — se reintentará en el siguiente."
+              fi
+            done
+          fi
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 16/25 — resto ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir el resto de este checkpoint tras varios intentos — se reintentará en el siguiente."
           fi
 
       - name: Mantener la sesión activa (checkpoint 17/25 de la galería)
@@ -1242,30 +1594,52 @@ jobs:
             split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
-          git add -A
-          committed=""
-          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
-            echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 17/25 ($(date -u +%FT%TZ))"; then
-            committed=1
-          else
-            echo "Nada que respaldar todavía (storage/ vacío)."
-          fi
-          if [ -n "$committed" ]; then
-            ok=""
-            for attempt in 1 2 3 4; do
-              if timeout 600 git push -q origin HEAD:gallery-data; then
+
+          # QUINTO BUG REAL CONFIRMADO Y CORREGIDO (mismo día, con el error EXACTO de git en el
+          # log, tras subir el timeout a 600s sin que sirviera de nada): un solo "git push" con
+          # TODO storage/ de golpe (varios GB en una tanda, p.ej. justo tras recuperar 17 vídeos
+          # borrados) hace que el propio SERVIDOR de GitHub corte la conexión a media subida:
+          # "error: RPC failed; HTTP 500 ... send-pack: unexpected disconnect while reading
+          # sideband packet" — confirmado en los 4 intentos, cada uno tras varios minutos
+          # transfiriendo antes de fallar igual. No es un timeout que se pueda alargar más: es un
+          # límite real del lado de GitHub para una única subida enorme. Arreglo de verdad: subir
+          # en trozos pequeños — un mini-commit y un push por cada carpeta de trabajo
+          # (storage/jobs/<id>) en vez de un solo commit gigante con todo storage/. Si la sesión
+          # se corta a media cadena, lo ya subido queda a salvo igual, no hace falta llegar al final.
+          push_current() {
+            local ok=""
+            for attempt in 1 2 3; do
+              if timeout 300 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
-              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 120 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
-            if [ -z "$ok" ]; then
-              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
-            fi
+            [ -n "$ok" ]
+          }
+
+          git add -A -- storage/app.db 2>/dev/null || true
+          git add -A -- storage/.gitkeep 2>/dev/null || true
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 17/25 — base de datos ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir la base de datos de este checkpoint tras varios intentos — se reintentará en el siguiente."
+          fi
+          if [ -d storage/jobs ]; then
+            for jobdir in storage/jobs/*/; do
+              [ -d "$jobdir" ] || continue
+              git add -A -- "$jobdir"
+              if ! git diff --cached --quiet; then
+                git commit -q -m "Snapshot automático checkpoint 17/25 — $(basename "$jobdir") ($(date -u +%FT%TZ))"
+                push_current || echo "::error::Fallo al subir $(basename "$jobdir") en este checkpoint tras varios intentos — se reintentará en el siguiente."
+              fi
+            done
+          fi
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 17/25 — resto ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir el resto de este checkpoint tras varios intentos — se reintentará en el siguiente."
           fi
 
       - name: Mantener la sesión activa (checkpoint 18/25 de la galería)
@@ -1289,30 +1663,52 @@ jobs:
             split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
-          git add -A
-          committed=""
-          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
-            echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 18/25 ($(date -u +%FT%TZ))"; then
-            committed=1
-          else
-            echo "Nada que respaldar todavía (storage/ vacío)."
-          fi
-          if [ -n "$committed" ]; then
-            ok=""
-            for attempt in 1 2 3 4; do
-              if timeout 600 git push -q origin HEAD:gallery-data; then
+
+          # QUINTO BUG REAL CONFIRMADO Y CORREGIDO (mismo día, con el error EXACTO de git en el
+          # log, tras subir el timeout a 600s sin que sirviera de nada): un solo "git push" con
+          # TODO storage/ de golpe (varios GB en una tanda, p.ej. justo tras recuperar 17 vídeos
+          # borrados) hace que el propio SERVIDOR de GitHub corte la conexión a media subida:
+          # "error: RPC failed; HTTP 500 ... send-pack: unexpected disconnect while reading
+          # sideband packet" — confirmado en los 4 intentos, cada uno tras varios minutos
+          # transfiriendo antes de fallar igual. No es un timeout que se pueda alargar más: es un
+          # límite real del lado de GitHub para una única subida enorme. Arreglo de verdad: subir
+          # en trozos pequeños — un mini-commit y un push por cada carpeta de trabajo
+          # (storage/jobs/<id>) en vez de un solo commit gigante con todo storage/. Si la sesión
+          # se corta a media cadena, lo ya subido queda a salvo igual, no hace falta llegar al final.
+          push_current() {
+            local ok=""
+            for attempt in 1 2 3; do
+              if timeout 300 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
-              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 120 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
-            if [ -z "$ok" ]; then
-              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
-            fi
+            [ -n "$ok" ]
+          }
+
+          git add -A -- storage/app.db 2>/dev/null || true
+          git add -A -- storage/.gitkeep 2>/dev/null || true
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 18/25 — base de datos ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir la base de datos de este checkpoint tras varios intentos — se reintentará en el siguiente."
+          fi
+          if [ -d storage/jobs ]; then
+            for jobdir in storage/jobs/*/; do
+              [ -d "$jobdir" ] || continue
+              git add -A -- "$jobdir"
+              if ! git diff --cached --quiet; then
+                git commit -q -m "Snapshot automático checkpoint 18/25 — $(basename "$jobdir") ($(date -u +%FT%TZ))"
+                push_current || echo "::error::Fallo al subir $(basename "$jobdir") en este checkpoint tras varios intentos — se reintentará en el siguiente."
+              fi
+            done
+          fi
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 18/25 — resto ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir el resto de este checkpoint tras varios intentos — se reintentará en el siguiente."
           fi
 
       - name: Mantener la sesión activa (checkpoint 19/25 de la galería)
@@ -1336,30 +1732,52 @@ jobs:
             split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
-          git add -A
-          committed=""
-          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
-            echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 19/25 ($(date -u +%FT%TZ))"; then
-            committed=1
-          else
-            echo "Nada que respaldar todavía (storage/ vacío)."
-          fi
-          if [ -n "$committed" ]; then
-            ok=""
-            for attempt in 1 2 3 4; do
-              if timeout 600 git push -q origin HEAD:gallery-data; then
+
+          # QUINTO BUG REAL CONFIRMADO Y CORREGIDO (mismo día, con el error EXACTO de git en el
+          # log, tras subir el timeout a 600s sin que sirviera de nada): un solo "git push" con
+          # TODO storage/ de golpe (varios GB en una tanda, p.ej. justo tras recuperar 17 vídeos
+          # borrados) hace que el propio SERVIDOR de GitHub corte la conexión a media subida:
+          # "error: RPC failed; HTTP 500 ... send-pack: unexpected disconnect while reading
+          # sideband packet" — confirmado en los 4 intentos, cada uno tras varios minutos
+          # transfiriendo antes de fallar igual. No es un timeout que se pueda alargar más: es un
+          # límite real del lado de GitHub para una única subida enorme. Arreglo de verdad: subir
+          # en trozos pequeños — un mini-commit y un push por cada carpeta de trabajo
+          # (storage/jobs/<id>) en vez de un solo commit gigante con todo storage/. Si la sesión
+          # se corta a media cadena, lo ya subido queda a salvo igual, no hace falta llegar al final.
+          push_current() {
+            local ok=""
+            for attempt in 1 2 3; do
+              if timeout 300 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
-              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 120 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
-            if [ -z "$ok" ]; then
-              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
-            fi
+            [ -n "$ok" ]
+          }
+
+          git add -A -- storage/app.db 2>/dev/null || true
+          git add -A -- storage/.gitkeep 2>/dev/null || true
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 19/25 — base de datos ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir la base de datos de este checkpoint tras varios intentos — se reintentará en el siguiente."
+          fi
+          if [ -d storage/jobs ]; then
+            for jobdir in storage/jobs/*/; do
+              [ -d "$jobdir" ] || continue
+              git add -A -- "$jobdir"
+              if ! git diff --cached --quiet; then
+                git commit -q -m "Snapshot automático checkpoint 19/25 — $(basename "$jobdir") ($(date -u +%FT%TZ))"
+                push_current || echo "::error::Fallo al subir $(basename "$jobdir") en este checkpoint tras varios intentos — se reintentará en el siguiente."
+              fi
+            done
+          fi
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 19/25 — resto ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir el resto de este checkpoint tras varios intentos — se reintentará en el siguiente."
           fi
 
       - name: Mantener la sesión activa (checkpoint 20/25 de la galería)
@@ -1383,30 +1801,52 @@ jobs:
             split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
-          git add -A
-          committed=""
-          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
-            echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 20/25 ($(date -u +%FT%TZ))"; then
-            committed=1
-          else
-            echo "Nada que respaldar todavía (storage/ vacío)."
-          fi
-          if [ -n "$committed" ]; then
-            ok=""
-            for attempt in 1 2 3 4; do
-              if timeout 600 git push -q origin HEAD:gallery-data; then
+
+          # QUINTO BUG REAL CONFIRMADO Y CORREGIDO (mismo día, con el error EXACTO de git en el
+          # log, tras subir el timeout a 600s sin que sirviera de nada): un solo "git push" con
+          # TODO storage/ de golpe (varios GB en una tanda, p.ej. justo tras recuperar 17 vídeos
+          # borrados) hace que el propio SERVIDOR de GitHub corte la conexión a media subida:
+          # "error: RPC failed; HTTP 500 ... send-pack: unexpected disconnect while reading
+          # sideband packet" — confirmado en los 4 intentos, cada uno tras varios minutos
+          # transfiriendo antes de fallar igual. No es un timeout que se pueda alargar más: es un
+          # límite real del lado de GitHub para una única subida enorme. Arreglo de verdad: subir
+          # en trozos pequeños — un mini-commit y un push por cada carpeta de trabajo
+          # (storage/jobs/<id>) en vez de un solo commit gigante con todo storage/. Si la sesión
+          # se corta a media cadena, lo ya subido queda a salvo igual, no hace falta llegar al final.
+          push_current() {
+            local ok=""
+            for attempt in 1 2 3; do
+              if timeout 300 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
-              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 120 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
-            if [ -z "$ok" ]; then
-              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
-            fi
+            [ -n "$ok" ]
+          }
+
+          git add -A -- storage/app.db 2>/dev/null || true
+          git add -A -- storage/.gitkeep 2>/dev/null || true
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 20/25 — base de datos ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir la base de datos de este checkpoint tras varios intentos — se reintentará en el siguiente."
+          fi
+          if [ -d storage/jobs ]; then
+            for jobdir in storage/jobs/*/; do
+              [ -d "$jobdir" ] || continue
+              git add -A -- "$jobdir"
+              if ! git diff --cached --quiet; then
+                git commit -q -m "Snapshot automático checkpoint 20/25 — $(basename "$jobdir") ($(date -u +%FT%TZ))"
+                push_current || echo "::error::Fallo al subir $(basename "$jobdir") en este checkpoint tras varios intentos — se reintentará en el siguiente."
+              fi
+            done
+          fi
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 20/25 — resto ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir el resto de este checkpoint tras varios intentos — se reintentará en el siguiente."
           fi
 
       - name: Mantener la sesión activa (checkpoint 21/25 de la galería)
@@ -1430,30 +1870,52 @@ jobs:
             split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
-          git add -A
-          committed=""
-          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
-            echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 21/25 ($(date -u +%FT%TZ))"; then
-            committed=1
-          else
-            echo "Nada que respaldar todavía (storage/ vacío)."
-          fi
-          if [ -n "$committed" ]; then
-            ok=""
-            for attempt in 1 2 3 4; do
-              if timeout 600 git push -q origin HEAD:gallery-data; then
+
+          # QUINTO BUG REAL CONFIRMADO Y CORREGIDO (mismo día, con el error EXACTO de git en el
+          # log, tras subir el timeout a 600s sin que sirviera de nada): un solo "git push" con
+          # TODO storage/ de golpe (varios GB en una tanda, p.ej. justo tras recuperar 17 vídeos
+          # borrados) hace que el propio SERVIDOR de GitHub corte la conexión a media subida:
+          # "error: RPC failed; HTTP 500 ... send-pack: unexpected disconnect while reading
+          # sideband packet" — confirmado en los 4 intentos, cada uno tras varios minutos
+          # transfiriendo antes de fallar igual. No es un timeout que se pueda alargar más: es un
+          # límite real del lado de GitHub para una única subida enorme. Arreglo de verdad: subir
+          # en trozos pequeños — un mini-commit y un push por cada carpeta de trabajo
+          # (storage/jobs/<id>) en vez de un solo commit gigante con todo storage/. Si la sesión
+          # se corta a media cadena, lo ya subido queda a salvo igual, no hace falta llegar al final.
+          push_current() {
+            local ok=""
+            for attempt in 1 2 3; do
+              if timeout 300 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
-              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 120 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
-            if [ -z "$ok" ]; then
-              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
-            fi
+            [ -n "$ok" ]
+          }
+
+          git add -A -- storage/app.db 2>/dev/null || true
+          git add -A -- storage/.gitkeep 2>/dev/null || true
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 21/25 — base de datos ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir la base de datos de este checkpoint tras varios intentos — se reintentará en el siguiente."
+          fi
+          if [ -d storage/jobs ]; then
+            for jobdir in storage/jobs/*/; do
+              [ -d "$jobdir" ] || continue
+              git add -A -- "$jobdir"
+              if ! git diff --cached --quiet; then
+                git commit -q -m "Snapshot automático checkpoint 21/25 — $(basename "$jobdir") ($(date -u +%FT%TZ))"
+                push_current || echo "::error::Fallo al subir $(basename "$jobdir") en este checkpoint tras varios intentos — se reintentará en el siguiente."
+              fi
+            done
+          fi
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 21/25 — resto ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir el resto de este checkpoint tras varios intentos — se reintentará en el siguiente."
           fi
 
       - name: Mantener la sesión activa (checkpoint 22/25 de la galería)
@@ -1477,30 +1939,52 @@ jobs:
             split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
-          git add -A
-          committed=""
-          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
-            echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 22/25 ($(date -u +%FT%TZ))"; then
-            committed=1
-          else
-            echo "Nada que respaldar todavía (storage/ vacío)."
-          fi
-          if [ -n "$committed" ]; then
-            ok=""
-            for attempt in 1 2 3 4; do
-              if timeout 600 git push -q origin HEAD:gallery-data; then
+
+          # QUINTO BUG REAL CONFIRMADO Y CORREGIDO (mismo día, con el error EXACTO de git en el
+          # log, tras subir el timeout a 600s sin que sirviera de nada): un solo "git push" con
+          # TODO storage/ de golpe (varios GB en una tanda, p.ej. justo tras recuperar 17 vídeos
+          # borrados) hace que el propio SERVIDOR de GitHub corte la conexión a media subida:
+          # "error: RPC failed; HTTP 500 ... send-pack: unexpected disconnect while reading
+          # sideband packet" — confirmado en los 4 intentos, cada uno tras varios minutos
+          # transfiriendo antes de fallar igual. No es un timeout que se pueda alargar más: es un
+          # límite real del lado de GitHub para una única subida enorme. Arreglo de verdad: subir
+          # en trozos pequeños — un mini-commit y un push por cada carpeta de trabajo
+          # (storage/jobs/<id>) en vez de un solo commit gigante con todo storage/. Si la sesión
+          # se corta a media cadena, lo ya subido queda a salvo igual, no hace falta llegar al final.
+          push_current() {
+            local ok=""
+            for attempt in 1 2 3; do
+              if timeout 300 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
-              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 120 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
-            if [ -z "$ok" ]; then
-              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
-            fi
+            [ -n "$ok" ]
+          }
+
+          git add -A -- storage/app.db 2>/dev/null || true
+          git add -A -- storage/.gitkeep 2>/dev/null || true
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 22/25 — base de datos ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir la base de datos de este checkpoint tras varios intentos — se reintentará en el siguiente."
+          fi
+          if [ -d storage/jobs ]; then
+            for jobdir in storage/jobs/*/; do
+              [ -d "$jobdir" ] || continue
+              git add -A -- "$jobdir"
+              if ! git diff --cached --quiet; then
+                git commit -q -m "Snapshot automático checkpoint 22/25 — $(basename "$jobdir") ($(date -u +%FT%TZ))"
+                push_current || echo "::error::Fallo al subir $(basename "$jobdir") en este checkpoint tras varios intentos — se reintentará en el siguiente."
+              fi
+            done
+          fi
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 22/25 — resto ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir el resto de este checkpoint tras varios intentos — se reintentará en el siguiente."
           fi
 
       - name: Mantener la sesión activa (checkpoint 23/25 de la galería)
@@ -1524,30 +2008,52 @@ jobs:
             split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
-          git add -A
-          committed=""
-          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
-            echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 23/25 ($(date -u +%FT%TZ))"; then
-            committed=1
-          else
-            echo "Nada que respaldar todavía (storage/ vacío)."
-          fi
-          if [ -n "$committed" ]; then
-            ok=""
-            for attempt in 1 2 3 4; do
-              if timeout 600 git push -q origin HEAD:gallery-data; then
+
+          # QUINTO BUG REAL CONFIRMADO Y CORREGIDO (mismo día, con el error EXACTO de git en el
+          # log, tras subir el timeout a 600s sin que sirviera de nada): un solo "git push" con
+          # TODO storage/ de golpe (varios GB en una tanda, p.ej. justo tras recuperar 17 vídeos
+          # borrados) hace que el propio SERVIDOR de GitHub corte la conexión a media subida:
+          # "error: RPC failed; HTTP 500 ... send-pack: unexpected disconnect while reading
+          # sideband packet" — confirmado en los 4 intentos, cada uno tras varios minutos
+          # transfiriendo antes de fallar igual. No es un timeout que se pueda alargar más: es un
+          # límite real del lado de GitHub para una única subida enorme. Arreglo de verdad: subir
+          # en trozos pequeños — un mini-commit y un push por cada carpeta de trabajo
+          # (storage/jobs/<id>) en vez de un solo commit gigante con todo storage/. Si la sesión
+          # se corta a media cadena, lo ya subido queda a salvo igual, no hace falta llegar al final.
+          push_current() {
+            local ok=""
+            for attempt in 1 2 3; do
+              if timeout 300 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
-              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 120 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
-            if [ -z "$ok" ]; then
-              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
-            fi
+            [ -n "$ok" ]
+          }
+
+          git add -A -- storage/app.db 2>/dev/null || true
+          git add -A -- storage/.gitkeep 2>/dev/null || true
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 23/25 — base de datos ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir la base de datos de este checkpoint tras varios intentos — se reintentará en el siguiente."
+          fi
+          if [ -d storage/jobs ]; then
+            for jobdir in storage/jobs/*/; do
+              [ -d "$jobdir" ] || continue
+              git add -A -- "$jobdir"
+              if ! git diff --cached --quiet; then
+                git commit -q -m "Snapshot automático checkpoint 23/25 — $(basename "$jobdir") ($(date -u +%FT%TZ))"
+                push_current || echo "::error::Fallo al subir $(basename "$jobdir") en este checkpoint tras varios intentos — se reintentará en el siguiente."
+              fi
+            done
+          fi
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 23/25 — resto ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir el resto de este checkpoint tras varios intentos — se reintentará en el siguiente."
           fi
 
       - name: Mantener la sesión activa (checkpoint 24/25 de la galería)
@@ -1571,30 +2077,52 @@ jobs:
             split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
-          git add -A
-          committed=""
-          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
-            echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 24/25 ($(date -u +%FT%TZ))"; then
-            committed=1
-          else
-            echo "Nada que respaldar todavía (storage/ vacío)."
-          fi
-          if [ -n "$committed" ]; then
-            ok=""
-            for attempt in 1 2 3 4; do
-              if timeout 600 git push -q origin HEAD:gallery-data; then
+
+          # QUINTO BUG REAL CONFIRMADO Y CORREGIDO (mismo día, con el error EXACTO de git en el
+          # log, tras subir el timeout a 600s sin que sirviera de nada): un solo "git push" con
+          # TODO storage/ de golpe (varios GB en una tanda, p.ej. justo tras recuperar 17 vídeos
+          # borrados) hace que el propio SERVIDOR de GitHub corte la conexión a media subida:
+          # "error: RPC failed; HTTP 500 ... send-pack: unexpected disconnect while reading
+          # sideband packet" — confirmado en los 4 intentos, cada uno tras varios minutos
+          # transfiriendo antes de fallar igual. No es un timeout que se pueda alargar más: es un
+          # límite real del lado de GitHub para una única subida enorme. Arreglo de verdad: subir
+          # en trozos pequeños — un mini-commit y un push por cada carpeta de trabajo
+          # (storage/jobs/<id>) en vez de un solo commit gigante con todo storage/. Si la sesión
+          # se corta a media cadena, lo ya subido queda a salvo igual, no hace falta llegar al final.
+          push_current() {
+            local ok=""
+            for attempt in 1 2 3; do
+              if timeout 300 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
-              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 120 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
-            if [ -z "$ok" ]; then
-              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
-            fi
+            [ -n "$ok" ]
+          }
+
+          git add -A -- storage/app.db 2>/dev/null || true
+          git add -A -- storage/.gitkeep 2>/dev/null || true
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 24/25 — base de datos ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir la base de datos de este checkpoint tras varios intentos — se reintentará en el siguiente."
+          fi
+          if [ -d storage/jobs ]; then
+            for jobdir in storage/jobs/*/; do
+              [ -d "$jobdir" ] || continue
+              git add -A -- "$jobdir"
+              if ! git diff --cached --quiet; then
+                git commit -q -m "Snapshot automático checkpoint 24/25 — $(basename "$jobdir") ($(date -u +%FT%TZ))"
+                push_current || echo "::error::Fallo al subir $(basename "$jobdir") en este checkpoint tras varios intentos — se reintentará en el siguiente."
+              fi
+            done
+          fi
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 24/25 — resto ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir el resto de este checkpoint tras varios intentos — se reintentará en el siguiente."
           fi
 
       - name: Mantener la sesión activa (checkpoint 25/25 de la galería)
@@ -1618,30 +2146,52 @@ jobs:
             split -d -a 4 -b 90m "$f" "${f}.part"
             rm -f "$f"
           done
-          git add -A
-          committed=""
-          if git rev-parse --verify HEAD >/dev/null 2>&1 && git diff --cached --quiet; then
-            echo "Sin cambios nuevos que respaldar."
-          elif git commit -q -m "Snapshot automático checkpoint 25/25 ($(date -u +%FT%TZ))"; then
-            committed=1
-          else
-            echo "Nada que respaldar todavía (storage/ vacío)."
-          fi
-          if [ -n "$committed" ]; then
-            ok=""
-            for attempt in 1 2 3 4; do
-              if timeout 600 git push -q origin HEAD:gallery-data; then
+
+          # QUINTO BUG REAL CONFIRMADO Y CORREGIDO (mismo día, con el error EXACTO de git en el
+          # log, tras subir el timeout a 600s sin que sirviera de nada): un solo "git push" con
+          # TODO storage/ de golpe (varios GB en una tanda, p.ej. justo tras recuperar 17 vídeos
+          # borrados) hace que el propio SERVIDOR de GitHub corte la conexión a media subida:
+          # "error: RPC failed; HTTP 500 ... send-pack: unexpected disconnect while reading
+          # sideband packet" — confirmado en los 4 intentos, cada uno tras varios minutos
+          # transfiriendo antes de fallar igual. No es un timeout que se pueda alargar más: es un
+          # límite real del lado de GitHub para una única subida enorme. Arreglo de verdad: subir
+          # en trozos pequeños — un mini-commit y un push por cada carpeta de trabajo
+          # (storage/jobs/<id>) en vez de un solo commit gigante con todo storage/. Si la sesión
+          # se corta a media cadena, lo ya subido queda a salvo igual, no hace falta llegar al final.
+          push_current() {
+            local ok=""
+            for attempt in 1 2 3; do
+              if timeout 300 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
-              echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 120 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
-            if [ -z "$ok" ]; then
-              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
-            fi
+            [ -n "$ok" ]
+          }
+
+          git add -A -- storage/app.db 2>/dev/null || true
+          git add -A -- storage/.gitkeep 2>/dev/null || true
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 25/25 — base de datos ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir la base de datos de este checkpoint tras varios intentos — se reintentará en el siguiente."
+          fi
+          if [ -d storage/jobs ]; then
+            for jobdir in storage/jobs/*/; do
+              [ -d "$jobdir" ] || continue
+              git add -A -- "$jobdir"
+              if ! git diff --cached --quiet; then
+                git commit -q -m "Snapshot automático checkpoint 25/25 — $(basename "$jobdir") ($(date -u +%FT%TZ))"
+                push_current || echo "::error::Fallo al subir $(basename "$jobdir") en este checkpoint tras varios intentos — se reintentará en el siguiente."
+              fi
+            done
+          fi
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Snapshot automático checkpoint 25/25 — resto ($(date -u +%FT%TZ))"
+            push_current || echo "::error::Fallo al subir el resto de este checkpoint tras varios intentos — se reintentará en el siguiente."
           fi
 
       - name: Pasar el testigo a la siguiente sesión
