@@ -98,15 +98,24 @@ export async function publishClip(clipId: string, platform: Platform): Promise<P
       return { ok: true, publicationId: publication.id, status: "PUBLISHED", remoteUrl: result.url };
     }
 
-    const existingHashtags = JSON.parse(clip.hashtags || "[]") as string[];
-    const fresh = await suggestHashtags({
-      platform,
-      title: clip.title,
-      description: clip.description,
-      existing: existingHashtags,
-      contentLanguage,
-    });
-    await db.clip.update({ where: { id: clip.id }, data: { hashtags: JSON.stringify(fresh.hashtags) } });
+    // Cada paso se envuelve por separado (en vez de dejar que cualquier fallo suba tal cual,
+    // p.ej. el críptico "The string did not match the expected pattern." visto en real sin
+    // ningún contexto de en qué paso pasó) para que el mensaje que llega al usuario diga SIEMPRE
+    // en qué parte concreta falló, no solo que "falló publicar".
+    let fresh: { hashtags: string[] };
+    try {
+      const existingHashtags = JSON.parse(clip.hashtags || "[]") as string[];
+      fresh = await suggestHashtags({
+        platform,
+        title: clip.title,
+        description: clip.description,
+        existing: existingHashtags,
+        contentLanguage,
+      });
+      await db.clip.update({ where: { id: clip.id }, data: { hashtags: JSON.stringify(fresh.hashtags) } });
+    } catch (err) {
+      throw new Error(`Fallo generando los hashtags para TikTok: ${(err as Error).message}`);
+    }
 
     const result = await uploadShortToTikTok({
       filePath: clip.filePath,

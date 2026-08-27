@@ -183,54 +183,77 @@ function buildCaption(title: string, hashtags: string[]): string {
 export async function uploadShortToTikTok(
   params: UploadToTikTokParams
 ): Promise<{ publishId: string; status: "PUBLISHED"; privacyLevel: string }> {
-  const accessToken = await refreshTokenIfNeeded();
+  // Cada paso envuelto por separado con su propio contexto: un error nativo sin más (p.ej. "The
+  // string did not match the expected pattern.", visto en real) no dice nada de en qué paso de
+  // los 4 pasó — con esto, el mensaje que le llega al usuario siempre dice cuál de ellos fue.
+  let accessToken: string;
+  try {
+    accessToken = await refreshTokenIfNeeded();
+  } catch (err) {
+    throw new Error(`Fallo renovando la conexión con TikTok: ${(err as Error).message}`);
+  }
+
   const stats = fs.statSync(params.filePath);
   const videoSize = stats.size;
 
-  const creatorInfo = await queryCreatorInfo(accessToken);
-  const privacyLevel = pickPrivacyLevel(creatorInfo.privacyLevelOptions);
-
-  const initRes = await fetch(DIRECT_POST_INIT_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json; charset=UTF-8",
-    },
-    body: JSON.stringify({
-      post_info: {
-        title: buildCaption(params.title, params.hashtags),
-        privacy_level: privacyLevel,
-        disable_duet: false,
-        disable_comment: false,
-        disable_stitch: false,
-      },
-      source_info: {
-        source: "FILE_UPLOAD",
-        video_size: videoSize,
-        chunk_size: videoSize,
-        total_chunk_count: 1,
-      },
-    }),
-  });
-  const initData = await initRes.json();
-  if (!initRes.ok || initData.error?.code !== "ok") {
-    throw new Error(`TikTok rechazó la subida: ${initData.error?.message ?? initRes.statusText}`);
+  let privacyLevel: string;
+  try {
+    const creatorInfo = await queryCreatorInfo(accessToken);
+    privacyLevel = pickPrivacyLevel(creatorInfo.privacyLevelOptions);
+  } catch (err) {
+    throw new Error(`Fallo consultando la cuenta de TikTok: ${(err as Error).message}`);
   }
 
-  const { publish_id: publishId, upload_url: uploadUrl } = initData.data;
+  let publishId: string;
+  let uploadUrl: string;
+  try {
+    const initRes = await fetch(DIRECT_POST_INIT_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json; charset=UTF-8",
+      },
+      body: JSON.stringify({
+        post_info: {
+          title: buildCaption(params.title, params.hashtags),
+          privacy_level: privacyLevel,
+          disable_duet: false,
+          disable_comment: false,
+          disable_stitch: false,
+        },
+        source_info: {
+          source: "FILE_UPLOAD",
+          video_size: videoSize,
+          chunk_size: videoSize,
+          total_chunk_count: 1,
+        },
+      }),
+    });
+    const initData = await initRes.json();
+    if (!initRes.ok || initData.error?.code !== "ok") {
+      throw new Error(initData.error?.message ?? initRes.statusText);
+    }
+    publishId = initData.data.publish_id;
+    uploadUrl = initData.data.upload_url;
+  } catch (err) {
+    throw new Error(`TikTok rechazó iniciar la subida: ${(err as Error).message}`);
+  }
 
-  const fileBuffer = fs.readFileSync(params.filePath);
-  const uploadRes = await fetch(uploadUrl, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "video/mp4",
-      "Content-Range": `bytes 0-${videoSize - 1}/${videoSize}`,
-    },
-    body: fileBuffer,
-  });
-
-  if (!uploadRes.ok) {
-    throw new Error(`Fallo subiendo el vídeo a TikTok (${uploadRes.status})`);
+  try {
+    const fileBuffer = fs.readFileSync(params.filePath);
+    const uploadRes = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "video/mp4",
+        "Content-Range": `bytes 0-${videoSize - 1}/${videoSize}`,
+      },
+      body: fileBuffer,
+    });
+    if (!uploadRes.ok) {
+      throw new Error(`código ${uploadRes.status}`);
+    }
+  } catch (err) {
+    throw new Error(`Fallo subiendo el archivo de vídeo a TikTok: ${(err as Error).message}`);
   }
 
   return { publishId, status: "PUBLISHED", privacyLevel };
