@@ -238,8 +238,14 @@ export default function ClipCard({ clip }: { clip: ClipData }) {
     setEditingMeta(false);
   }
 
+  // Antes solo se buscaba la publicación NO fallida, así que un intento fallido (p.ej. del
+  // programador automático, que publica en segundo plano sin que el usuario vea nada) quedaba
+  // completamente invisible: el botón volvía a su estado normal como si nunca se hubiera
+  // intentado, sin ningún indicio de por qué TikTok/YouTube no recibió el vídeo. Se coge la
+  // publicación MÁS RECIENTE de esa plataforma tenga el estado que tenga, para poder mostrar el
+  // error real cuando lo haya.
   const statusFor = (platform: string) =>
-    publications.find((p) => p.platform === platform && p.status !== "FAILED");
+    [...publications].reverse().find((p) => p.platform === platform);
 
   async function publish(platform: "YOUTUBE" | "TIKTOK") {
     setPublishing(platform);
@@ -409,7 +415,13 @@ export default function ClipCard({ clip }: { clip: ClipData }) {
               onClick={() => publish("YOUTUBE")}
               className="rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-40"
             >
-              {yt?.status === "PUBLISHED" ? "✓ Publicado en YouTube" : publishing === "YOUTUBE" ? "Subiendo…" : "Publicar en YouTube"}
+              {yt?.status === "PUBLISHED"
+                ? "✓ Publicado en YouTube"
+                : publishing === "YOUTUBE"
+                  ? "Subiendo…"
+                  : yt?.status === "FAILED"
+                    ? "⚠️ Falló — reintentar en YouTube"
+                    : "Publicar en YouTube"}
             </button>
             <button
               disabled={clipStatus !== "READY" || publishing === "TIKTOK"}
@@ -420,7 +432,9 @@ export default function ClipCard({ clip }: { clip: ClipData }) {
                 ? "✓ Publicado en TikTok"
                 : publishing === "TIKTOK"
                   ? "Subiendo…"
-                  : "Publicar en TikTok"}
+                  : tt?.status === "FAILED"
+                    ? "⚠️ Falló — reintentar en TikTok"
+                    : "Publicar en TikTok"}
             </button>
             {clipStatus === "READY" && (
               <a
@@ -444,6 +458,12 @@ export default function ClipCard({ clip }: { clip: ClipData }) {
               </a>
             )}
           </div>
+          {yt?.status === "FAILED" && yt.error && (
+            <p className="mt-2 text-xs text-red-400">YouTube: {yt.error}</p>
+          )}
+          {tt?.status === "FAILED" && tt.error && (
+            <p className="mt-2 text-xs text-red-400">TikTok: {tt.error}</p>
+          )}
           {note && <p className="mt-2 text-xs text-slate-400">{note}</p>}
         </div>
       </div>
