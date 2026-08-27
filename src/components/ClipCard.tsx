@@ -250,21 +250,46 @@ export default function ClipCard({ clip }: { clip: ClipData }) {
   async function publish(platform: "YOUTUBE" | "TIKTOK") {
     setPublishing(platform);
     setNote(null);
+    // La petición y la lectura de la respuesta se separan en dos try/catch (en vez de uno solo)
+    // porque un error nativo del navegador sin contexto (p.ej. "The string did not match the
+    // expected pattern.", visto en real) no decía si el fallo era de red, de leer la respuesta, o
+    // un error real del servidor — con esto el mensaje que ve el usuario siempre dice cuál de los
+    // tres fue.
+    let res: Response;
     try {
-      const res = await fetch(`/api/clips/${clip.id}/publish`, {
+      res = await fetch(`/api/clips/${clip.id}/publish`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ platform }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Fallo al publicar");
-      setPublications((prev) => [...prev.filter((p) => p.platform !== platform), data.publication]);
-      if (data.note) setNote(data.note);
     } catch (err) {
-      setNote((err as Error).message);
-    } finally {
+      setNote(`Fallo de conexión al contactar con el servidor: ${(err as Error).message}`);
       setPublishing(null);
+      return;
     }
+    let data: {
+      error?: string;
+      note?: string;
+      publication?: { id: string; platform: string; status: string; remoteUrl: string | null; error: string | null };
+    };
+    try {
+      data = await res.json();
+    } catch (err) {
+      setNote(`El servidor respondió (código ${res.status}) pero la respuesta no se pudo leer: ${(err as Error).message}`);
+      setPublishing(null);
+      return;
+    }
+    if (!res.ok) {
+      setNote(data.error ?? `Fallo al publicar (código ${res.status})`);
+      setPublishing(null);
+      return;
+    }
+    if (data.publication) {
+      const publication = data.publication;
+      setPublications((prev) => [...prev.filter((p) => p.platform !== platform), publication]);
+    }
+    if (data.note) setNote(data.note);
+    setPublishing(null);
   }
 
   const yt = statusFor("YOUTUBE");
