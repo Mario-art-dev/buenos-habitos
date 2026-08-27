@@ -502,17 +502,17 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if timeout 90 git push -q origin HEAD:gallery-data; then
+              if timeout 600 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
             if [ -z "$ok" ]; then
-              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
             fi
           fi
 
@@ -549,17 +549,17 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if timeout 90 git push -q origin HEAD:gallery-data; then
+              if timeout 600 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
             if [ -z "$ok" ]; then
-              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
             fi
           fi
 
@@ -596,17 +596,17 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if timeout 90 git push -q origin HEAD:gallery-data; then
+              if timeout 600 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
             if [ -z "$ok" ]; then
-              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
             fi
           fi
 
@@ -643,17 +643,17 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if timeout 90 git push -q origin HEAD:gallery-data; then
+              if timeout 600 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
             if [ -z "$ok" ]; then
-              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
             fi
           fi
 
@@ -690,17 +690,17 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if timeout 90 git push -q origin HEAD:gallery-data; then
+              if timeout 600 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
             if [ -z "$ok" ]; then
-              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
             fi
           fi
 
@@ -737,17 +737,17 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if timeout 90 git push -q origin HEAD:gallery-data; then
+              if timeout 600 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
             if [ -z "$ok" ]; then
-              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
             fi
           fi
 
@@ -784,17 +784,17 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if timeout 90 git push -q origin HEAD:gallery-data; then
+              if timeout 600 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
             if [ -z "$ok" ]; then
-              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
             fi
           fi
 
@@ -831,17 +831,17 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if timeout 90 git push -q origin HEAD:gallery-data; then
+              if timeout 600 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
             if [ -z "$ok" ]; then
-              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
             fi
           fi
 
@@ -878,17 +878,17 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if timeout 90 git push -q origin HEAD:gallery-data; then
+              if timeout 600 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
             if [ -z "$ok" ]; then
-              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
             fi
           fi
 
@@ -925,17 +925,17 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if timeout 90 git push -q origin HEAD:gallery-data; then
+              if timeout 600 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
             if [ -z "$ok" ]; then
-              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
             fi
           fi
 
@@ -972,17 +972,17 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if timeout 90 git push -q origin HEAD:gallery-data; then
+              if timeout 600 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
             if [ -z "$ok" ]; then
-              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
             fi
           fi
 
@@ -1019,17 +1019,17 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if timeout 90 git push -q origin HEAD:gallery-data; then
+              if timeout 600 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
             if [ -z "$ok" ]; then
-              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
             fi
           fi
 
@@ -1066,17 +1066,17 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if timeout 90 git push -q origin HEAD:gallery-data; then
+              if timeout 600 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
             if [ -z "$ok" ]; then
-              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
             fi
           fi
 
@@ -1113,17 +1113,17 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if timeout 90 git push -q origin HEAD:gallery-data; then
+              if timeout 600 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
             if [ -z "$ok" ]; then
-              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
             fi
           fi
 
@@ -1160,17 +1160,17 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if timeout 90 git push -q origin HEAD:gallery-data; then
+              if timeout 600 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
             if [ -z "$ok" ]; then
-              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
             fi
           fi
 
@@ -1207,17 +1207,17 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if timeout 90 git push -q origin HEAD:gallery-data; then
+              if timeout 600 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
             if [ -z "$ok" ]; then
-              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
             fi
           fi
 
@@ -1254,17 +1254,17 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if timeout 90 git push -q origin HEAD:gallery-data; then
+              if timeout 600 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
             if [ -z "$ok" ]; then
-              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
             fi
           fi
 
@@ -1301,17 +1301,17 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if timeout 90 git push -q origin HEAD:gallery-data; then
+              if timeout 600 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
             if [ -z "$ok" ]; then
-              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
             fi
           fi
 
@@ -1348,17 +1348,17 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if timeout 90 git push -q origin HEAD:gallery-data; then
+              if timeout 600 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
             if [ -z "$ok" ]; then
-              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
             fi
           fi
 
@@ -1395,17 +1395,17 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if timeout 90 git push -q origin HEAD:gallery-data; then
+              if timeout 600 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
             if [ -z "$ok" ]; then
-              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
             fi
           fi
 
@@ -1442,17 +1442,17 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if timeout 90 git push -q origin HEAD:gallery-data; then
+              if timeout 600 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
             if [ -z "$ok" ]; then
-              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
             fi
           fi
 
@@ -1489,17 +1489,17 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if timeout 90 git push -q origin HEAD:gallery-data; then
+              if timeout 600 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
             if [ -z "$ok" ]; then
-              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
             fi
           fi
 
@@ -1536,17 +1536,17 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if timeout 90 git push -q origin HEAD:gallery-data; then
+              if timeout 600 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
             if [ -z "$ok" ]; then
-              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
             fi
           fi
 
@@ -1583,17 +1583,17 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if timeout 90 git push -q origin HEAD:gallery-data; then
+              if timeout 600 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
             if [ -z "$ok" ]; then
-              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
             fi
           fi
 
@@ -1630,17 +1630,17 @@ jobs:
           if [ -n "$committed" ]; then
             ok=""
             for attempt in 1 2 3 4; do
-              if timeout 90 git push -q origin HEAD:gallery-data; then
+              if timeout 600 git push -q origin HEAD:gallery-data; then
                 ok=1
                 break
               fi
               echo "Fallo al subir el respaldo (intento $attempt/4), reintentando..."
-              timeout 60 git fetch -q origin gallery-data 2>/dev/null || true
+              timeout 300 git fetch -q origin gallery-data 2>/dev/null || true
               git merge -q -X ours --no-edit origin/gallery-data 2>/dev/null || true
               sleep $((attempt * 5))
             done
             if [ -z "$ok" ]; then
-              echo "AVISO: no se pudo subir el respaldo tras 4 intentos. Se reintentará en el siguiente checkpoint (como mucho se pierden 10 minutos)."
+              echo "::error::No se pudo subir el checkpoint tras 4 intentos (aunque el paso siga en verde a propósito, para no tirar toda la sesión por un solo checkpoint fallido) — se reintentará en el siguiente, como mucho se pierden 10 minutos de esta tanda de cambios."
             fi
           fi
 
