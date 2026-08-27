@@ -123,7 +123,8 @@ Devuelve SOLO este JSON (sin texto extra):
       "hook": "la frase o momento exacto que engancha en el segundo 0-2",
       "viralityScore": number entre 0 y 100,
       "viralityReason": "explicación breve (1 frase) de por qué puede volverse viral",
-      "hashtags": ["array de 6 a 10 hashtags SIN el símbolo #, relevantes para el nicho y la plataforma"],
+      "hashtags": ["array de hasta 5 hashtags SIN el símbolo #, relevantes para el nicho — se usan solo en
+        TikTok, no en YouTube"],
       "musicRecommended": boolean — true SOLO si este clip concreto mejoraría de verdad con música de fondo
         (ej. un montaje sin diálogo relevante, un momento de tensión/hype que pide banda sonora). false si el
         propio audio/diálogo del clip ya lleva el peso (la mayoría de los casos): NUNCA actives esto solo
@@ -179,6 +180,7 @@ function parseClips(raw: string): MomentCandidate[] {
     clips.push({
       ...c,
       endSec,
+      hashtags: Array.isArray(c.hashtags) ? c.hashtags.slice(0, 5) : [],
       musicRecommended,
       musicQuery: musicRecommended ? c.musicQuery ?? null : null,
       musicSuggestedSection: musicRecommended ? c.musicSuggestedSection ?? null : null,

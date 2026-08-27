@@ -71,23 +71,21 @@ export interface UploadToYouTubeParams {
   filePath: string;
   title: string;
   description: string;
-  hashtags: string[];
   privacyStatus?: "public" | "unlisted" | "private";
 }
 
+// Pedido explícito: los hashtags son cosa de TikTok, en YouTube ni se generan ni se ponen (ni en
+// tags ni en la descripción) — se sube solo con el título y la descripción tal cual.
 export async function uploadShortToYouTube(params: UploadToYouTubeParams): Promise<{ videoId: string; url: string }> {
   const client = await getAuthorizedClient();
   const youtube = google.youtube({ version: "v3", auth: client });
-
-  const description = `${params.description}\n\n${params.hashtags.map((h) => `#${h}`).join(" ")}`;
 
   const res = await youtube.videos.insert({
     part: ["snippet", "status"],
     requestBody: {
       snippet: {
         title: params.title.slice(0, 100),
-        description: description.slice(0, 5000),
-        tags: params.hashtags,
+        description: params.description.slice(0, 5000),
         categoryId: "24", // Entertainment
       },
       status: {

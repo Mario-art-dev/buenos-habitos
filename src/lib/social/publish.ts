@@ -80,22 +80,13 @@ export async function publishClip(clipId: string, platform: Platform): Promise<P
       data: { clipId: clip.id, platform, status: "UPLOADING" },
     });
 
-    const existingHashtags = JSON.parse(clip.hashtags || "[]") as string[];
-    const fresh = await suggestHashtags({
-      platform,
-      title: clip.title,
-      description: clip.description,
-      existing: existingHashtags,
-      contentLanguage,
-    });
-    await db.clip.update({ where: { id: clip.id }, data: { hashtags: JSON.stringify(fresh.hashtags) } });
-
+    // Los hashtags son solo cosa de TikTok (pedido explícito) — YouTube se sube sin ellos, así que
+    // no hace falta gastar una llamada de IA regenerándolos cuando la plataforma es YouTube.
     if (platform === "YOUTUBE") {
       const result = await uploadShortToYouTube({
         filePath: clip.filePath,
         title: clip.title,
         description: clip.description,
-        hashtags: fresh.hashtags,
         privacyStatus: "public",
       });
       await db.publication.update({
@@ -106,6 +97,16 @@ export async function publishClip(clipId: string, platform: Platform): Promise<P
       await finalizeIfFullyPublished(clip.id);
       return { ok: true, publicationId: publication.id, status: "PUBLISHED", remoteUrl: result.url };
     }
+
+    const existingHashtags = JSON.parse(clip.hashtags || "[]") as string[];
+    const fresh = await suggestHashtags({
+      platform,
+      title: clip.title,
+      description: clip.description,
+      existing: existingHashtags,
+      contentLanguage,
+    });
+    await db.clip.update({ where: { id: clip.id }, data: { hashtags: JSON.stringify(fresh.hashtags) } });
 
     const result = await uploadShortToTikTok({
       filePath: clip.filePath,

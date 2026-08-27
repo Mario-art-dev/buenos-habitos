@@ -99,8 +99,8 @@ Escribe el guion completo de un vídeo publicitario corto (estilo TikTok/Shorts)
 - "title": título corto para el vídeo (máx 70 caracteres).
 - "description": descripción del vídeo (2-3 frases), dejando claro que es contenido publicitario/con enlace de
   afiliado (transparencia legal), adaptada al canal ${config.channel.name}.
-- "hashtags": 8 a 12 hashtags sin el símbolo #, incluyendo alguno de publicidad (como "publicidad" o "ad") y
-  otros de producto/nicho.
+- "hashtags": hasta 5 hashtags sin el símbolo #, incluyendo alguno de publicidad (como "publicidad" o "ad") y
+  otros de producto/nicho — se usan solo en TikTok, no en YouTube.
 - "viralityScore": 0-100, probabilidad de que este vídeo funcione bien.
 - "viralityReason": 1 frase explicando por qué.
 
@@ -125,7 +125,7 @@ Devuelve SOLO este JSON:
   return {
     title: parsed.title?.slice(0, 100) ?? params.productName,
     description: parsed.description ?? "",
-    hashtags: parsed.hashtags ?? [],
+    hashtags: (parsed.hashtags ?? []).slice(0, 5),
     viralityScore: Math.max(0, Math.min(100, Math.round(parsed.viralityScore ?? 50))),
     viralityReason: parsed.viralityReason ?? "",
     hook: parsed.hook?.trim() || "Esto que tengo aquí te va a encantar.",

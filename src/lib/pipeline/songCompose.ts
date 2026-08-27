@@ -35,8 +35,8 @@ Genera los metadatos de este vídeo:
 - "title": título corto y estratégico (máx 70 caracteres), en ${contentLanguageName()}, con gancho, sin comillas.
 - "description": descripción corta (1-2 frases), adaptada al canal ${config.channel.name}, mencionando el
   ritmo/la música.
-- "hashtags": 8 a 12 hashtags sin el símbolo #, relevantes para TikTok/YouTube Shorts, incluyendo alguno de
-  "edit"/"hypeedit"/música.
+- "hashtags": hasta 5 hashtags sin el símbolo #, incluyendo alguno de "edit"/"hypeedit"/música — se usan solo
+  en TikTok, no en YouTube.
 - "viralityScore": 0-100.
 - "viralityReason": 1 frase.
 
@@ -52,7 +52,7 @@ Devuelve SOLO este JSON:
   return {
     title: parsed.title?.slice(0, 100) ?? `Montaje al ritmo de ${params.songTitle}`,
     description: parsed.description ?? "",
-    hashtags: parsed.hashtags ?? [],
+    hashtags: (parsed.hashtags ?? []).slice(0, 5),
     viralityScore: Math.max(0, Math.min(100, Math.round(parsed.viralityScore ?? 50))),
     viralityReason: parsed.viralityReason ?? "",
   };

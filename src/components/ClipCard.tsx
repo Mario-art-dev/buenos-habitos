@@ -212,7 +212,8 @@ export default function ClipCard({ clip }: { clip: ClipData }) {
       const nextHashtags = hashtagsText
         .split(",")
         .map((h) => h.trim().replace(/^#/, ""))
-        .filter(Boolean);
+        .filter(Boolean)
+        .slice(0, 5);
       const res = await fetch(`/api/clips/${clip.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -326,7 +327,7 @@ export default function ClipCard({ clip }: { clip: ClipData }) {
                 type="text"
                 value={hashtagsText}
                 onChange={(e) => setHashtagsText(e.target.value)}
-                placeholder="hashtags separados por comas"
+                placeholder="hashtags separados por comas (solo TikTok, máx. 5)"
                 className="w-full rounded-lg border border-ink-600 bg-ink-900 px-2 py-1.5 text-xs text-slate-300 outline-none focus:border-brand-500"
               />
               {metaError && <p className="text-xs text-red-400">{metaError}</p>}

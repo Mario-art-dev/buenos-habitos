@@ -2,6 +2,9 @@ import { getAIProvider } from "@/lib/ai/provider";
 import { config } from "@/lib/config";
 import { contentLanguageName } from "@/lib/lang";
 
+// Solo TIKTOK llama a esto en la práctica (ver publishClip en publish.ts) — los hashtags son cosa
+// de TikTok, YouTube no los lleva. El tipo Platform se deja general por si algún día hiciera falta
+// desde otro sitio, pero hoy siempre se invoca con TIKTOK.
 export type Platform = "YOUTUBE" | "TIKTOK";
 
 export interface HashtagSuggestion {
@@ -58,14 +61,14 @@ Descripción: "${description}"
 ${existing.length ? `Hashtags ya sugeridos previamente: ${existing.join(", ")}` : ""}
 ${external.length ? `Hashtags detectados como populares ahora mismo por una fuente externa: ${external.join(", ")}` : ""}
 
-Elige el set de 8 a 12 hashtags con más probabilidad real de hacer viral ESTE clip concreto — nada de
-hashtags random ni genéricos que le sirvan a cualquier vídeo. Piensa como un estratega, no rellenes:
-1. 2-3 hashtags de ALTO volumen que seguidores de comedia/entretenimiento usan para descubrir contenido
+Elige el set de HASTA 5 hashtags (nunca más) con más probabilidad real de hacer viral ESTE clip concreto —
+nada de hashtags random ni genéricos que le sirvan a cualquier vídeo. Piensa como un estratega, no rellenes:
+1. 1-2 hashtags de ALTO volumen que seguidores de comedia/entretenimiento usan para descubrir contenido
    nuevo en ${platform === "TIKTOK" ? "TikTok" : "YouTube Shorts"} (ej. equivalentes locales de "funny",
    "comedy", "entertainment", "fyp"/"viral" según la plataforma) — para entrar en el radar de ESE público.
-2. 4-6 hashtags de NICHO, específicos de lo que pasa en ESTE clip en concreto (el tema, la situación, la
+2. 2-3 hashtags de NICHO, específicos de lo que pasa en ESTE clip en concreto (el tema, la situación, la
    emoción que provoca, el tipo de momento) — para que a quien le guste justo esto, se lo encuentre.
-3. 1-2 hashtags de marca/canal.
+3. Como mucho 1 hashtag de marca/canal.
 Cada hashtag debe justificar su hueco: si no ayuda a que ESTE clip llegue al público de comedia/
 entretenimiento, no va. Los hashtags deben estar en ${contentLanguage} salvo los que ya sean
 universales en cualquier idioma (nombres propios, "fyp", "viral", etc.). No repitas, no uses el símbolo #,
@@ -83,7 +86,7 @@ Formato de respuesta JSON exacto:
     const cleaned = raw.trim().replace(/^```json\s*/i, "").replace(/```\s*$/i, "");
     const parsed = JSON.parse(cleaned) as { hashtags: string[] };
     return {
-      hashtags: parsed.hashtags.slice(0, 12),
+      hashtags: parsed.hashtags.slice(0, 5),
       note: external.length
         ? "Combinado con datos de tendencias externas configuradas (TRENDS_API_URL)."
         : "Estimado por IA según buenas prácticas de la plataforma y el nicho del canal (no hay fuente de tendencias en vivo configurada).",

@@ -98,7 +98,7 @@ ${items}
 Para cada tramo (usa el número de "Tramo" indicado, EN EL MISMO ORDEN), escribe en ${contentLanguage}:
 - "title": título corto (máx 60 caracteres), con gancho/curiosidad/humor, nunca un titular plano.
 - "description": 1-2 frases, mismo tono humano y directo.
-- "hashtags": array de 6 a 10 hashtags sin el símbolo #.
+- "hashtags": array de hasta 5 hashtags sin el símbolo # (se usan solo en TikTok, no en YouTube).
 - "viralityScore": 0-100, qué tan enganchante es este tramo comparado con un short medio.
 
 Devuelve SOLO este JSON:
@@ -147,7 +147,7 @@ export async function describeFixedSegments(
         results.set(s.index, {
           title: s.title || fallbackDescription(sourceTitle, s.index + 1).title,
           description: s.description || "",
-          hashtags: Array.isArray(s.hashtags) ? s.hashtags : [],
+          hashtags: Array.isArray(s.hashtags) ? s.hashtags.slice(0, 5) : [],
           viralityScore: Math.max(0, Math.min(100, Math.round(s.viralityScore ?? 0))),
         });
       }

@@ -89,7 +89,8 @@ Genera los metadatos de este vídeo de ranking:
   caracteres, con gancho, en ${contentLanguage}, sin comillas).
 ${avoidTitlesBlock}
 - "description": descripción corta (1-2 frases) resumiendo el vídeo, adaptada al canal ${config.channel.name}.
-- "hashtags": 8 a 12 hashtags sin el símbolo #, relevantes para TikTok/YouTube Shorts y esta categoría.
+- "hashtags": hasta 5 hashtags sin el símbolo #, relevantes para esta categoría — se usan solo en TikTok, no
+  en YouTube.
 - "viralityScore": 0-100, probabilidad de que este vídeo se vuelva viral.
 - "viralityReason": 1 frase explicando por qué.
 - "musicRecommended": boolean — true SOLO si este vídeo de ranking concreto mejoraría de verdad con música de
@@ -144,7 +145,7 @@ Devuelve SOLO este JSON:
   return {
     title,
     description: parsed.description ?? "",
-    hashtags: parsed.hashtags ?? [],
+    hashtags: (parsed.hashtags ?? []).slice(0, 5),
     viralityScore: Math.max(0, Math.min(100, Math.round(parsed.viralityScore ?? 50))),
     viralityReason: parsed.viralityReason ?? "",
     musicRecommended: !!parsed.musicRecommended,

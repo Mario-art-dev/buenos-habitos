@@ -96,7 +96,7 @@ const editSchema = z.object({
   // así que se guardan sin necesidad de regenerar nada.
   title: z.string().min(1).max(200).optional(),
   description: z.string().max(5000).optional(),
-  hashtags: z.array(z.string().min(1).max(50)).max(30).optional(),
+  hashtags: z.array(z.string().min(1).max(50)).max(5).optional(),
   // Solo RANKING: la categoría/nombre que rellena la plantilla fija del título quemado en pantalla
   // ("Ranking Funniest {category} Moments" / "Best 5 {category} Clips", ver rankingListOverlay.ts)
   // y qué plantilla usa. Hace falta regenerar para que se vea el cambio (está quemado en el vídeo).
