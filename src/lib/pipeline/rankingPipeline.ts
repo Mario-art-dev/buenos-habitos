@@ -9,6 +9,7 @@ import { buildCandidateMoments, classifyCandidates, groupIntoRankings, type Manu
 import { composeRanking } from "./rankingCompose";
 import { assembleRankingVideo, finalizeWithoutMusic } from "./rankingRender";
 import { setStatus } from "./status";
+import { autoApplyRecommendedMusic } from "./musicApply";
 import { config } from "@/lib/config";
 import { normalizeLanguageCode, resolveContentLanguage } from "@/lib/lang";
 
@@ -169,6 +170,17 @@ export async function processRankingJob(jobId: string): Promise<void> {
 
         const { filePath, thumbnailPath } = await finalizeWithoutMusic(jobId, created.id);
         await db.clip.update({ where: { id: created.id }, data: { status: "READY", filePath, thumbnailPath } });
+
+        // Música de fondo automática (mismo criterio que el modo SINGLE, ver runPipeline.ts): si
+        // falla, el ranking se queda listo sin música en vez de marcarse FAILED.
+        if (composition.musicRecommended && composition.musicQuery) {
+          try {
+            await autoApplyRecommendedMusic(created.id);
+          } catch {
+            // ignorar: el short se queda listo sin música de fondo
+          }
+        }
+
         succeeded++;
       } catch (err) {
         const error = err as Error;

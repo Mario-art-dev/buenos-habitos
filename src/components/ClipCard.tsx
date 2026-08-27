@@ -61,22 +61,6 @@ function MusicPanel({ clip, onApplied }: { clip: ClipData; onApplied: () => void
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
-  const [autoLoading, setAutoLoading] = useState(false);
-
-  async function applyAuto() {
-    setAutoLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/clips/${clip.id}/music/auto`, { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "No se pudo aplicar la canción");
-      onApplied();
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setAutoLoading(false);
-    }
-  }
 
   async function apply() {
     setLoading(true);
@@ -116,24 +100,12 @@ function MusicPanel({ clip, onApplied }: { clip: ClipData; onApplied: () => void
 
   return (
     <div className="mt-3 rounded-xl border border-ink-600 bg-ink-900/60 p-3">
-      {clip.musicRecommended && (
-        <div className="flex flex-wrap items-center gap-2">
-          <p className="text-xs text-slate-400">
-            🎵 Recomendación de la IA: <span className="text-slate-200">{clip.musicQuery || "(sin sugerencia)"}</span>
-            {clip.musicSuggestedSection && (
-              <span className="text-slate-500"> · sección {clip.musicSuggestedSection}</span>
-            )}
-          </p>
-          {!clip.musicEnabled && clip.musicQuery && (
-            <button
-              disabled={autoLoading}
-              onClick={applyAuto}
-              className="rounded-lg bg-brand-600 px-2.5 py-1 text-xs font-semibold text-white disabled:opacity-40"
-            >
-              {autoLoading ? "Buscando y aplicando…" : "🪄 Aplicar automáticamente"}
-            </button>
-          )}
-        </div>
+      {clip.musicRecommended && !clip.musicEnabled && (
+        <p className="text-xs text-slate-500">
+          🎵 La IA recomendó música ({clip.musicQuery || "sin sugerencia concreta"}
+          {clip.musicSuggestedSection && ` · sección ${clip.musicSuggestedSection}`}) pero no se pudo aplicar
+          sola al generar el short. Puedes añadirla a mano abajo.
+        </p>
       )}
       {clip.musicEnabled && (
         <div className="mt-1 flex flex-wrap items-center gap-2">

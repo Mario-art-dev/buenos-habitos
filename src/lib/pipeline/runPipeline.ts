@@ -23,6 +23,7 @@ import { pickHookStartSec, hookVerifiedFrameSec } from "./hookFrame";
 import { probeVideo, pickVerticalResolution } from "./probe";
 import { processRankingJob } from "./rankingPipeline";
 import { processProductJob } from "./productPipeline";
+import { autoApplyRecommendedMusic } from "./musicApply";
 import { processSongJob } from "./songPipeline";
 import { processSplitJob } from "./splitPipeline";
 import { processDoubleJob } from "./doublePipeline";
@@ -262,6 +263,19 @@ async function processSingleJob(jobId: string): Promise<void> {
             captionCues: JSON.stringify(captionCues),
           },
         });
+
+        // Música de fondo: ya no es una recomendación que el usuario tenga que aplicar a mano
+        // (pedido explícito) — si la IA la recomendó, se busca y se mezcla aquí mismo, así el
+        // short sale "Listo" ya con su canción puesta. Si falla (p.ej. no se encuentra en
+        // YouTube), el clip se queda tal cual sin música: nunca por esto se marca FAILED, y el
+        // usuario siempre puede quitarla o poner otra desde el editor.
+        if (clip.musicRecommended && clip.musicQuery) {
+          try {
+            await autoApplyRecommendedMusic(clip.id);
+          } catch {
+            // ignorar: el short se queda listo sin música de fondo
+          }
+        }
       } catch (err) {
         await db.clip.update({
           where: { id: clip.id },
