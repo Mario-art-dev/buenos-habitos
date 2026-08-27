@@ -154,10 +154,14 @@ async function queryCreatorInfo(accessToken: string): Promise<CreatorInfo> {
   const res = await fetch(CREATOR_INFO_URL, {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json; charset=UTF-8" },
+    // TikTok exige Content-Type JSON en esta llamada aunque no lleve campos — sin un body real
+    // ("{}"), algunas cuentas reciben un rechazo genérico de su validador de esquema en vez de un
+    // error claro (visto en real: "The string did not match the expected pattern.").
+    body: "{}",
   });
   const data = await res.json();
   if (!res.ok || data.error?.code !== "ok") {
-    throw new Error(`TikTok rechazó la consulta de la cuenta: ${data.error?.message ?? res.statusText}`);
+    throw new Error(`TikTok rechazó la consulta de la cuenta: ${data.error?.message || JSON.stringify(data.error ?? data)}`);
   }
   return { privacyLevelOptions: data.data?.privacy_level_options ?? ["SELF_ONLY"] };
 }
@@ -168,8 +172,28 @@ function pickPrivacyLevel(options: string[]): string {
   return preference.find((p) => options.includes(p)) ?? options[0] ?? "SELF_ONLY";
 }
 
+/** Un hashtag válido para TikTok: sin espacios/saltos de línea/almohadillas de más ni símbolos raros. */
+function sanitizeHashtag(raw: string): string | null {
+  const cleaned = raw
+    .replace(/^#+/, "")
+    .trim()
+    .replace(/[\s#]+/g, "");
+  return cleaned ? `#${cleaned}` : null;
+}
+
 function buildCaption(title: string, hashtags: string[]): string {
-  const tags = hashtags.map((h) => (h.startsWith("#") ? h : `#${h}`)).join(" ");
+  // Un hashtag mal formado (con espacios, vacío, o repetido) puede hacer que TikTok rechace toda
+  // la publicación con un error genérico de validación (visto en real: "The string did not match
+  // the expected pattern."), así que se limpian aquí antes de mandarlos, no solo al mostrarlos.
+  const seen = new Set<string>();
+  const tags = hashtags
+    .map(sanitizeHashtag)
+    .filter((h): h is string => {
+      if (!h || seen.has(h.toLowerCase())) return false;
+      seen.add(h.toLowerCase());
+      return true;
+    })
+    .join(" ");
   const caption = tags ? `${title}\n\n${tags}` : title;
   // TikTok trunca/rechaza captions de más de 2200 caracteres.
   return caption.slice(0, 2200);
@@ -231,7 +255,7 @@ export async function uploadShortToTikTok(
     });
     const initData = await initRes.json();
     if (!initRes.ok || initData.error?.code !== "ok") {
-      throw new Error(initData.error?.message ?? initRes.statusText);
+      throw new Error(initData.error?.message || JSON.stringify(initData.error ?? initData) || initRes.statusText);
     }
     publishId = initData.data.publish_id;
     uploadUrl = initData.data.upload_url;
