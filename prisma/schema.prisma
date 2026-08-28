@@ -226,6 +226,9 @@ model Publication {
   remoteId  String?
   remoteUrl String?
   error     String?
+  // Aviso informativo (no es un error) para casos como TikTok publicando en modo privado porque la
+  // app todavía no está auditada — se guarda aparte de "error" para no confundirlo con un fallo.
+  note      String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

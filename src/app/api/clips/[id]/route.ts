@@ -39,7 +39,7 @@ function serialize(clip: {
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
   const clip = await db.clip.findUnique({
     where: { id: params.id },
-    include: { job: true, rankingItems: true },
+    include: { job: true, rankingItems: true, publications: true },
   });
   if (!clip) {
     return NextResponse.json({ error: "Clip no encontrado" }, { status: 404 });

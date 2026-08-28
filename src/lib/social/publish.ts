@@ -123,21 +123,17 @@ export async function publishClip(clipId: string, platform: Platform): Promise<P
       description: clip.description,
       hashtags: fresh.hashtags,
     });
+    const note =
+      result.privacyLevel === "SELF_ONLY"
+        ? "Publicado en TikTok en modo privado (solo lo ves tú): tu app de TikTok todavía no está auditada por TikTok para publicar en público. Pídeles la auditoría del 'Content Posting API' en tu panel de desarrollador para que se publique público automáticamente."
+        : undefined;
     await db.publication.update({
       where: { id: publication.id },
-      data: { status: "PUBLISHED", remoteId: result.publishId },
+      data: { status: "PUBLISHED", remoteId: result.publishId, note },
     });
     await db.clip.update({ where: { id: clip.id }, data: { autoPublishedAt: new Date() } });
     await finalizeIfFullyPublished(clip.id);
-    return {
-      ok: true,
-      publicationId: publication.id,
-      status: "PUBLISHED",
-      note:
-        result.privacyLevel === "SELF_ONLY"
-          ? "Publicado en TikTok en modo privado (solo lo ves tú): tu app de TikTok todavía no está auditada por TikTok para publicar en público. Pídeles la auditoría del 'Content Posting API' en tu panel de desarrollador para que se publique público automáticamente."
-          : undefined,
-    };
+    return { ok: true, publicationId: publication.id, status: "PUBLISHED", note };
   } catch (err) {
     const message = (err as Error).message;
     // publication puede seguir siendo null si el fallo pasó ANTES de crear el registro (p.ej.

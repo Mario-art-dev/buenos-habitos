@@ -37,7 +37,14 @@ export interface ClipData {
   commentaryOutro?: string | null;
   affiliateLink?: string | null;
   rankingItems?: RankingItemData[];
-  publications: { id: string; platform: string; status: string; remoteUrl: string | null; error: string | null }[];
+  publications: {
+    id: string;
+    platform: string;
+    status: string;
+    remoteUrl: string | null;
+    error: string | null;
+    note?: string | null;
+  }[];
 }
 
 function formatTime(sec: number) {
@@ -250,45 +257,50 @@ export default function ClipCard({ clip }: { clip: ClipData }) {
   async function publish(platform: "YOUTUBE" | "TIKTOK") {
     setPublishing(platform);
     setNote(null);
-    // La petición y la lectura de la respuesta se separan en dos try/catch (en vez de uno solo)
-    // porque un error nativo del navegador sin contexto (p.ej. "The string did not match the
-    // expected pattern.", visto en real) no decía si el fallo era de red, de leer la respuesta, o
-    // un error real del servidor — con esto el mensaje que ve el usuario siempre dice cuál de los
-    // tres fue.
-    let res: Response;
+    // Solo se espera aquí a que el servidor CONFIRME que ha empezado — la subida de verdad (varias
+    // llamadas a TikTok/YouTube + el archivo del vídeo) sigue después en el servidor sin depender
+    // de esta petición, porque mantenerla abierta todo el rato se cortaba con un 502 en el túnel
+    // gratuito antes de terminar (visto en real como "The string did not match the expected
+    // pattern." al no poder leer esa página de error como JSON). Aquí solo se arranca y luego se
+    // pregunta el resultado con GET, sin depender de que la conexión aguante abierta.
     try {
-      res = await fetch(`/api/clips/${clip.id}/publish`, {
+      const startRes = await fetch(`/api/clips/${clip.id}/publish`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ platform }),
       });
+      if (!startRes.ok) {
+        const errData = await startRes.json().catch(() => ({}) as { error?: string });
+        setNote(errData.error ?? `Fallo al iniciar la publicación (código ${startRes.status})`);
+        setPublishing(null);
+        return;
+      }
     } catch (err) {
-      setNote(`Fallo de conexión al contactar con el servidor: ${(err as Error).message}`);
+      setNote(`Fallo de conexión al iniciar la publicación: ${(err as Error).message}`);
       setPublishing(null);
       return;
     }
-    let data: {
-      error?: string;
-      note?: string;
-      publication?: { id: string; platform: string; status: string; remoteUrl: string | null; error: string | null };
-    };
-    try {
-      data = await res.json();
-    } catch (err) {
-      setNote(`El servidor respondió (código ${res.status}) pero la respuesta no se pudo leer: ${(err as Error).message}`);
-      setPublishing(null);
-      return;
+
+    // Hasta 2 minutos preguntando cada 3s, tiempo de sobra para que termine la subida real.
+    for (let attempt = 0; attempt < 40; attempt++) {
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      try {
+        const pollRes = await fetch(`/api/clips/${clip.id}`);
+        if (!pollRes.ok) continue;
+        const pollData: { clip?: { publications?: ClipData["publications"] } } = await pollRes.json();
+        const matches = (pollData.clip?.publications ?? []).filter((p) => p.platform === platform);
+        const latest = matches[matches.length - 1];
+        if (latest && latest.status !== "UPLOADING") {
+          setPublications((prev) => [...prev.filter((p) => p.platform !== platform), latest]);
+          if (latest.note) setNote(latest.note);
+          setPublishing(null);
+          return;
+        }
+      } catch {
+        // fallo puntual preguntando el estado, se reintenta en la siguiente vuelta
+      }
     }
-    if (!res.ok) {
-      setNote(data.error ?? `Fallo al publicar (código ${res.status})`);
-      setPublishing(null);
-      return;
-    }
-    if (data.publication) {
-      const publication = data.publication;
-      setPublications((prev) => [...prev.filter((p) => p.platform !== platform), publication]);
-    }
-    if (data.note) setNote(data.note);
+    setNote("Sigue publicándose en el servidor (está tardando más de lo normal). Recarga la página en un rato para ver el resultado.");
     setPublishing(null);
   }
 
