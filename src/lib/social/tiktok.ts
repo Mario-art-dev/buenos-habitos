@@ -97,14 +97,14 @@ export async function handleTikTokOAuthCallback(code: string, codeVerifier: stri
   });
 }
 
-async function refreshTokenIfNeeded(): Promise<string> {
+async function refreshTokenIfNeeded(): Promise<{ accessToken: string; scope: string }> {
   const account = await getAccount("TIKTOK");
   if (!account) throw new Error("TikTok no está conectado. Ve a Ajustes para conectarlo.");
 
   if (account.expiresAt && account.expiresAt.getTime() > Date.now() + 60_000) {
-    return account.accessToken;
+    return { accessToken: account.accessToken, scope: account.scope ?? "" };
   }
-  if (!account.refreshToken) return account.accessToken;
+  if (!account.refreshToken) return { accessToken: account.accessToken, scope: account.scope ?? "" };
 
   const res = await fetch(TOKEN_URL, {
     method: "POST",
@@ -118,7 +118,8 @@ async function refreshTokenIfNeeded(): Promise<string> {
   });
   const data = (await res.json()) as TikTokTokenResponse;
   if (!res.ok || data.error) {
-    return account.accessToken; // seguimos con el que había, fallará más adelante si de verdad expiró
+    // seguimos con el que había, fallará más adelante si de verdad expiró
+    return { accessToken: account.accessToken, scope: account.scope ?? "" };
   }
 
   await saveAccount({
@@ -130,7 +131,7 @@ async function refreshTokenIfNeeded(): Promise<string> {
     expiresAt: new Date(Date.now() + data.expires_in * 1000),
     scope: data.scope,
   });
-  return data.access_token;
+  return { accessToken: data.access_token, scope: data.scope ?? "" };
 }
 
 export interface UploadToTikTokParams {
@@ -242,10 +243,22 @@ export async function uploadShortToTikTok(
   // string did not match the expected pattern.", visto en real) no dice nada de en qué paso de
   // los 4 pasó — con esto, el mensaje que le llega al usuario siempre dice cuál de ellos fue.
   let accessToken: string;
+  let grantedScope: string;
   try {
-    accessToken = await refreshTokenIfNeeded();
+    const auth = await refreshTokenIfNeeded();
+    accessToken = auth.accessToken;
+    grantedScope = auth.scope;
   } catch (err) {
     throw new Error(`Fallo renovando la conexión con TikTok: ${(err as Error).message}`);
+  }
+  // Si la cuenta se conectó ANTES de añadir el scope "video.publish" en el panel de desarrollador
+  // de TikTok, el token guardado no lo lleva y TikTok rechaza publicar con un error genérico de
+  // "revisa nuestras guías de integración" que no menciona el scope para nada — se detecta aquí
+  // con un mensaje claro en vez de dejar que falle más adelante sin explicación.
+  if (grantedScope && !grantedScope.split(",").map((s) => s.trim()).includes("video.publish")) {
+    throw new Error(
+      "Tu conexión con TikTok no tiene permiso para publicar (falta el scope 'video.publish'). Ve a Ajustes, desconecta TikTok y vuelve a conectarlo."
+    );
   }
 
   const stats = fs.statSync(params.filePath);
@@ -302,7 +315,14 @@ export async function uploadShortToTikTok(
     }
     if (!result.ok) {
       const { initData, initRes } = result;
-      throw new Error(initData.error?.message || JSON.stringify(initData.error ?? initData) || initRes.statusText);
+      // Se incluye el código y el log_id que manda TikTok (además del mensaje bonito) — sin esto,
+      // dos rechazos con el mismo texto ("Please review our integration guidelines...") pero
+      // causas distintas eran indistinguibles desde la web, y hacía falta adivinar cuál era.
+      const code = initData.error?.code;
+      const logId = initData.error?.log_id;
+      const detail = [code && `código: ${code}`, logId && `log_id: ${logId}`].filter(Boolean).join(", ");
+      const baseMessage = initData.error?.message || JSON.stringify(initData.error ?? initData) || initRes.statusText;
+      throw new Error(detail ? `${baseMessage} (${detail}, privacy_level usado: ${privacyLevel})` : baseMessage);
     }
     publishId = result.initData.data.publish_id;
     uploadUrl = result.initData.data.upload_url;
