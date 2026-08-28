@@ -228,9 +228,7 @@ export async function uploadShortToTikTok(
     throw new Error(`Fallo consultando la cuenta de TikTok: ${(err as Error).message}`);
   }
 
-  let publishId: string;
-  let uploadUrl: string;
-  try {
+  const tryInit = async (level: string) => {
     const initRes = await fetch(DIRECT_POST_INIT_URL, {
       method: "POST",
       headers: {
@@ -240,7 +238,7 @@ export async function uploadShortToTikTok(
       body: JSON.stringify({
         post_info: {
           title: buildCaption(params.title, params.hashtags),
-          privacy_level: privacyLevel,
+          privacy_level: level,
           disable_duet: false,
           disable_comment: false,
           disable_stitch: false,
@@ -254,11 +252,28 @@ export async function uploadShortToTikTok(
       }),
     });
     const initData = await initRes.json();
-    if (!initRes.ok || initData.error?.code !== "ok") {
+    const ok = initRes.ok && initData.error?.code === "ok";
+    return { ok, code: initData.error?.code as string | undefined, initData, initRes };
+  };
+
+  let publishId: string;
+  let uploadUrl: string;
+  try {
+    let result = await tryInit(privacyLevel);
+    // Aunque creator_info/query diga que hay una opción mejor disponible, TikTok puede seguir
+    // rechazando el init con "unaudited_client_can_only_post_to_private_accounts" mientras la app
+    // no esté auditada de verdad — visto en real. Si pasa, se reintenta una sola vez forzando
+    // SELF_ONLY (privado) en vez de fallar directamente.
+    if (!result.ok && result.code === "unaudited_client_can_only_post_to_private_accounts" && privacyLevel !== "SELF_ONLY") {
+      privacyLevel = "SELF_ONLY";
+      result = await tryInit(privacyLevel);
+    }
+    if (!result.ok) {
+      const { initData, initRes } = result;
       throw new Error(initData.error?.message || JSON.stringify(initData.error ?? initData) || initRes.statusText);
     }
-    publishId = initData.data.publish_id;
-    uploadUrl = initData.data.upload_url;
+    publishId = result.initData.data.publish_id;
+    uploadUrl = result.initData.data.upload_url;
   } catch (err) {
     throw new Error(`TikTok rechazó iniciar la subida: ${(err as Error).message}`);
   }
