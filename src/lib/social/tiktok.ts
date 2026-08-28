@@ -200,9 +200,14 @@ function buildCaption(title: string, hashtags: string[]): string {
   return caption.slice(0, 2200);
 }
 
-const MIN_CHUNK_BYTES = 5 * 1024 * 1024; // 5MB — mínimo que admite TikTok por trozo
-const MAX_CHUNK_BYTES = 64 * 1024 * 1024; // 64MB — máximo que admite TikTok por trozo normal
-const MAX_FINAL_CHUNK_BYTES = 128 * 1024 * 1024; // el ÚLTIMO trozo puede llegar hasta aquí
+// Bytes en base 1000 (no 1024): el propio ejemplo de la documentación de TikTok usa chunk_size =
+// 10.000.000 exactos, no 10.485.760 (10MiB) — visto en real que un vídeo de entre 64.000.000 y
+// 67.108.864 bytes (64MB "de verdad" pero menos de 64MiB) seguía dando "The chunk size is invalid"
+// usando el límite en base 1024, así que se usan los valores redondos en base 1000 para no
+// pasarse nunca del límite real, sea cual sea la convención exacta de TikTok.
+const MIN_CHUNK_BYTES = 5_000_000; // 5MB — mínimo que admite TikTok por trozo
+const MAX_CHUNK_BYTES = 64_000_000; // 64MB — máximo que admite TikTok por trozo normal
+const MAX_FINAL_CHUNK_BYTES = 128_000_000; // el ÚLTIMO trozo puede llegar hasta aquí
 
 /**
  * Calcula cómo trocear el vídeo para el init de TikTok (visto en real: "The chunk size is
