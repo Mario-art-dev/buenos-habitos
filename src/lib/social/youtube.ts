@@ -88,9 +88,13 @@ export async function uploadShortToYouTube(params: UploadToYouTubeParams): Promi
         description: params.description.slice(0, 5000),
         categoryId: "24", // Entertainment
       },
+      // Pedido explícito: no declarar la audiencia (ni "sí" ni "no" creado para niños) al subir —
+      // el usuario comprobó en real que los vídeos subidos con selfDeclaredMadeForKids fijado se
+      // quedaban en 0-1 visitas frente a miles en los que la audiencia queda sin marcar en YouTube
+      // Studio. Se deja sin mandar el campo para que quede "sin seleccionar", igual que si se
+      // subiera a mano sin tocar esa pregunta.
       status: {
         privacyStatus: params.privacyStatus ?? "public",
-        selfDeclaredMadeForKids: false,
       },
     },
     media: {
