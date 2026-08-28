@@ -199,6 +199,37 @@ function buildCaption(title: string, hashtags: string[]): string {
   return caption.slice(0, 2200);
 }
 
+const MIN_CHUNK_BYTES = 5 * 1024 * 1024; // 5MB — mínimo que admite TikTok por trozo
+const MAX_CHUNK_BYTES = 64 * 1024 * 1024; // 64MB — máximo que admite TikTok por trozo normal
+const MAX_FINAL_CHUNK_BYTES = 128 * 1024 * 1024; // el ÚLTIMO trozo puede llegar hasta aquí
+
+/**
+ * Calcula cómo trocear el vídeo para el init de TikTok (visto en real: "The chunk size is
+ * invalid" al mandar chunk_size = tamaño entero del vídeo para clips de más de 64MB, el máximo que
+ * admite TikTok por trozo). Para vídeos de hasta 128MB basta un solo trozo (el último trozo real
+ * puede llegar hasta ese tamaño aunque el "chunk_size" declarado esté limitado a 64MB); solo hace
+ * falta partir de verdad en varias peticiones PUT para vídeos todavía más grandes.
+ */
+function planChunks(videoSize: number): { chunkSize: number; totalChunkCount: number; ranges: [number, number][] } {
+  if (videoSize <= MIN_CHUNK_BYTES || videoSize <= MAX_CHUNK_BYTES) {
+    return { chunkSize: videoSize, totalChunkCount: 1, ranges: [[0, videoSize - 1]] };
+  }
+  if (videoSize <= MAX_FINAL_CHUNK_BYTES) {
+    return { chunkSize: MAX_CHUNK_BYTES, totalChunkCount: 1, ranges: [[0, videoSize - 1]] };
+  }
+  const chunkSize = MAX_CHUNK_BYTES;
+  let totalChunkCount = Math.floor(videoSize / chunkSize);
+  const remainder = videoSize - totalChunkCount * chunkSize;
+  if (remainder > 0 && chunkSize + remainder > MAX_FINAL_CHUNK_BYTES) totalChunkCount += 1;
+  const ranges: [number, number][] = [];
+  for (let i = 0; i < totalChunkCount; i++) {
+    const start = i * chunkSize;
+    const end = i === totalChunkCount - 1 ? videoSize - 1 : start + chunkSize - 1;
+    ranges.push([start, end]);
+  }
+  return { chunkSize, totalChunkCount, ranges };
+}
+
 /**
  * Publica el vídeo directamente en TikTok (Content Posting API) — ya no queda como borrador
  * manual en el inbox: sale como una publicación real desde el momento en que termina de subirse,
@@ -219,6 +250,7 @@ export async function uploadShortToTikTok(
 
   const stats = fs.statSync(params.filePath);
   const videoSize = stats.size;
+  const chunkPlan = planChunks(videoSize);
 
   let privacyLevel: string;
   try {
@@ -246,8 +278,8 @@ export async function uploadShortToTikTok(
         source_info: {
           source: "FILE_UPLOAD",
           video_size: videoSize,
-          chunk_size: videoSize,
-          total_chunk_count: 1,
+          chunk_size: chunkPlan.chunkSize,
+          total_chunk_count: chunkPlan.totalChunkCount,
         },
       }),
     });
@@ -280,16 +312,20 @@ export async function uploadShortToTikTok(
 
   try {
     const fileBuffer = fs.readFileSync(params.filePath);
-    const uploadRes = await fetch(uploadUrl, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "video/mp4",
-        "Content-Range": `bytes 0-${videoSize - 1}/${videoSize}`,
-      },
-      body: fileBuffer,
-    });
-    if (!uploadRes.ok) {
-      throw new Error(`código ${uploadRes.status}`);
+    // Normalmente es un solo trozo (todo el archivo en una petición); solo se divide en varias
+    // peticiones PUT de verdad para vídeos de más de 128MB, siguiendo los rangos de planChunks.
+    for (const [start, end] of chunkPlan.ranges) {
+      const uploadRes = await fetch(uploadUrl, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "video/mp4",
+          "Content-Range": `bytes ${start}-${end}/${videoSize}`,
+        },
+        body: fileBuffer.subarray(start, end + 1),
+      });
+      if (!uploadRes.ok) {
+        throw new Error(`código ${uploadRes.status} en el trozo ${start}-${end}`);
+      }
     }
   } catch (err) {
     throw new Error(`Fallo subiendo el archivo de vídeo a TikTok: ${(err as Error).message}`);
