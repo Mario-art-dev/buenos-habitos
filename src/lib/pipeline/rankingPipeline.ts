@@ -176,8 +176,10 @@ export async function processRankingJob(jobId: string): Promise<void> {
         if (composition.musicRecommended && composition.musicQuery) {
           try {
             await autoApplyRecommendedMusic(created.id);
-          } catch {
-            // ignorar: el short se queda listo sin música de fondo
+          } catch (musicErr) {
+            // no crítico: el short se queda listo sin música de fondo, pero se deja constancia en
+            // los logs del servidor para poder diagnosticar por qué falló una canción concreta.
+            console.error(`[music] fallo aplicando música automática al ranking ${created.id}:`, (musicErr as Error).message);
           }
         }
 

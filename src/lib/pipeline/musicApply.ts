@@ -146,10 +146,37 @@ export async function autoApplyRecommendedMusic(clipId: string): Promise<{ fileP
 
   const base = await resolveCleanBase(clipId);
   const rawAudioPath = `${musicSegmentPath(base.jobId, clipId)}.source.mp3`;
-  const result = await downloadAudioOnly(`ytsearch1:${clip.musicQuery} official audio`, rawAudioPath);
-  if (!result.resolvedUrl) {
-    fs.rmSync(rawAudioPath, { force: true });
-    throw new Error(`No se encontró ninguna canción en YouTube para "${clip.musicQuery}".`);
+
+  // El primer resultado de búsqueda a veces está bloqueado para descargar (subidas oficiales de
+  // discográficas con protecciones extra, restricción de región/edad...) aunque la canción exista
+  // de sobra en YouTube en otra subida — pedido explícito: que casi nunca se quede el short sin
+  // música. Se prueban varias reformulaciones de la búsqueda en orden hasta que una se pueda
+  // descargar de verdad, en vez de rendirse en cuanto falla la primera.
+  const queryVariants = [
+    `${clip.musicQuery} official audio`,
+    `${clip.musicQuery} audio`,
+    `${clip.musicQuery} lyrics`,
+    clip.musicQuery,
+  ];
+
+  let result: Awaited<ReturnType<typeof downloadAudioOnly>> | null = null;
+  let lastError: Error | null = null;
+  for (const query of queryVariants) {
+    try {
+      const attempt = await downloadAudioOnly(`ytsearch1:${query}`, rawAudioPath);
+      if (attempt.resolvedUrl) {
+        result = attempt;
+        break;
+      }
+    } catch (err) {
+      lastError = err as Error;
+      fs.rmSync(rawAudioPath, { force: true });
+    }
+  }
+  if (!result?.resolvedUrl) {
+    throw new Error(
+      `No se pudo descargar ninguna versión de "${clip.musicQuery}" desde YouTube${lastError ? `: ${lastError.message}` : ""}.`
+    );
   }
 
   const startSec = parseSuggestedStartSec(clip.musicSuggestedSection);

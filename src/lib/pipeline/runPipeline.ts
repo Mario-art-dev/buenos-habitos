@@ -272,8 +272,10 @@ async function processSingleJob(jobId: string): Promise<void> {
         if (clip.musicRecommended && clip.musicQuery) {
           try {
             await autoApplyRecommendedMusic(clip.id);
-          } catch {
-            // ignorar: el short se queda listo sin música de fondo
+          } catch (musicErr) {
+            // no crítico: el short se queda listo sin música de fondo, pero se deja constancia en
+            // los logs del servidor para poder diagnosticar por qué falló una canción concreta.
+            console.error(`[music] fallo aplicando música automática al clip ${clip.id}:`, (musicErr as Error).message);
           }
         }
       } catch (err) {
