@@ -564,8 +564,11 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
         body: JSON.stringify({
           captionCues: nextCues,
           customTexts: nextTexts,
-          effectiveStartSec: nextEffectiveStart,
-          endSec: nextEnd,
+          // Solo se manda el recorte en los modos donde de verdad significa algo (ver
+          // trimEditable) — en RANKING/SONG, startSec/endSec son solo una referencia aproximada
+          // del montaje final (varios tramos ya concatenados), mandarlos de vuelta sin cambios no
+          // aporta nada y podía disparar una validación de "recorte demasiado corto" sin sentido.
+          ...(trimEditable && { effectiveStartSec: nextEffectiveStart, endSec: nextEnd }),
           coverFrameSec: nextCoverFrameSec,
           coverTitle,
           captionsEnabled,

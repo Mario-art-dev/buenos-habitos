@@ -118,14 +118,23 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     return NextResponse.json({ error: parsed.error.errors[0]?.message ?? "Datos inválidos" }, { status: 400 });
   }
 
-  const clip = await db.clip.findUnique({ where: { id: params.id }, include: { rankingItems: true } });
+  const clip = await db.clip.findUnique({
+    where: { id: params.id },
+    include: { rankingItems: true, job: { select: { mode: true } } },
+  });
   if (!clip) {
     return NextResponse.json({ error: "Clip no encontrado" }, { status: 404 });
   }
 
   const newStart = parsed.data.effectiveStartSec ?? clip.effectiveStartSec ?? clip.startSec;
   const newEnd = parsed.data.endSec ?? clip.endSec;
-  if (newEnd - newStart < 0.5) {
+  // El recorte (startSec/endSec) solo representa un tramo único y editable en SINGLE/SPLIT/DOUBLE
+  // (ver el comentario de trimEditable en EditClipClient.tsx) — en RANKING y SONG esos campos son
+  // solo una referencia aproximada del montaje final (varios tramos ya concatenados), así que
+  // pueden dar una diferencia mínima o negativa sin que eso sea un error real del usuario. Validar
+  // aquí igualmente bloqueaba guardar cualquier cambio (p.ej. solo texto) en esos modos.
+  const trimEditableMode = clip.job.mode === "SINGLE" || clip.job.mode === "SPLIT" || clip.job.mode === "DOUBLE";
+  if (trimEditableMode && newEnd - newStart < 0.5) {
     return NextResponse.json({ error: "El recorte es demasiado corto (mínimo medio segundo)" }, { status: 400 });
   }
 
