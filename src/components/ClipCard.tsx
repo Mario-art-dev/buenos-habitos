@@ -446,7 +446,48 @@ export default function ClipCard({ clip }: { clip: ClipData }) {
 
           {clipStatus === "READY" && <MusicPanel clip={clip} onApplied={() => setVideoVersion((v) => v + 1)} />}
 
-          <div className="mt-4 flex flex-wrap items-center gap-2">
+          <div className="mt-3 flex flex-wrap gap-2 text-xs">
+            <span
+              className={`rounded-full px-2.5 py-1 font-medium ${
+                yt?.status === "PUBLISHED"
+                  ? "bg-emerald-500/15 text-emerald-400"
+                  : yt?.status === "FAILED"
+                    ? "bg-red-500/15 text-red-400"
+                    : yt?.status === "UPLOADING"
+                      ? "bg-amber-500/15 text-amber-400"
+                      : "bg-ink-700 text-slate-400"
+              }`}
+            >
+              {yt?.status === "PUBLISHED"
+                ? "✅ Publicado en YouTube"
+                : yt?.status === "FAILED"
+                  ? "⚠️ Falló en YouTube"
+                  : yt?.status === "UPLOADING"
+                    ? "⏳ Subiendo a YouTube"
+                    : "◻️ No publicado en YouTube"}
+            </span>
+            <span
+              className={`rounded-full px-2.5 py-1 font-medium ${
+                tt?.status === "PUBLISHED" || tt?.status === "DRAFT"
+                  ? "bg-emerald-500/15 text-emerald-400"
+                  : tt?.status === "FAILED"
+                    ? "bg-red-500/15 text-red-400"
+                    : tt?.status === "UPLOADING"
+                      ? "bg-amber-500/15 text-amber-400"
+                      : "bg-ink-700 text-slate-400"
+              }`}
+            >
+              {tt?.status === "PUBLISHED" || tt?.status === "DRAFT"
+                ? "✅ Publicado en TikTok"
+                : tt?.status === "FAILED"
+                  ? "⚠️ Falló en TikTok"
+                  : tt?.status === "UPLOADING"
+                    ? "⏳ Subiendo a TikTok"
+                    : "◻️ No publicado en TikTok"}
+            </span>
+          </div>
+
+          <div className="mt-2 flex flex-wrap items-center gap-2">
             <button
               disabled={clipStatus !== "READY" || publishing === "YOUTUBE"}
               onClick={() => publish("YOUTUBE")}
