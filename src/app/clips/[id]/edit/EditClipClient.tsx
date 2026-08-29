@@ -74,6 +74,8 @@ interface ClipData {
   customTitle: string | null;
   // Solo RANKING: etiqueta en pantalla de cada puesto del listado numerado.
   rankingItems: RankingItemData[] | null;
+  renderPending?: boolean;
+  error?: string | null;
 }
 
 // Reloj virtual de la composición de Remotion — no tiene por qué coincidir con el fps real del
@@ -585,9 +587,30 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
       const putData = await putRes.json().catch(() => null);
       if (!putRes.ok) throw new Error(putData?.error ?? "No se pudieron guardar los cambios");
 
-      const regenRes = await fetchWithRetry(`/api/clips/${clipId}/regenerate`, { method: "POST" }, 1);
-      const regenData = await regenRes.json().catch(() => null);
-      if (!regenRes.ok) throw new Error(regenData?.error ?? "No se pudo regenerar el vídeo");
+      // El regenerado real (ffmpeg completo) puede tardar más de lo que aguanta abierta una sola
+      // petición el túnel gratuito — igual que se arregló para publicar en TikTok/YouTube, esta
+      // ruta solo confirma que ha EMPEZADO, y aquí se pregunta el resultado con GET hasta que
+      // renderPending se ponga a false, en vez de depender de mantener la conexión abierta.
+      const startRes = await fetchWithRetry(`/api/clips/${clipId}/regenerate`, { method: "POST" }, 1);
+      if (!startRes.ok) {
+        const startData = await startRes.json().catch(() => null);
+        throw new Error(startData?.error ?? "No se pudo iniciar el regenerado");
+      }
+
+      let regenData: { videoUrl: string | null; thumbnailUrl: string | null } | null = null;
+      for (let attempt = 0; attempt < 100; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+        const pollRes = await fetch(`/api/clips/${clipId}`);
+        if (!pollRes.ok) continue;
+        const pollData: { clip?: ClipData } = await pollRes.json().catch(() => ({}) as { clip?: ClipData });
+        if (!pollData.clip || pollData.clip.renderPending) continue;
+        if (pollData.clip.error) throw new Error(pollData.clip.error);
+        regenData = { videoUrl: pollData.clip.videoUrl, thumbnailUrl: pollData.clip.thumbnailUrl };
+        break;
+      }
+      if (!regenData) {
+        throw new Error("Sigue regenerándose en el servidor (está tardando más de lo normal). Recarga la página en un rato.");
+      }
 
       setCues(nextCues);
       setTexts(nextTexts);

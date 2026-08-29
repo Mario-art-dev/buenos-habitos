@@ -200,6 +200,11 @@ model Clip {
 
   autoPublishedAt DateTime?
   createdAt       DateTime      @default(now())
+  // true mientras un regenerado (editor -> "Guardar y regenerar") está corriendo en el servidor
+  // en segundo plano — ver POST /api/clips/[id]/regenerate. El vídeo/miniatura anteriores se
+  // quedan tal cual sirviendo hasta que termina, así que el clip no desaparece de ningún sitio
+  // mientras se recalcula.
+  renderPending Boolean @default(false)
   publications    Publication[]
   rankingItems    RankingItem[]
 }
