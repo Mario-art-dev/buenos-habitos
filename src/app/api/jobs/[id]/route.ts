@@ -131,9 +131,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     // vídeos huérfanos ocupando espacio, y se limpia el enlace (si lo hubiera) para que
     // resolveSourceVideo() use el archivo nuevo y no el enlace viejo.
     if (sourceUploadId) {
-      if (job.sourceFilePath) fs.rmSync(job.sourceFilePath, { force: true });
+      // Se consume el trozo subido ANTES de borrar el vídeo anterior — si el trozo no llegó a
+      // recibirse (subida a medias, id caducado...), consumeUpload lanza el error aquí y el vídeo
+      // que ya había se queda intacto, en vez de quedarse el trabajo sin ningún vídeo fuente por
+      // un intento de reemplazo que ni siquiera llegó a completarse.
       const dest = sourceVideoPath(job.id);
       consumeUpload(sourceUploadId, dest);
+      if (job.sourceFilePath && job.sourceFilePath !== dest) fs.rmSync(job.sourceFilePath, { force: true });
       data.sourceFilePath = dest;
       data.sourceUrl = null;
       data.sourceTitle = "Vídeo subido";
@@ -144,9 +148,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     }
 
     if (bottomVideoUploadId) {
-      if (job.bottomVideoFilePath) fs.rmSync(job.bottomVideoFilePath, { force: true });
+      // Mismo motivo que arriba: consumir primero, borrar el anterior solo si de verdad se
+      // reemplazó.
       const dest = bottomVideoPath(job.id);
       consumeUpload(bottomVideoUploadId, dest);
+      if (job.bottomVideoFilePath && job.bottomVideoFilePath !== dest) fs.rmSync(job.bottomVideoFilePath, { force: true });
       data.bottomVideoFilePath = dest;
       data.bottomVideoUrl = null;
     } else if (rest.bottomVideoUrl && job.bottomVideoFilePath) {

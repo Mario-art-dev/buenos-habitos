@@ -62,25 +62,53 @@ function parseSuggestedStartSec(section: string | null | undefined): number {
   return Number(match[1]) * 60 + Number(match[2]);
 }
 
-function MusicPanel({ clip, onApplied }: { clip: ClipData; onApplied: () => void }) {
+/**
+ * Espera a que termine un render en segundo plano ya arrancado (POST que solo confirma que
+ * empezó — ver /api/clips/[id]/regenerate y /api/clips/[id]/music) preguntando el estado del clip
+ * cada 3s hasta que renderPending se ponga a false. Compartido por "Reintentar" y por añadir/
+ * quitar música, que por dentro también disparan un regenerado completo.
+ */
+async function waitForRenderDone(
+  clipId: string
+): Promise<Partial<ClipData> & { error: string | null }> {
+  for (let attempt = 0; attempt < 100; attempt++) {
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    try {
+      const res = await fetch(`/api/clips/${clipId}`);
+      if (!res.ok) continue;
+      const data: { clip?: ClipData & { renderPending?: boolean } } = await res.json();
+      if (!data.clip || data.clip.renderPending) continue;
+      return { ...data.clip, error: data.clip.error ?? null };
+    } catch {
+      // fallo puntual preguntando el estado, se reintenta en la siguiente vuelta
+    }
+  }
+  throw new Error("Sigue procesándose en el servidor (está tardando más de lo normal). Recarga la página en un rato.");
+}
+
+function MusicPanel({ clip, onApplied }: { clip: ClipData; onApplied: (updated: Partial<ClipData>) => void }) {
   const [url, setUrl] = useState(clip.musicSourceUrl ?? "");
   const [startSec, setStartSec] = useState(clip.musicStartSec ?? parseSuggestedStartSec(clip.musicSuggestedSection));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
 
-  async function apply() {
+  // Añadir/quitar música vuelve a mezclar el vídeo entero (para SINGLE/SPLIT eso es un
+  // regenerado completo por dentro) — igual que "Guardar y regenerar" y "Reintentar", puede tardar
+  // más de lo que aguanta abierta una sola petición el túnel gratuito. La ruta solo confirma que
+  // ha empezado; aquí se pregunta el resultado con GET hasta que renderPending se ponga a false.
+  async function runAndWait(startFetch: () => Promise<Response>, failMessage: string) {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/clips/${clip.id}/music`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ musicSourceUrl: url, musicStartSec: startSec }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "No se pudo añadir la música");
-      onApplied();
+      const startRes = await startFetch();
+      if (!startRes.ok) {
+        const startData = await startRes.json().catch(() => null);
+        throw new Error(startData?.error ?? failMessage);
+      }
+      const result = await waitForRenderDone(clip.id);
+      if (result.error) throw new Error(result.error);
+      onApplied(result);
       setOpen(false);
     } catch (err) {
       setError((err as Error).message);
@@ -89,20 +117,20 @@ function MusicPanel({ clip, onApplied }: { clip: ClipData; onApplied: () => void
     }
   }
 
-  async function remove() {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/clips/${clip.id}/music`, { method: "DELETE" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "No se pudo quitar la música");
-      onApplied();
-      setOpen(false);
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setLoading(false);
-    }
+  function apply() {
+    return runAndWait(
+      () =>
+        fetch(`/api/clips/${clip.id}/music`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ musicSourceUrl: url, musicStartSec: startSec }),
+        }),
+      "No se pudo añadir la música"
+    );
+  }
+
+  function remove() {
+    return runAndWait(() => fetch(`/api/clips/${clip.id}/music`, { method: "DELETE" }), "No se pudo quitar la música");
   }
 
   return (
@@ -187,13 +215,22 @@ export default function ClipCard({ clip }: { clip: ClipData }) {
   const [clipStatus, setClipStatus] = useState(clip.status);
   const [clipError, setClipError] = useState(clip.error ?? null);
   const [retrying, setRetrying] = useState(false);
+  const [musicState, setMusicState] = useState({
+    musicEnabled: clip.musicEnabled ?? false,
+    musicSourceUrl: clip.musicSourceUrl ?? null,
+    musicStartSec: clip.musicStartSec ?? null,
+  });
 
   async function retryClip() {
     setRetrying(true);
     try {
-      const res = await fetch(`/api/clips/${clip.id}/regenerate`, { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "No se pudo reintentar");
+      const startRes = await fetch(`/api/clips/${clip.id}/regenerate`, { method: "POST" });
+      if (!startRes.ok) {
+        const startData = await startRes.json().catch(() => null);
+        throw new Error(startData?.error ?? "No se pudo reintentar");
+      }
+      const result = await waitForRenderDone(clip.id);
+      if (result.error) throw new Error(result.error);
       setClipStatus("READY");
       setClipError(null);
       setVideoVersion((v) => v + 1);
@@ -444,7 +481,19 @@ export default function ClipCard({ clip }: { clip: ClipData }) {
             </div>
           )}
 
-          {clipStatus === "READY" && <MusicPanel clip={clip} onApplied={() => setVideoVersion((v) => v + 1)} />}
+          {clipStatus === "READY" && (
+            <MusicPanel
+              clip={{ ...clip, ...musicState }}
+              onApplied={(updated) => {
+                setMusicState({
+                  musicEnabled: updated.musicEnabled ?? false,
+                  musicSourceUrl: updated.musicSourceUrl ?? null,
+                  musicStartSec: updated.musicStartSec ?? null,
+                });
+                setVideoVersion((v) => v + 1);
+              }}
+            />
+          )}
 
           <div className="mt-3 flex flex-wrap gap-2 text-xs">
             <span
