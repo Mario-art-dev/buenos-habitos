@@ -182,28 +182,41 @@ function titleCaseWords(text: string): string {
     .join(" ");
 }
 
+/** Si `label` ya está en `avoid` (en minúsculas), le añade un número para no repetir el texto en
+ *  pantalla de dos puestos del mismo ranking a la vez — pedido explícito: nunca dos iguales. */
+function uniqueOrSuffixed(label: string, avoid: Set<string>): string {
+  if (!avoid.has(label.toLowerCase())) return label;
+  let n = 2;
+  while (avoid.has(`${label} ${n}`.toLowerCase())) n++;
+  return `${label} ${n}`;
+}
+
 /**
  * Título corto derivado de la propia transcripción del tramo (en vez de un texto genérico tipo
- * "Featured moment", o una frase larga) para cuando la IA no puso ninguna etiqueta — sea porque
- * el campo "label" no se pudo recuperar del JSON roto, o porque el lote entero cayó en
- * fallbackMomentsForBatch. Ancla en la palabra "de más contenido" (la más larga que no sea
- * muletilla) y la extiende con hasta 2 palabras seguidas más si también son de contenido y caben
- * en el presupuesto de caracteres — no hace falta que sea una sola palabra, pero lo único que
- * importa de verdad es que sea LO MÁS CORTO POSIBLE para que no tape tanto el propio clip.
+ * "Featured moment", o una reacción inventada tipo "Wtf?") — pedido explícito: tiene que ser un
+ * sonido, palabra o expresión que se haya dicho DE VERDAD en ese clip, no algo genérico. Ancla en
+ * la palabra "de más contenido" (la más larga que no sea muletilla) y la extiende con hasta 2
+ * palabras seguidas más si también son de contenido y caben en el presupuesto de caracteres — no
+ * hace falta que sea una sola palabra, pero lo único que importa de verdad es que sea LO MÁS CORTO
+ * POSIBLE para que no tape tanto el propio clip.
  *
- * `fallbackSeed` (la categoría que ya le puso la IA a este momento, o "Otros") es lo que se usa
- * si el tramo no tiene NINGÚN diálogo — pedido explícito: bajo ningún concepto un texto genérico
- * tipo "Featured moment"/"Momento destacado" igual para todos los clips, sea lo que sea menos eso.
+ * `avoid` son las etiquetas YA usadas por otros puestos de este mismo ranking (en minúsculas) —
+ * si el mejor anclaje ya está cogido, se prueba con el siguiente anclaje más largo del mismo tramo
+ * antes de rendirse, para que cada puesto tenga su propio texto en pantalla.
+ *
+ * `fallbackSeed` (la categoría que ya le puso la IA a este momento, o su propia etiqueta si la
+ * dio) es lo que se usa si el tramo no tiene NINGÚN diálogo — pedido explícito: bajo ningún
+ * concepto un texto genérico tipo "Featured moment"/"Momento destacado" igual para todos los clips.
  */
-function deriveLabelFromTranscript(excerpt: string, fallbackSeed: string): string {
+function deriveLabelFromTranscript(excerpt: string, fallbackSeed: string, avoid: Set<string> = new Set()): string {
   const cleaned = excerpt.replace(/\s+/g, " ").trim();
-  if (!cleaned) return fallbackSeed;
+  if (!cleaned) return uniqueOrSuffixed(fallbackSeed, avoid);
 
   const words = cleaned
     .replace(/[^\p{L}\p{N}\s']/gu, " ")
     .split(/\s+/)
     .filter(Boolean);
-  if (words.length === 0) return fallbackSeed;
+  if (words.length === 0) return uniqueOrSuffixed(fallbackSeed, avoid);
 
   const CHAR_BUDGET = 22;
   const isContentWord = (w: string) => w.length >= 3 && !STOPWORDS.has(w.toLowerCase());
@@ -211,22 +224,32 @@ function deriveLabelFromTranscript(excerpt: string, fallbackSeed: string): strin
 
   if (contentIdxs.length === 0) {
     const capped = words[0].length > CHAR_BUDGET ? words[0].slice(0, CHAR_BUDGET) : words[0];
-    return capped.charAt(0).toUpperCase() + capped.slice(1).toLowerCase();
+    const label = capped.charAt(0).toUpperCase() + capped.slice(1).toLowerCase();
+    return uniqueOrSuffixed(label, avoid);
   }
 
-  const anchor = [...contentIdxs].sort((a, b) => b.w.length - a.w.length)[0];
-  let label = anchor.w;
-  let extras = 0;
-  for (let i = anchor.i + 1; extras < 2 && i < words.length; i++) {
-    if (!isContentWord(words[i])) break;
-    const candidate = `${label} ${words[i]}`;
-    if (candidate.length > CHAR_BUDGET) break;
-    label = candidate;
-    extras++;
+  // Se prueban los anclajes de más largo a más corto hasta encontrar uno que no choque con otro
+  // puesto ya resuelto de este mismo ranking.
+  const sortedAnchors = [...contentIdxs].sort((a, b) => b.w.length - a.w.length);
+  for (const anchor of sortedAnchors) {
+    let label = anchor.w;
+    let extras = 0;
+    for (let i = anchor.i + 1; extras < 2 && i < words.length; i++) {
+      if (!isContentWord(words[i])) break;
+      const candidate = `${label} ${words[i]}`;
+      if (candidate.length > CHAR_BUDGET) break;
+      label = candidate;
+      extras++;
+    }
+    const capped = label.length > CHAR_BUDGET ? label.slice(0, CHAR_BUDGET) : label;
+    const finalLabel = capped.charAt(0).toUpperCase() + capped.slice(1).toLowerCase();
+    if (!avoid.has(finalLabel.toLowerCase())) return finalLabel;
   }
 
-  const capped = label.length > CHAR_BUDGET ? label.slice(0, CHAR_BUDGET) : label;
-  return capped.charAt(0).toUpperCase() + capped.slice(1).toLowerCase();
+  // Los anclajes de este tramo ya están todos cogidos por otros puestos (caso muy raro) — se
+  // distingue con un número antes que dejar dos puestos con el mismo texto en pantalla.
+  const best = sortedAnchors[0].w;
+  return uniqueOrSuffixed(best.charAt(0).toUpperCase() + best.slice(1).toLowerCase(), avoid);
 }
 
 interface RawMoment {
@@ -370,7 +393,13 @@ export async function classifyCandidates(
           ...candidate,
           include: !!m.include,
           category: (m.category || "otros").trim().toLowerCase(),
-          label: m.label || deriveLabelFromTranscript(candidate.transcriptExcerpt, titleCaseWords((m.category || "otros").trim())),
+          // Siempre se prioriza lo que se dice DE VERDAD en el tramo (pedido explícito) — el
+          // "label" que puso la IA solo se usa como último recurso cuando el tramo no tiene ningún
+          // diálogo aprovechable (un momento visual sin palabras: una jugada, un gesto...).
+          label: deriveLabelFromTranscript(
+            candidate.transcriptExcerpt,
+            m.label || titleCaseWords((m.category || "otros").trim())
+          ),
           description: m.description || "",
           score: Math.max(0, Math.min(100, Math.round(m.score ?? 0))),
         });
@@ -411,6 +440,27 @@ function matchesManualCategory(item: ClassifiedMoment, nameLower: string): boole
   const cat = item.category.toLowerCase();
   if (cat.includes(nameLower) || nameLower.includes(cat)) return true;
   return item.label.toLowerCase().includes(nameLower) || item.description.toLowerCase().includes(nameLower);
+}
+
+/**
+ * Garantiza que ningún puesto de UN MISMO ranking comparta el texto quemado en pantalla — pedido
+ * explícito: "es imposible que sean todos los títulos iguales". classifyCandidates() ya deriva cada
+ * label de la transcripción real de su propio tramo, pero dos tramos distintos pueden dar la misma
+ * palabra (p.ej. dos reacciones con "Wow") sin que classifyCandidates lo sepa, porque clasifica
+ * TODOS los candidatos del vídeo antes de saber qué grupo final acabará compartiendo cada uno — el
+ * choque solo se puede detectar aquí, una vez decidido qué 3-5 momentos van juntos en cada ranking.
+ */
+function ensureUniqueLabels(items: ClassifiedMoment[]): ClassifiedMoment[] {
+  const used = new Set<string>();
+  for (const item of items) {
+    let label = item.label;
+    if (used.has(label.toLowerCase())) {
+      label = deriveLabelFromTranscript(item.transcriptExcerpt, label, used);
+    }
+    used.add(label.toLowerCase());
+    item.label = label;
+  }
+  return items;
 }
 
 /**
@@ -455,7 +505,7 @@ export function groupIntoRankings(
     }
     const picked = pickBestRemaining(pool, config.ranking.maxItems);
     if (picked.length < 3) continue; // no quedan ni 3 clips libres en todo el vídeo: imposible garantizar esta sección
-    groups.push({ category: name, templateType: manual.type, items: picked });
+    groups.push({ category: name, templateType: manual.type, items: ensureUniqueLabels(picked) });
     for (const p of picked) usedIndexes.add(p.index);
   }
 
@@ -477,7 +527,7 @@ export function groupIntoRankings(
     const totalDuration = picked.reduce((sum, i) => sum + (i.endSec - i.startSec), 0);
     if (totalDuration < config.ranking.minDurationSec) continue;
 
-    groups.push({ category, templateType: "TOPIC", items: picked });
+    groups.push({ category, templateType: "TOPIC", items: ensureUniqueLabels(picked) });
     for (const p of picked) usedIndexes.add(p.index);
   }
 
@@ -496,7 +546,7 @@ export function groupIntoRankings(
     const totalDuration = picked.reduce((sum, i) => sum + (i.endSec - i.startSec), 0);
     if (totalDuration < config.ranking.minDurationSec || picked.length < 3) break;
 
-    groups.push({ category: genericLabel, templateType: "TOPIC", items: picked });
+    groups.push({ category: genericLabel, templateType: "TOPIC", items: ensureUniqueLabels(picked) });
     const pickedIndexes = new Set(picked.map((p) => p.index));
     leftover = leftover.filter((i) => !pickedIndexes.has(i.index));
     for (const p of picked) usedIndexes.add(p.index);
@@ -508,6 +558,7 @@ export function groupIntoRankings(
   if (groups.length === 0) {
     const picked = pickBestRemaining(included, config.ranking.maxItems);
     if (picked.length >= 3) {
+      ensureUniqueLabels(picked);
       if (youtuberFallbackName && youtuberFallbackName.trim()) {
         groups.push({ category: youtuberFallbackName.trim(), templateType: "YOUTUBER", items: picked });
       } else {

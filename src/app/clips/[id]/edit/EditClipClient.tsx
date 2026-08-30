@@ -597,8 +597,12 @@ export default function EditClipClient({ clipId }: { clipId: string }) {
         throw new Error(startData?.error ?? "No se pudo iniciar el regenerado");
       }
 
+      // 15 min (300 x 3s) — Rankings puede regenerar hasta 5 tramos + overlay + portada + música en
+      // un solo "Guardar y regenerar", bastante más lento que un SINGLE/SPLIT de un solo tramo; con
+      // solo 5 min (el límite anterior) se podía dar por perdido un regenerado que en realidad
+      // seguía en marcha sin ningún problema.
       let regenData: { videoUrl: string | null; thumbnailUrl: string | null } | null = null;
-      for (let attempt = 0; attempt < 100; attempt++) {
+      for (let attempt = 0; attempt < 300; attempt++) {
         await new Promise((resolve) => setTimeout(resolve, 3000));
         const pollRes = await fetch(`/api/clips/${clipId}`);
         if (!pollRes.ok) continue;

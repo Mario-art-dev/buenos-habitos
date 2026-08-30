@@ -71,7 +71,9 @@ function parseSuggestedStartSec(section: string | null | undefined): number {
 async function waitForRenderDone(
   clipId: string
 ): Promise<Partial<ClipData> & { error: string | null }> {
-  for (let attempt = 0; attempt < 100; attempt++) {
+  // 15 min (300 x 3s) — Rankings puede regenerar hasta 5 tramos + overlay + portada + música en
+  // un solo render, bastante más lento que un SINGLE/SPLIT de un solo tramo.
+  for (let attempt = 0; attempt < 300; attempt++) {
     await new Promise((resolve) => setTimeout(resolve, 3000));
     try {
       const res = await fetch(`/api/clips/${clipId}`);
