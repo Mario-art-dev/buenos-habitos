@@ -470,7 +470,13 @@ jobs:
 
 
       - name: Mantener la sesión activa (checkpoint 1/25 de la galería)
-        run: sleep 600
+        run: |
+          sleep 600
+          # Se imprime aquí (y no solo en worker.log en disco) para poder verlo desde fuera con
+          # get_job_logs — antes un fallo del worker (p.ej. la música automática) quedaba
+          # invisible salvo entrando al runner a mano, que no es posible desde aquí.
+          echo "--- worker.log (últimas 100 líneas) ---"
+          tail -n 100 worker.log 2>/dev/null || true
 
       - name: Guardar el respaldo permanente (checkpoint 1/25) — rama git, nunca caduca ni se desaloja
         run: |
@@ -539,7 +545,13 @@ jobs:
           fi
 
       - name: Mantener la sesión activa (checkpoint 2/25 de la galería)
-        run: sleep 600
+        run: |
+          sleep 600
+          # Se imprime aquí (y no solo en worker.log en disco) para poder verlo desde fuera con
+          # get_job_logs — antes un fallo del worker (p.ej. la música automática) quedaba
+          # invisible salvo entrando al runner a mano, que no es posible desde aquí.
+          echo "--- worker.log (últimas 100 líneas) ---"
+          tail -n 100 worker.log 2>/dev/null || true
 
       - name: Guardar el respaldo permanente (checkpoint 2/25) — rama git, nunca caduca ni se desaloja
         run: |
@@ -608,7 +620,13 @@ jobs:
           fi
 
       - name: Mantener la sesión activa (checkpoint 3/25 de la galería)
-        run: sleep 600
+        run: |
+          sleep 600
+          # Se imprime aquí (y no solo en worker.log en disco) para poder verlo desde fuera con
+          # get_job_logs — antes un fallo del worker (p.ej. la música automática) quedaba
+          # invisible salvo entrando al runner a mano, que no es posible desde aquí.
+          echo "--- worker.log (últimas 100 líneas) ---"
+          tail -n 100 worker.log 2>/dev/null || true
 
       - name: Guardar el respaldo permanente (checkpoint 3/25) — rama git, nunca caduca ni se desaloja
         run: |
@@ -677,7 +695,13 @@ jobs:
           fi
 
       - name: Mantener la sesión activa (checkpoint 4/25 de la galería)
-        run: sleep 600
+        run: |
+          sleep 600
+          # Se imprime aquí (y no solo en worker.log en disco) para poder verlo desde fuera con
+          # get_job_logs — antes un fallo del worker (p.ej. la música automática) quedaba
+          # invisible salvo entrando al runner a mano, que no es posible desde aquí.
+          echo "--- worker.log (últimas 100 líneas) ---"
+          tail -n 100 worker.log 2>/dev/null || true
 
       - name: Guardar el respaldo permanente (checkpoint 4/25) — rama git, nunca caduca ni se desaloja
         run: |
@@ -746,7 +770,13 @@ jobs:
           fi
 
       - name: Mantener la sesión activa (checkpoint 5/25 de la galería)
-        run: sleep 600
+        run: |
+          sleep 600
+          # Se imprime aquí (y no solo en worker.log en disco) para poder verlo desde fuera con
+          # get_job_logs — antes un fallo del worker (p.ej. la música automática) quedaba
+          # invisible salvo entrando al runner a mano, que no es posible desde aquí.
+          echo "--- worker.log (últimas 100 líneas) ---"
+          tail -n 100 worker.log 2>/dev/null || true
 
       - name: Guardar el respaldo permanente (checkpoint 5/25) — rama git, nunca caduca ni se desaloja
         run: |
@@ -815,7 +845,13 @@ jobs:
           fi
 
       - name: Mantener la sesión activa (checkpoint 6/25 de la galería)
-        run: sleep 600
+        run: |
+          sleep 600
+          # Se imprime aquí (y no solo en worker.log en disco) para poder verlo desde fuera con
+          # get_job_logs — antes un fallo del worker (p.ej. la música automática) quedaba
+          # invisible salvo entrando al runner a mano, que no es posible desde aquí.
+          echo "--- worker.log (últimas 100 líneas) ---"
+          tail -n 100 worker.log 2>/dev/null || true
 
       - name: Guardar el respaldo permanente (checkpoint 6/25) — rama git, nunca caduca ni se desaloja
         run: |
@@ -884,7 +920,13 @@ jobs:
           fi
 
       - name: Mantener la sesión activa (checkpoint 7/25 de la galería)
-        run: sleep 600
+        run: |
+          sleep 600
+          # Se imprime aquí (y no solo en worker.log en disco) para poder verlo desde fuera con
+          # get_job_logs — antes un fallo del worker (p.ej. la música automática) quedaba
+          # invisible salvo entrando al runner a mano, que no es posible desde aquí.
+          echo "--- worker.log (últimas 100 líneas) ---"
+          tail -n 100 worker.log 2>/dev/null || true
 
       - name: Guardar el respaldo permanente (checkpoint 7/25) — rama git, nunca caduca ni se desaloja
         run: |
@@ -953,7 +995,13 @@ jobs:
           fi
 
       - name: Mantener la sesión activa (checkpoint 8/25 de la galería)
-        run: sleep 600
+        run: |
+          sleep 600
+          # Se imprime aquí (y no solo en worker.log en disco) para poder verlo desde fuera con
+          # get_job_logs — antes un fallo del worker (p.ej. la música automática) quedaba
+          # invisible salvo entrando al runner a mano, que no es posible desde aquí.
+          echo "--- worker.log (últimas 100 líneas) ---"
+          tail -n 100 worker.log 2>/dev/null || true
 
       - name: Guardar el respaldo permanente (checkpoint 8/25) — rama git, nunca caduca ni se desaloja
         run: |
@@ -1022,7 +1070,13 @@ jobs:
           fi
 
       - name: Mantener la sesión activa (checkpoint 9/25 de la galería)
-        run: sleep 600
+        run: |
+          sleep 600
+          # Se imprime aquí (y no solo en worker.log en disco) para poder verlo desde fuera con
+          # get_job_logs — antes un fallo del worker (p.ej. la música automática) quedaba
+          # invisible salvo entrando al runner a mano, que no es posible desde aquí.
+          echo "--- worker.log (últimas 100 líneas) ---"
+          tail -n 100 worker.log 2>/dev/null || true
 
       - name: Guardar el respaldo permanente (checkpoint 9/25) — rama git, nunca caduca ni se desaloja
         run: |
@@ -1091,7 +1145,13 @@ jobs:
           fi
 
       - name: Mantener la sesión activa (checkpoint 10/25 de la galería)
-        run: sleep 600
+        run: |
+          sleep 600
+          # Se imprime aquí (y no solo en worker.log en disco) para poder verlo desde fuera con
+          # get_job_logs — antes un fallo del worker (p.ej. la música automática) quedaba
+          # invisible salvo entrando al runner a mano, que no es posible desde aquí.
+          echo "--- worker.log (últimas 100 líneas) ---"
+          tail -n 100 worker.log 2>/dev/null || true
 
       - name: Guardar el respaldo permanente (checkpoint 10/25) — rama git, nunca caduca ni se desaloja
         run: |
@@ -1160,7 +1220,13 @@ jobs:
           fi
 
       - name: Mantener la sesión activa (checkpoint 11/25 de la galería)
-        run: sleep 600
+        run: |
+          sleep 600
+          # Se imprime aquí (y no solo en worker.log en disco) para poder verlo desde fuera con
+          # get_job_logs — antes un fallo del worker (p.ej. la música automática) quedaba
+          # invisible salvo entrando al runner a mano, que no es posible desde aquí.
+          echo "--- worker.log (últimas 100 líneas) ---"
+          tail -n 100 worker.log 2>/dev/null || true
 
       - name: Guardar el respaldo permanente (checkpoint 11/25) — rama git, nunca caduca ni se desaloja
         run: |
@@ -1229,7 +1295,13 @@ jobs:
           fi
 
       - name: Mantener la sesión activa (checkpoint 12/25 de la galería)
-        run: sleep 600
+        run: |
+          sleep 600
+          # Se imprime aquí (y no solo en worker.log en disco) para poder verlo desde fuera con
+          # get_job_logs — antes un fallo del worker (p.ej. la música automática) quedaba
+          # invisible salvo entrando al runner a mano, que no es posible desde aquí.
+          echo "--- worker.log (últimas 100 líneas) ---"
+          tail -n 100 worker.log 2>/dev/null || true
 
       - name: Guardar el respaldo permanente (checkpoint 12/25) — rama git, nunca caduca ni se desaloja
         run: |
@@ -1298,7 +1370,13 @@ jobs:
           fi
 
       - name: Mantener la sesión activa (checkpoint 13/25 de la galería)
-        run: sleep 600
+        run: |
+          sleep 600
+          # Se imprime aquí (y no solo en worker.log en disco) para poder verlo desde fuera con
+          # get_job_logs — antes un fallo del worker (p.ej. la música automática) quedaba
+          # invisible salvo entrando al runner a mano, que no es posible desde aquí.
+          echo "--- worker.log (últimas 100 líneas) ---"
+          tail -n 100 worker.log 2>/dev/null || true
 
       - name: Guardar el respaldo permanente (checkpoint 13/25) — rama git, nunca caduca ni se desaloja
         run: |
@@ -1367,7 +1445,13 @@ jobs:
           fi
 
       - name: Mantener la sesión activa (checkpoint 14/25 de la galería)
-        run: sleep 600
+        run: |
+          sleep 600
+          # Se imprime aquí (y no solo en worker.log en disco) para poder verlo desde fuera con
+          # get_job_logs — antes un fallo del worker (p.ej. la música automática) quedaba
+          # invisible salvo entrando al runner a mano, que no es posible desde aquí.
+          echo "--- worker.log (últimas 100 líneas) ---"
+          tail -n 100 worker.log 2>/dev/null || true
 
       - name: Guardar el respaldo permanente (checkpoint 14/25) — rama git, nunca caduca ni se desaloja
         run: |
@@ -1436,7 +1520,13 @@ jobs:
           fi
 
       - name: Mantener la sesión activa (checkpoint 15/25 de la galería)
-        run: sleep 600
+        run: |
+          sleep 600
+          # Se imprime aquí (y no solo en worker.log en disco) para poder verlo desde fuera con
+          # get_job_logs — antes un fallo del worker (p.ej. la música automática) quedaba
+          # invisible salvo entrando al runner a mano, que no es posible desde aquí.
+          echo "--- worker.log (últimas 100 líneas) ---"
+          tail -n 100 worker.log 2>/dev/null || true
 
       - name: Guardar el respaldo permanente (checkpoint 15/25) — rama git, nunca caduca ni se desaloja
         run: |
@@ -1505,7 +1595,13 @@ jobs:
           fi
 
       - name: Mantener la sesión activa (checkpoint 16/25 de la galería)
-        run: sleep 600
+        run: |
+          sleep 600
+          # Se imprime aquí (y no solo en worker.log en disco) para poder verlo desde fuera con
+          # get_job_logs — antes un fallo del worker (p.ej. la música automática) quedaba
+          # invisible salvo entrando al runner a mano, que no es posible desde aquí.
+          echo "--- worker.log (últimas 100 líneas) ---"
+          tail -n 100 worker.log 2>/dev/null || true
 
       - name: Guardar el respaldo permanente (checkpoint 16/25) — rama git, nunca caduca ni se desaloja
         run: |
@@ -1574,7 +1670,13 @@ jobs:
           fi
 
       - name: Mantener la sesión activa (checkpoint 17/25 de la galería)
-        run: sleep 600
+        run: |
+          sleep 600
+          # Se imprime aquí (y no solo en worker.log en disco) para poder verlo desde fuera con
+          # get_job_logs — antes un fallo del worker (p.ej. la música automática) quedaba
+          # invisible salvo entrando al runner a mano, que no es posible desde aquí.
+          echo "--- worker.log (últimas 100 líneas) ---"
+          tail -n 100 worker.log 2>/dev/null || true
 
       - name: Guardar el respaldo permanente (checkpoint 17/25) — rama git, nunca caduca ni se desaloja
         run: |
@@ -1643,7 +1745,13 @@ jobs:
           fi
 
       - name: Mantener la sesión activa (checkpoint 18/25 de la galería)
-        run: sleep 600
+        run: |
+          sleep 600
+          # Se imprime aquí (y no solo en worker.log en disco) para poder verlo desde fuera con
+          # get_job_logs — antes un fallo del worker (p.ej. la música automática) quedaba
+          # invisible salvo entrando al runner a mano, que no es posible desde aquí.
+          echo "--- worker.log (últimas 100 líneas) ---"
+          tail -n 100 worker.log 2>/dev/null || true
 
       - name: Guardar el respaldo permanente (checkpoint 18/25) — rama git, nunca caduca ni se desaloja
         run: |
@@ -1712,7 +1820,13 @@ jobs:
           fi
 
       - name: Mantener la sesión activa (checkpoint 19/25 de la galería)
-        run: sleep 600
+        run: |
+          sleep 600
+          # Se imprime aquí (y no solo en worker.log en disco) para poder verlo desde fuera con
+          # get_job_logs — antes un fallo del worker (p.ej. la música automática) quedaba
+          # invisible salvo entrando al runner a mano, que no es posible desde aquí.
+          echo "--- worker.log (últimas 100 líneas) ---"
+          tail -n 100 worker.log 2>/dev/null || true
 
       - name: Guardar el respaldo permanente (checkpoint 19/25) — rama git, nunca caduca ni se desaloja
         run: |
@@ -1781,7 +1895,13 @@ jobs:
           fi
 
       - name: Mantener la sesión activa (checkpoint 20/25 de la galería)
-        run: sleep 600
+        run: |
+          sleep 600
+          # Se imprime aquí (y no solo en worker.log en disco) para poder verlo desde fuera con
+          # get_job_logs — antes un fallo del worker (p.ej. la música automática) quedaba
+          # invisible salvo entrando al runner a mano, que no es posible desde aquí.
+          echo "--- worker.log (últimas 100 líneas) ---"
+          tail -n 100 worker.log 2>/dev/null || true
 
       - name: Guardar el respaldo permanente (checkpoint 20/25) — rama git, nunca caduca ni se desaloja
         run: |
@@ -1850,7 +1970,13 @@ jobs:
           fi
 
       - name: Mantener la sesión activa (checkpoint 21/25 de la galería)
-        run: sleep 600
+        run: |
+          sleep 600
+          # Se imprime aquí (y no solo en worker.log en disco) para poder verlo desde fuera con
+          # get_job_logs — antes un fallo del worker (p.ej. la música automática) quedaba
+          # invisible salvo entrando al runner a mano, que no es posible desde aquí.
+          echo "--- worker.log (últimas 100 líneas) ---"
+          tail -n 100 worker.log 2>/dev/null || true
 
       - name: Guardar el respaldo permanente (checkpoint 21/25) — rama git, nunca caduca ni se desaloja
         run: |
@@ -1919,7 +2045,13 @@ jobs:
           fi
 
       - name: Mantener la sesión activa (checkpoint 22/25 de la galería)
-        run: sleep 600
+        run: |
+          sleep 600
+          # Se imprime aquí (y no solo en worker.log en disco) para poder verlo desde fuera con
+          # get_job_logs — antes un fallo del worker (p.ej. la música automática) quedaba
+          # invisible salvo entrando al runner a mano, que no es posible desde aquí.
+          echo "--- worker.log (últimas 100 líneas) ---"
+          tail -n 100 worker.log 2>/dev/null || true
 
       - name: Guardar el respaldo permanente (checkpoint 22/25) — rama git, nunca caduca ni se desaloja
         run: |
@@ -1988,7 +2120,13 @@ jobs:
           fi
 
       - name: Mantener la sesión activa (checkpoint 23/25 de la galería)
-        run: sleep 600
+        run: |
+          sleep 600
+          # Se imprime aquí (y no solo en worker.log en disco) para poder verlo desde fuera con
+          # get_job_logs — antes un fallo del worker (p.ej. la música automática) quedaba
+          # invisible salvo entrando al runner a mano, que no es posible desde aquí.
+          echo "--- worker.log (últimas 100 líneas) ---"
+          tail -n 100 worker.log 2>/dev/null || true
 
       - name: Guardar el respaldo permanente (checkpoint 23/25) — rama git, nunca caduca ni se desaloja
         run: |
@@ -2057,7 +2195,13 @@ jobs:
           fi
 
       - name: Mantener la sesión activa (checkpoint 24/25 de la galería)
-        run: sleep 600
+        run: |
+          sleep 600
+          # Se imprime aquí (y no solo en worker.log en disco) para poder verlo desde fuera con
+          # get_job_logs — antes un fallo del worker (p.ej. la música automática) quedaba
+          # invisible salvo entrando al runner a mano, que no es posible desde aquí.
+          echo "--- worker.log (últimas 100 líneas) ---"
+          tail -n 100 worker.log 2>/dev/null || true
 
       - name: Guardar el respaldo permanente (checkpoint 24/25) — rama git, nunca caduca ni se desaloja
         run: |
@@ -2126,7 +2270,13 @@ jobs:
           fi
 
       - name: Mantener la sesión activa (checkpoint 25/25 de la galería)
-        run: sleep 600
+        run: |
+          sleep 600
+          # Se imprime aquí (y no solo en worker.log en disco) para poder verlo desde fuera con
+          # get_job_logs — antes un fallo del worker (p.ej. la música automática) quedaba
+          # invisible salvo entrando al runner a mano, que no es posible desde aquí.
+          echo "--- worker.log (últimas 100 líneas) ---"
+          tail -n 100 worker.log 2>/dev/null || true
 
       - name: Guardar el respaldo permanente (checkpoint 25/25) — rama git, nunca caduca ni se desaloja
         run: |
