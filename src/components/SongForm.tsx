@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import VideoInput, { type VideoInputValue } from "./VideoInput";
+import { fetchWithRetry } from "@/lib/fetchWithRetry";
 
 export default function SongForm() {
   const [source, setSource] = useState<VideoInputValue>({ url: "", uploadId: null });
@@ -16,7 +17,7 @@ export default function SongForm() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/jobs/song", {
+      const res = await fetchWithRetry("/api/jobs/song", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

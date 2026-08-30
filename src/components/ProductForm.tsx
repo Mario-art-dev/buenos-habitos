@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { fetchWithRetry } from "@/lib/fetchWithRetry";
 
 export default function ProductForm() {
   const [productName, setProductName] = useState("");
@@ -23,7 +24,7 @@ export default function ProductForm() {
       form.set("referenceAdUrl", referenceAdUrl);
       files.forEach((f) => form.append("files", f));
 
-      const res = await fetch("/api/jobs/product", { method: "POST", body: form });
+      const res = await fetchWithRetry("/api/jobs/product", { method: "POST", body: form });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "No se pudo crear el trabajo");
       router.push(`/jobs/${data.job.id}`);

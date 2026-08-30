@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import VideoInput, { type VideoInputValue } from "./VideoInput";
+import { fetchWithRetry } from "@/lib/fetchWithRetry";
 
 export default function DoubleForm() {
   const [top, setTop] = useState<VideoInputValue>({ url: "", uploadId: null });
@@ -18,7 +19,7 @@ export default function DoubleForm() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/jobs/double", {
+      const res = await fetchWithRetry("/api/jobs/double", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
