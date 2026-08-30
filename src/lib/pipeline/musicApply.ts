@@ -152,11 +152,21 @@ export async function autoApplyRecommendedMusic(clipId: string): Promise<{ fileP
   // de sobra en YouTube en otra subida — pedido explícito: que casi nunca se quede el short sin
   // música. Se prueban varias reformulaciones de la búsqueda en orden hasta que una se pueda
   // descargar de verdad, en vez de rendirse en cuanto falla la primera.
+  //
+  // Diagnosticado en real (log del runner de producción, no una suposición): para canciones
+  // conocidas, YouTube devuelve "LOGIN_REQUIRED" ("Sign in to confirm you're not a bot") en TODOS
+  // los clientes de yt-dlp probados (android, web, tv, y las combinaciones entre ellos) cuando el
+  // resultado es justo la subida oficial/de discográfica — no es un problema del proveedor de
+  // tokens (bgutil, que respondía bien) ni del bloqueo genérico de IP de datacenter (ya arreglado
+  // aparte). "official audio" es precisamente la coletilla que más apunta directo a esa subida
+  // oficial protegida, así que se prueba la ÚLTIMA (no la primera): las demás reformulaciones
+  // tienen más posibilidades de sacar una subida de un canal pequeño (letra, portada casera...)
+  // sin esa protección extra.
   const queryVariants = [
-    `${clip.musicQuery} official audio`,
-    `${clip.musicQuery} audio`,
-    `${clip.musicQuery} lyrics`,
     clip.musicQuery,
+    `${clip.musicQuery} lyrics`,
+    `${clip.musicQuery} audio`,
+    `${clip.musicQuery} official audio`,
   ];
 
   let result: Awaited<ReturnType<typeof downloadAudioOnly>> | null = null;
@@ -174,8 +184,13 @@ export async function autoApplyRecommendedMusic(clipId: string): Promise<{ fileP
     }
   }
   if (!result?.resolvedUrl) {
+    // "Sign in to confirm..."/LOGIN_REQUIRED es el bloqueo real y más frecuente (ver arriba) —
+    // se explica en claro en vez de enseñar el texto técnico crudo de yt-dlp.
+    const blockedByLogin = /sign in to confirm|login_required/i.test(lastError?.message ?? "");
     throw new Error(
-      `No se pudo descargar ninguna versión de "${clip.musicQuery}" desde YouTube${lastError ? `: ${lastError.message}` : ""}.`
+      blockedByLogin
+        ? `YouTube está bloqueando la descarga automática de "${clip.musicQuery}" en todas las versiones probadas (protección extra habitual en subidas oficiales/de discográfica de canciones muy conocidas). Puedes pegar tú mismo el enlace de una versión menos oficial (letra, cover...) en el panel de música.`
+        : `No se pudo descargar ninguna versión de "${clip.musicQuery}" desde YouTube${lastError ? `: ${lastError.message}` : ""}.`
     );
   }
 

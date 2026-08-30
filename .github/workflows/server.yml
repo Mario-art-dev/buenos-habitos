@@ -278,41 +278,6 @@ jobs:
             exit 1
           fi
 
-      # PASO TEMPORAL DE DIAGNÓSTICO (2ª vuelta) — la 1ª vuelta confirmó la causa real: tanto el
-      # cliente "android" como "web" de yt-dlp reciben "LOGIN_REQUIRED" de YouTube para vídeos
-      # oficiales/de discográfica (visto con Ed Sheeran - Shape of You), aunque el proveedor de
-      # tokens (bgutil) esté funcionando bien — no es el proveedor de tokens ni un bloqueo genérico
-      # de IP. Antes de aplicar el arreglo a ciegas, se prueba aquí si añadir el cliente "tv" (que
-      # actualmente suele esquivar este bloqueo concreto, sin necesitar cookies) lo resuelve de
-      # verdad con la red real de este runner.
-      - name: "[DIAGNÓSTICO TEMPORAL 2] Probar cliente tv de yt-dlp para música"
-        continue-on-error: true
-        run: |
-          echo "=== Intento con player_client=tv ==="
-          yt-dlp "ytsearch1:Ed Sheeran Shape of You official audio" \
-            -x --audio-format mp3 \
-            --extractor-args "youtube:player_client=tv" \
-            --extractor-args "youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416" \
-            --no-playlist \
-            -o "/tmp/diag_tv.%(ext)s" \
-            --print "after_move:%(title)s|||%(duration)s|||%(webpage_url)s" \
-            -v || true
-          echo "--- resultado tv ---"
-          ls -la /tmp/diag_tv.* 2>&1 || echo "(no se generó ningún archivo con tv)"
-
-          echo ""
-          echo "=== Intento con player_client=tv,android,web ==="
-          yt-dlp "ytsearch1:Ed Sheeran Shape of You official audio" \
-            -x --audio-format mp3 \
-            --extractor-args "youtube:player_client=tv,android,web" \
-            --extractor-args "youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416" \
-            --no-playlist \
-            -o "/tmp/diag_combo.%(ext)s" \
-            --print "after_move:%(title)s|||%(duration)s|||%(webpage_url)s" \
-            -v || true
-          echo "--- resultado combo ---"
-          ls -la /tmp/diag_combo.* 2>&1 || echo "(no se generó ningún archivo con el combo)"
-
       - name: Preparar la base de datos (reutilizando la del respaldo si existe)
         run: npx prisma generate && npx prisma db push
         env:
