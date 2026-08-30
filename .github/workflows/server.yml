@@ -278,6 +278,24 @@ jobs:
             exit 1
           fi
 
+      # PASO TEMPORAL DE DIAGNÓSTICO — reproduce exactamente la llamada a yt-dlp de
+      # downloadAudioOnly() (musicApply.ts) con acceso de red real de este runner, para ver el
+      # error real de por qué falla la música automática (no se puede reproducir en un sandbox con
+      # proxy restringido). Se quita en cuanto se identifique la causa.
+      - name: "[DIAGNÓSTICO TEMPORAL] Probar descarga de música con yt-dlp"
+        continue-on-error: true
+        run: |
+          yt-dlp "ytsearch1:Ed Sheeran Shape of You official audio" \
+            -x --audio-format mp3 \
+            --extractor-args "youtube:player_client=android,web" \
+            --extractor-args "youtubepot-bgutilhttp:base_url=http://127.0.0.1:4416" \
+            --no-playlist \
+            -o "/tmp/diag_audio.%(ext)s" \
+            --print "after_move:%(title)s|||%(duration)s|||%(webpage_url)s" \
+            -v
+          echo "--- resultado ---"
+          ls -la /tmp/diag_audio.* 2>&1 || echo "(no se generó ningún archivo)"
+
       - name: Preparar la base de datos (reutilizando la del respaldo si existe)
         run: npx prisma generate && npx prisma db push
         env:
