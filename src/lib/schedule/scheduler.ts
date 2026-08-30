@@ -91,8 +91,8 @@ export async function scheduleAllReadyClips(): Promise<PublishAllResult> {
 }
 
 export interface PublishNowResult {
-  publishedClips: number;
-  failedClips: number;
+  scheduledTasks: number;
+  clipsAffected: number;
   platforms: Platform[];
 }
 
@@ -102,6 +102,15 @@ export interface PublishNowResult {
  * primeros que entraron, orden FIFO por createdAt — a todas las plataformas conectadas. Si un clip
  * ya se había publicado a mano en alguna plataforma antes, no se vuelve a subir ahí (evita
  * duplicados); solo se sube a las plataformas que todavía le faltan.
+ *
+ * IMPORTANTE: esto NO publica de verdad dentro de la petición — llamar a publishClip() en serie
+ * para cada clip/plataforma (subida real a YouTube/TikTok, puede tardar bastante por vídeo) casi
+ * seguro que supera lo que aguanta abierta una sola petición el túnel gratuito en cuanto N pasa de
+ * 1 o 2, dando el mismo "Load failed" ya arreglado en publish/regenerate/música — con el
+ * agravante de que aquí serían N subidas reales en cola, no solo una. En vez de eso se crean
+ * tareas AutoPublishTask con scheduledAt = ahora mismo, y el mismo procesador que ya usa
+ * "Configurar horarios" (processDueTasks, llamado cada minuto desde el worker) las recoge y
+ * publica solas en segundo plano — la ruta responde al instante con cuántas se encolaron.
  */
 export async function publishImmediately(count: number): Promise<PublishNowResult> {
   const settings = await getAutoPublishSettings();
@@ -117,21 +126,28 @@ export async function publishImmediately(count: number): Promise<PublishNowResul
     include: { publications: { where: { status: { in: ["PUBLISHED", "DRAFT"] } } } },
   });
 
-  let publishedClips = 0;
-  let failedClips = 0;
+  const alreadyPending = await db.autoPublishTask.findMany({
+    where: { status: "PENDING", clipId: { in: clips.map((c) => c.id) } },
+    select: { clipId: true, platform: true },
+  });
+  const pendingKey = (clipId: string, platform: string) => `${clipId}:${platform}`;
+  const pendingSet = new Set(alreadyPending.map((t) => pendingKey(t.clipId, t.platform)));
+
+  const now = new Date();
+  let scheduledTasks = 0;
+  let clipsAffected = 0;
   for (const clip of clips) {
     const alreadyDone = new Set(clip.publications.map((p) => p.platform));
-    const pending = platforms.filter((p) => !alreadyDone.has(p));
-    let clipOk = true;
-    for (const platform of pending) {
-      const result = await publishClip(clip.id, platform);
-      if (!result.ok) clipOk = false;
+    const toSchedule = platforms.filter((p) => !alreadyDone.has(p) && !pendingSet.has(pendingKey(clip.id, p)));
+    if (toSchedule.length === 0) continue;
+    clipsAffected++;
+    for (const platform of toSchedule) {
+      await db.autoPublishTask.create({ data: { clipId: clip.id, platform, scheduledAt: now, status: "PENDING" } });
+      scheduledTasks++;
     }
-    if (clipOk) publishedClips++;
-    else failedClips++;
   }
 
-  return { publishedClips, failedClips, platforms };
+  return { scheduledTasks, clipsAffected, platforms };
 }
 
 async function runIntervalMode(intervalHours: number, platforms: Platform[], nextRunAt: Date | null) {

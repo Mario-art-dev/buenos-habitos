@@ -67,15 +67,12 @@ export default function GalleryClient() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "No se pudo publicar");
-      const result = data.result as { publishedClips: number; failedClips: number };
+      const result = data.result as { scheduledTasks: number; clipsAffected: number };
       setPublishNowMessage(
-        result.failedClips > 0
-          ? `Publicados ${result.publishedClips} shorts. ${result.failedClips} fallaron (revisa la conexión de las plataformas).`
-          : `Publicados ${result.publishedClips} shorts de inmediato.`
+        result.clipsAffected === 0
+          ? "No había ningún short pendiente de publicar (o ya estaban todos publicados/en cola)."
+          : `En marcha: ${result.clipsAffected} shorts (${result.scheduledTasks} subidas) puestos en cola para publicarse en los próximos minutos.`
       );
-      fetch("/api/clips")
-        .then((res) => res.json())
-        .then((d) => setClips(d.clips));
     } catch (err) {
       setPublishNowError((err as Error).message);
     } finally {
