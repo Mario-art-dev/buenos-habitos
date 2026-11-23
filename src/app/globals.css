@@ -21,3 +21,18 @@ body {
   background: #26263c;
   border-radius: 8px;
 }
+
+/* ===== Modo Estudia ===== */
+@keyframes study-progress { from { width: 0%; } to { width: 100%; } }
+.study-progress { animation: study-progress linear forwards; }
+@keyframes study-blob { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(40px,60px) scale(1.25); } }
+.study-blob { animation: study-blob 9s ease-in-out infinite; }
+.study-blob-2 { animation-duration: 12s; animation-direction: reverse; }
+@keyframes study-heart { 0% { transform: translate(-50%,-50%) scale(0); opacity: 1; } 60% { transform: translate(-50%,-60%) scale(1.2); opacity: 1; } 100% { transform: translate(-50%,-90%) scale(1); opacity: 0; } }
+.study-heart { animation: study-heart .9s ease-out forwards; }
+.study-feed { scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.study-feed::-webkit-scrollbar { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .study-blob, .study-heart { animation: none; }
+  .study-heart { display: none; }
+}
