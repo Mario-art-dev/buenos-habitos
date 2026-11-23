@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 
 const LINKS = [
   { href: "/", label: "Inicio" },
+  { href: "/estudia", label: "Estudia" },
   { href: "/rankings", label: "Rankings" },
   { href: "/split", label: "Cortar en shorts" },
   { href: "/double", label: "Modo doble" },

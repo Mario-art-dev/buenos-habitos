@@ -291,3 +291,20 @@ model AiCredential {
   apiKey    String
   updatedAt DateTime @updatedAt
 }
+
+// Modo Estudia (/estudia): vídeos tipo TikTok generados por la IA a partir de los apuntes del
+// usuario. "script" es el guion completo en JSON (escenas animadas que se reproducen en el
+// navegador). "seen" sirve para que «Para ti» no repita hasta haberlos visto todos una vez.
+model StudyVideo {
+  id        String   @id @default(cuid())
+  subject   String
+  topic     String
+  title     String
+  order     Int      @default(0)
+  script    String
+  seen      Boolean  @default(false)
+  liked     Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([subject])
+}
