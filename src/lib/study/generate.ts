@@ -114,8 +114,8 @@ Video ${params.index + 1} of ${params.total}: "${params.lesson.title}"
 Key facts this video MUST teach (all of them):
 ${params.lesson.keyFacts.map((f) => `- ${f}`).join("\n")}
 
-Write the script for one vertical animated video of 45-110 seconds (max 2 minutes).
-"narration" is what the voice says in that scene: spoken, punchy, 12-40 words, total 130-260 words.
+Write the script for one vertical animated video of 40-90 seconds.
+"narration" is what the voice says in that scene: spoken, punchy, 10-25 words, total 90-170 words. Be concise: fewer, sharper scenes (5-7 plus the interactive ones).
 Tell it like a Draw My Life story: the narrator talks to the viewer, is funny and dramatic, and uses
 at least 2 comic references (e.g. "this enzyme is the Gordon Ramsay of your stomach"). On-screen texts
 must be SHORT. Emojis are the doodles (they get drawn on the paper). Start with a hook in the first 2

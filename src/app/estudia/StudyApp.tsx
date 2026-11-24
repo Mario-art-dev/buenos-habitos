@@ -171,24 +171,24 @@ function CreateView({ subjects, onCreated, onDone }: { subjects: string[]; onCre
 
       setPhase("planning");
       type Plan = { topic: string; lessons: { title: string; keyFacts: string[] }[] };
-      const plans: Plan[] = [];
-      for (let i = 0; i < calls; i++) {
-        plans.push(
-          await post<Plan>("/api/study/plan", {
+      // Todas las partes del temario a la vez (antes eran una tras otra).
+      const plans: Plan[] = await Promise.all(
+        Array.from({ length: calls }, (_, i) =>
+          post<Plan>("/api/study/plan", {
             subject: subj,
             topic: topic.trim(),
             text: chunks[i] ?? "",
             images: imageBatches[i] ?? [],
             chunkInfo: calls > 1 ? `This is part ${i + 1} of ${calls} of the material.` : undefined,
           })
-        );
-      }
+        )
+      );
       const topicName = topic.trim() || plans[0].topic;
       const lessons = plans.flatMap((p) => p.lessons);
       setJobs(lessons.map((l) => ({ title: l.title, status: "wait" })));
       setPhase("making");
 
-      // 2 a la vez para no agotar el cupo de la IA.
+      // 3 vídeos a la vez: más rápido sin agotar el cupo de la IA de golpe.
       let next = 0;
       const worker = async () => {
         while (next < lessons.length) {
@@ -208,7 +208,7 @@ function CreateView({ subjects, onCreated, onDone }: { subjects: string[]; onCre
           }
         }
       };
-      await Promise.all([worker(), worker()]);
+      await Promise.all([worker(), worker(), worker()]);
       setPhase("done");
     } catch (e) {
       setError((e as Error).message);
