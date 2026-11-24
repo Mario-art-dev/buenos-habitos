@@ -64,6 +64,48 @@ function sfx(kind: "right" | "wrong" | "pop") {
   } catch {}
 }
 
+// Música de fondo alegre tipo ukelele (sintetizada en el navegador, gratis), muy bajita para que
+// la voz se oiga bien. Acordes C - G - Am - F, como la mayoría de Draw My Life.
+const CHORDS = [
+  [261.6, 329.6, 392.0, 523.3],
+  [196.0, 246.9, 293.7, 392.0],
+  [220.0, 261.6, 329.6, 440.0],
+  [174.6, 220.0, 261.6, 349.2],
+];
+let musicTimer: ReturnType<typeof setInterval> | null = null;
+function startMusic() {
+  if (musicTimer) return;
+  try {
+    audioCtx ??= new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+    void audioCtx.resume();
+  } catch {
+    return;
+  }
+  let step = 0;
+  musicTimer = setInterval(() => {
+    const ctx = audioCtx!;
+    const chord = CHORDS[Math.floor(step / 8) % 4];
+    const pattern = [0, 2, 1, 3, 0, 2, 1, 2];
+    const f = chord[pattern[step % 8]];
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = "triangle";
+    o.frequency.value = f;
+    const t = ctx.currentTime;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.035, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.45);
+    o.connect(g).connect(ctx.destination);
+    o.start(t);
+    o.stop(t + 0.5);
+    step++;
+  }, 220);
+}
+function stopMusic() {
+  if (musicTimer) clearInterval(musicTimer);
+  musicTimer = null;
+}
+
 // ---------------------------------------------------------------- piezas dibujadas
 
 /** Texto escrito a mano palabra a palabra. *palabra* = subrayada con fosforito. */
@@ -123,6 +165,76 @@ function Arrow({ color }: { color: string }) {
   );
 }
 
+/** Relleno "coloreado con rotulador": rayas en zigzag detrás de un dibujo (como en los DML). */
+function ColorFill({ color, className = "" }: { color: string; className?: string }) {
+  return (
+    <svg viewBox="0 0 130 90" preserveAspectRatio="none" className={`pointer-events-none absolute -inset-2 -z-10 h-[calc(100%+16px)] w-[calc(100%+16px)] ${className}`}>
+      <path className="stroke" d="M8 30 L 22 10 L 18 52 L 40 8 L 34 78 L 58 10 L 54 84 L 80 12 L 74 82 L 100 14 L 96 74 L 120 22 L 118 60" fill="none" stroke={color} strokeOpacity="0.5" strokeWidth="15" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/** Explosión en punta (impacto) detrás de algo sorprendente. */
+function Burst({ color }: { color: string }) {
+  const pts: string[] = [];
+  for (let i = 0; i < 24; i++) {
+    const a = (i / 24) * Math.PI * 2;
+    const r = i % 2 ? 30 : 48;
+    pts.push(`${(60 + Math.cos(a) * r * 1.15).toFixed(1)} ${(50 + Math.sin(a) * r).toFixed(1)}`);
+  }
+  return (
+    <svg viewBox="0 0 120 100" className="pointer-events-none absolute -inset-8 -z-10 h-[calc(100%+64px)] w-[calc(100%+64px)]">
+      <path className="stroke" d={`M${pts.join(" L ")} Z`} fill={color} fillOpacity="0.85" stroke={INK} strokeWidth="2.5" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/** Etiqueta en mayúsculas con flecha ("YOU ←"), típica de los Draw My Life. */
+function Label({ text, color }: { text: string; color: string }) {
+  return (
+    <span className="flex items-center gap-1 self-start">
+      <svg viewBox="0 0 50 30" className="h-6 w-10 shrink-0">
+        <path className="stroke" d="M48 8 C 34 4, 20 10, 8 22" fill="none" stroke={INK} strokeWidth="3" strokeLinecap="round" />
+        <path className="stroke" d="M4 12 L 7 23 L 18 22" fill="none" stroke={INK} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      <span className="draw font-marker text-[18px] uppercase" style={{ color }}>{text}</span>
+    </span>
+  );
+}
+
+/** Mano de verdad con rotulador (lo más reconocible de un Draw My Life). La punta está en (0,0). */
+function MarkerHand({ color }: { color: string }) {
+  return (
+    <svg width="230" height="230" viewBox="-6 -6 230 230" className="overflow-visible drop-shadow-[0_10px_14px_rgba(0,0,0,.28)]">
+      <defs>
+        <linearGradient id="skin" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#f6d2b4" />
+          <stop offset="1" stopColor="#e2a982" />
+        </linearGradient>
+      </defs>
+      <g transform="rotate(38)">
+        {/* palma y muñeca */}
+        <path d="M70 -6 C 96 -34, 150 -40, 180 -20 L 290 -18 L 290 62 L 170 60 C 140 74, 96 64, 78 34 Z" fill="url(#skin)" stroke="#c98b66" strokeWidth="2" />
+        {/* rotulador */}
+        <path d="M0 0 L 16 -6 L 16 6 Z" fill={color} />
+        <rect x="16" y="-8" width="12" height="16" rx="2" fill="#9ca3af" />
+        <rect x="28" y="-10" width="138" height="20" rx="5" fill="#1f1f1f" />
+        <rect x="70" y="-10" width="40" height="20" fill="#f5f5f5" />
+        <rect x="76" y="-6" width="28" height="4" fill={color} />
+        <rect x="160" y="-11" width="22" height="22" rx="4" fill={color} />
+        {/* dedo índice por encima */}
+        <path d="M32 -10 C 34 -24, 60 -28, 92 -26 C 112 -25, 124 -20, 128 -12 L 120 -2 C 96 -8, 60 -6, 40 -2 C 34 -2, 31 -5, 32 -10 Z" fill="url(#skin)" stroke="#c98b66" strokeWidth="2" />
+        <path d="M34 -12 C 36 -18, 44 -20, 50 -18 C 48 -12, 40 -9, 34 -12 Z" fill="#f9e1d0" stroke="#d9a587" strokeWidth="1" />
+        {/* pulgar por debajo */}
+        <path d="M40 10 C 44 22, 70 30, 100 28 C 118 27, 128 20, 130 12 L 120 4 C 98 10, 66 10, 46 6 C 42 6, 39 7, 40 10 Z" fill="url(#skin)" stroke="#c98b66" strokeWidth="2" />
+        {/* dedos doblados */}
+        <path d="M92 26 C 96 44, 124 52, 146 44 C 156 40, 160 30, 156 22" fill="url(#skin)" stroke="#c98b66" strokeWidth="2" />
+        <path d="M118 44 C 126 58, 150 64, 168 54" fill="none" stroke="#c98b66" strokeWidth="2" />
+      </g>
+    </svg>
+  );
+}
+
 /** Muñeco de palitos (el protagonista de cada Draw My Life) con distintas caras y poses. */
 function Stick({ mood = "happy", color, size = 96, flip = false }: { mood?: string; color: string; size?: number; flip?: boolean }) {
   const p = { fill: "none", stroke: INK, strokeWidth: 3.5, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, className: "stroke" };
@@ -149,7 +261,8 @@ function Stick({ mood = "happy", color, size = 96, flip = false }: { mood?: stri
   };
   return (
     <svg viewBox="0 0 100 140" width={size} height={size * 1.4} className="shrink-0 overflow-visible" style={flip ? { transform: "scaleX(-1)" } : undefined}>
-      <circle cx="50" cy="26" r="19" {...p} />
+      <circle cx="50" cy="24" r="22" {...p} />
+      {m === "happy" || m === "laughing" || m === "cool" ? <path className="stroke" d="M34 30 l4 0 M62 30 l4 0" stroke="#f472b6" strokeWidth="4" strokeLinecap="round" /> : null}
       {m === "cool" ? (
         <path className="stroke" d="M34 22 L 66 22 M36 22 q 6 9 12 0 M52 22 q 6 9 12 0" fill="none" stroke={INK} strokeWidth="4" strokeLinecap="round" />
       ) : m === "angry" ? (
@@ -164,7 +277,10 @@ function Stick({ mood = "happy", color, size = 96, flip = false }: { mood?: stri
       <path {...p} d={arms[m][0]} />
       <path {...p} d={arms[m][1]} />
       <path {...p} d="M50 96 L 34 132 M50 96 L 66 132" />
-      {m === "shocked" ? <path className="stroke" d="M76 10 q 6 8 0 12 q -6 -4 0 -12" fill="#8ecbff" stroke="#3b82f6" strokeWidth="2" /> : null}
+      {m === "shocked" ? <path className="stroke" d="M78 8 q 6 8 0 12 q -6 -4 0 -12" fill="#8ecbff" stroke="#3b82f6" strokeWidth="2" /> : null}
+      {m === "shocked" || m === "angry" ? <text className="draw" x="16" y="8" fontSize="26" fill="#e63946" fontFamily="var(--font-marker)">!</text> : null}
+      {m === "shocked" ? <path className="stroke" d="M20 40 l -10 -4 M20 50 l -12 2 M80 40 l 10 -4 M80 50 l 12 2" stroke={INK} strokeWidth="2.5" strokeLinecap="round" /> : null}
+      {m === "laughing" ? <text className="draw" x="70" y="6" fontSize="15" fill="#e63946" fontFamily="var(--font-marker)">HA HA</text> : null}
       {m === "thinking" ? <text className="draw" x="74" y="12" fontSize="22" fill={color} fontFamily="inherit">?</text> : null}
       {m === "sad" ? <path className="stroke" d="M41 28 l -2 8" stroke="#3b82f6" strokeWidth="3" strokeLinecap="round" /> : null}
     </svg>
@@ -194,7 +310,7 @@ function Title({ text, color, big = false }: { text?: string; color: string; big
   if (!text) return null;
   return (
     <div className="w-full text-center">
-      <h2 className={`font-marker text-balance leading-[1.08] ${big ? "text-[clamp(30px,9.5vw,50px)]" : "text-[clamp(24px,7.4vw,38px)]"}`} style={{ color: big ? color : INK }}>
+      <h2 className={`font-marker text-balance uppercase leading-[1.08] ${big ? "text-[clamp(30px,9.5vw,50px)]" : "text-[clamp(24px,7.4vw,38px)]"}`} style={{ color: big ? color : INK }}>
         <Hand text={text} />
       </h2>
       <Underline color={color} />
@@ -233,10 +349,13 @@ function SceneView({
         <div className="flex w-full flex-col items-center gap-4">
           <Title text={scene.text} color={color} big />
           <div className="flex items-end gap-2">
-            <Stick mood={scene.mood ?? "shocked"} color={color} size={88} />
-            <span className="relative">
-              <Emoji e={scene.emoji ?? "🤯"} size="clamp(70px,24vw,120px)" />
-              <Scribble color={color} />
+            <div className="flex flex-col items-center">
+              <Stick mood={scene.mood ?? "shocked"} color={color} size={84} />
+              <Label text="you" color={color} />
+            </div>
+            <span className="relative isolate mx-6">
+              <Burst color={color} />
+              <Emoji e={scene.emoji ?? "🤯"} size="clamp(66px,22vw,110px)" />
             </span>
           </div>
           {scene.say ? <Bubble text={scene.say} color={color} /> : null}
@@ -251,8 +370,11 @@ function SceneView({
               <div key={i} className="contents">
                 {i === 1 ? <span className="draw font-marker text-4xl" style={{ color }}>=</span> : null}
                 <div className="flex flex-1 flex-col items-center gap-1">
-                  <Emoji e={s?.emoji} size="clamp(60px,20vw,104px)" />
-                  <Hand text={s?.label} className="text-center text-[20px] font-bold" />
+                  <span className="relative isolate">
+                    <ColorFill color={i ? color : "#1d6fe0"} />
+                    <Emoji e={s?.emoji} size="clamp(58px,19vw,100px)" />
+                  </span>
+                  <Hand text={s?.label} className="font-marker text-center text-[18px] uppercase" />
                 </div>
               </div>
             ))}
@@ -264,11 +386,14 @@ function SceneView({
       return (
         <div className="flex w-full flex-col items-center gap-3">
           <Title text={scene.text} color={color} />
-          <div className="grid w-full grid-cols-2 gap-3">
+          <div className="relative grid w-full grid-cols-2 gap-6">
+            <svg viewBox="0 0 10 200" preserveAspectRatio="none" className="pointer-events-none absolute inset-y-0 left-1/2 h-full w-3 -translate-x-1/2">
+              <path className="stroke" d="M5 2 C 3 60, 7 120, 5 198" fill="none" stroke={INK} strokeWidth="3" strokeLinecap="round" />
+            </svg>
             {[scene.left, scene.right].map((side, i) => (
-              <div key={i} className={`${box} draw flex flex-col items-center gap-1`} style={{ borderColor: i ? color : INK }}>
+              <div key={i} className="flex flex-col items-center gap-1">
                 <Emoji e={side?.emoji} size="52px" />
-                <Hand text={side?.label} className="font-marker text-center text-[20px]" style={{ color: i ? color : INK }} />
+                <Hand text={side?.label} className="font-marker text-center text-[20px] uppercase" style={{ color: i ? color : INK }} />
                 <ul className="space-y-0.5 text-[16px] leading-snug">
                   {(side?.points ?? []).map((p, j) => (
                     <li key={j}>
@@ -301,7 +426,8 @@ function SceneView({
     case "number":
       return (
         <div className="flex w-full flex-col items-center gap-3">
-          <span className="relative mt-2 px-4">
+          <span className="relative isolate mt-2 px-4">
+            <ColorFill color={HIGHLIGHT} />
             <span className="draw font-marker block text-center text-[clamp(46px,16vw,88px)] leading-none" style={{ color }}>
               {scene.value}
             </span>
@@ -315,6 +441,24 @@ function SceneView({
           {scene.say ? <Bubble text={scene.say} color={color} /> : null}
         </div>
       );
+    case "chart": {
+      const up = scene.value !== "down";
+      return (
+        <div className="flex w-full flex-col items-center gap-3">
+          <Title text={scene.text} color={color} />
+          <div className="flex w-full items-end gap-2">
+            <Stick mood={scene.mood ?? (up ? "happy" : "sad")} color={color} size={70} />
+            <svg viewBox="0 0 200 140" className="h-auto flex-1 overflow-visible">
+              <path className="stroke" d="M12 6 L 12 128 L 196 128" fill="none" stroke={INK} strokeWidth="3.5" strokeLinecap="round" />
+              <path className="stroke" d={up ? "M20 116 L 60 96 L 80 104 L 120 66 L 136 76 L 176 22" : "M20 24 L 60 46 L 80 38 L 120 80 L 136 70 L 176 116"} fill="none" stroke="#e63946" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
+              <path className="stroke" d={up ? "M160 22 L 178 20 L 176 38" : "M160 116 L 178 118 L 176 100"} fill="none" stroke="#e63946" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+          <Hand text={scene.label} className="font-marker text-[18px] uppercase tracking-wide" />
+          {scene.say ? <Bubble text={scene.say} color={color} /> : null}
+        </div>
+      );
+    }
     case "mnemonic":
       return (
         <div className="flex w-full flex-col items-center gap-3">
@@ -344,7 +488,10 @@ function SceneView({
           <div className="flex items-end justify-center gap-1">
             <Stick mood={scene.mood ?? "laughing"} color={color} size={80} />
             {(scene.emojis ?? [scene.emoji ?? "🤪"]).slice(0, 3).map((e, i) => (
-              <Emoji key={i} e={e} size="clamp(48px,16vw,84px)" />
+              <span key={i} className="relative isolate">
+                {i === 0 ? <ColorFill color={color} /> : null}
+                <Emoji e={e} size="clamp(46px,15vw,80px)" />
+              </span>
             ))}
           </div>
           <Hand text={scene.text} className="text-balance text-center text-[24px] leading-tight" />
@@ -485,6 +632,7 @@ export default function VideoPlayer({
   const [heartBurst, setHeartBurst] = useState(0);
   const sceneRef = useRef<HTMLDivElement>(null);
   const penRef = useRef<HTMLSpanElement>(null);
+  const wipeRef = useRef<HTMLDivElement>(null);
   const seenSent = useRef(false);
   const scene = scenes[idx] ?? scenes[0];
   const interactive = INTERACTIVE.has(scene.type);
@@ -498,6 +646,13 @@ export default function VideoPlayer({
       setPaused(false);
     }
   }, [active]);
+
+  useEffect(() => {
+    if (active && !paused && soundOn) {
+      startMusic();
+      return stopMusic;
+    }
+  }, [active, paused, soundOn]);
 
   // Reproducción de la escena: voz (o temporizador). Las interactivas esperan a que toques.
   useEffect(() => {
@@ -597,7 +752,9 @@ export default function VideoPlayer({
       const budget = Math.max(1.5, sceneSeconds(scene) * 0.6);
       const k = total > budget ? budget / total : 1;
       const tl = gsap.timeline();
-      gsap.set(pen, { opacity: 1, x: base.width * 0.8, y: base.height });
+      if (wipeRef.current && idx > 0) gsap.fromTo(wipeRef.current, { opacity: 0.95, clipPath: "inset(0 0 0 0)" }, { clipPath: "inset(0 0 0 100%)", duration: 0.45, ease: "power2.inOut" });
+      gsap.set(pen, { opacity: 1, x: base.width * 0.8, y: base.height + 40, rotation: 0 });
+      gsap.to(pen, { rotation: 2.5, duration: 0.09, yoyo: true, repeat: -1, ease: "sine.inOut", transformOrigin: "0 0" });
       let t = 0.1;
       for (const p of plan) {
         const d = p.dur * k;
@@ -615,7 +772,8 @@ export default function VideoPlayer({
         }
         t += d + 0.03 * k;
       }
-      tl.to(pen, { x: base.width + 40, y: base.height + 60, duration: 0.5, ease: "power2.in" }, t + 0.1);
+      tl.to(pen, { x: base.width + 80, y: base.height + 120, duration: 0.5, ease: "power2.in" }, t + 0.1);
+      tl.set(pen, { opacity: 0 });
       gsap.to(".float", { y: -6, rotation: 3, duration: 1.3, yoyo: true, repeat: -1, ease: "sine.inOut", delay: t, stagger: 0.2 });
     }, sceneRef);
     return () => ctx.revert();
@@ -634,10 +792,15 @@ export default function VideoPlayer({
   return (
     <div
       className="font-hand relative h-full w-full overflow-hidden"
-      style={{ color: INK, background: "#fbfaf4", backgroundImage: "radial-gradient(#00000010 1px, transparent 1px)", backgroundSize: "22px 22px" }}
+      style={{ color: INK, background: "radial-gradient(ellipse 120% 90% at 50% 42%, #ffffff 0%, #fbfbfb 55%, #e4e5e8 100%)" }}
       onClick={() => setPaused((p) => !p)}
       onDoubleClick={like}
     >
+      {/* reflejo de luz sobre la pizarra */}
+      <div className="pointer-events-none absolute inset-0" style={{ background: "linear-gradient(115deg, transparent 30%, rgba(255,255,255,.7) 45%, transparent 60%)" }} />
+      {/* borrado de pizarra entre escenas */}
+      <div ref={wipeRef} className="pointer-events-none absolute inset-0 z-30 bg-white opacity-0" />
+
       {/* barras de progreso */}
       <div className="absolute inset-x-3 top-14 z-10 flex gap-1">
         {scenes.map((s, i) => (
@@ -657,8 +820,8 @@ export default function VideoPlayer({
       {/* folio con la escena */}
       <div ref={sceneRef} key={`${video.id}-${idx}`} className="absolute inset-x-0 bottom-44 top-20 flex items-center justify-center px-5">
         <SceneView scene={scene} color={color} picked={picked} waiting={waiting} onPick={(i) => setPicked(i)} />
-        <span ref={penRef} className="pointer-events-none absolute left-0 top-0 z-20 -ml-1 -mt-11 select-none text-[52px] opacity-0 drop-shadow-[0_6px_6px_rgba(0,0,0,.25)]" aria-hidden>
-          ✍️
+        <span ref={penRef} className="pointer-events-none absolute left-0 top-0 z-20 -ml-[6px] -mt-[6px] opacity-0" aria-hidden>
+          <MarkerHand color={color} />
         </span>
       </div>
 

@@ -65,8 +65,9 @@ Return ONLY this JSON:
   return { topic: plan.topic?.trim() || params.topicHint || params.subject, lessons };
 }
 
-const SCENE_TYPES = `The video is a "Draw My Life" style whiteboard animation: a hand draws everything live with
-markers on white paper, and a STICK FIGURE (the narrator) reacts in every scene. Every scene may add:
+const SCENE_TYPES = `The video is a "Draw My Life" style whiteboard animation: a real hand draws everything live with
+black markers on a glossy white board (red as accent color, scribbled colouring, impact bursts,
+"YOU ←" labels, "HA HA", "!" and arrows), and a STICK FIGURE (the narrator) reacts in every scene. Every scene may add:
   "mood": stick figure face/pose — one of happy|shocked|thinking|laughing|pointing|sad|cool|angry
   "say": a SHORT funny line the stick figure says in a comic speech bubble (<=7 words), optional
 In on-screen texts wrap the 1-2 most important words in *asterisks* (they get a yellow highlighter).
@@ -78,6 +79,7 @@ Scene types (6-10 scenes, vary them, pick the ones that fit THIS content):
 - {"type":"list","text":"headline","items":[{"emoji":"1️⃣","text":"<=6 words"}],"narration":"..."}   (2-5 items)
 - {"type":"compare","text":"A vs B","left":{"label":"A","emoji":"🐢","points":["<=5 words"]},"right":{"label":"B","emoji":"🐇","points":["..."]},"narration":"..."}
 - {"type":"number","value":"1492","label":"what it means","emoji":"⛵","mood":"shocked","narration":"..."}   (dates, stats, formulas like "E=mc²")
+- {"type":"chart","text":"headline","value":"up or down","label":"WHAT IS MEASURED (axis label)","mood":"happy","narration":"..."}   (growth/decline, trends, more X → more Y)
 - {"type":"timeline","text":"headline","items":[{"emoji":"🏛️","text":"753 BC — Rome founded"}],"narration":"..."}
 - {"type":"mnemonic","acronym":"HOMES","words":["Huron","Ontario","Michigan","Erie","Superior"],"text":"memory trick","mood":"cool","narration":"..."}
 - {"type":"story","text":"absurd mental image <=14 words","emojis":["🦖","🍕","🚀"],"mood":"laughing","say":"...","narration":"..."}   (a crazy, vivid, funny scene that encodes the fact)
