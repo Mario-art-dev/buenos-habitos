@@ -64,6 +64,7 @@ function Feed({
   onSeen,
   onLike,
   onNearEnd,
+  onCorrect,
 }: {
   items: FeedItem[];
   startIndex?: number;
@@ -72,6 +73,7 @@ function Feed({
   onSeen: (id: string) => void;
   onLike: (id: string, liked: boolean) => void;
   onNearEnd?: () => void;
+  onCorrect?: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(startIndex);
@@ -100,7 +102,7 @@ function Feed({
       {items.map((it, i) => (
         <section key={it.key} className="h-full w-full snap-start snap-always">
           {Math.abs(i - active) <= 1 ? (
-            <VideoPlayer video={it.video} active={i === active} soundOn={soundOn} onToggleSound={onToggleSound} onSeen={onSeen} onLike={onLike} />
+            <VideoPlayer video={it.video} active={i === active} soundOn={soundOn} onToggleSound={onToggleSound} onSeen={onSeen} onLike={onLike} onCorrect={onCorrect} />
           ) : (
             <div className="h-full w-full bg-black" />
           )}
@@ -114,11 +116,11 @@ function VideoCard({ v, onOpen, onDelete }: { v: StudyVideo; onOpen: () => void;
   const hook = v.script.scenes[0];
   return (
     <div className="relative">
-      <button onClick={onOpen} className="flex aspect-[9/14] w-full flex-col justify-between overflow-hidden rounded-2xl bg-gradient-to-br from-fuchsia-600 via-violet-700 to-indigo-900 p-3 text-left text-white ring-1 ring-white/10 active:scale-[.98]">
-        <span className="text-5xl">{hook?.emoji ?? hook?.emojis?.[0] ?? "🎬"}</span>
+      <button onClick={onOpen} className="flex aspect-[9/14] w-full flex-col justify-between overflow-hidden rounded-2xl bg-[#fbfaf4] p-3 text-left text-neutral-900 ring-1 ring-white/10 active:scale-[.98]">
+        <span className="text-5xl">{hook?.emoji ?? hook?.emojis?.[0] ?? "✍️"}</span>
         <div>
-          <p className="line-clamp-4 text-[13px] font-black leading-tight [overflow-wrap:anywhere]">{v.title}</p>
-          <p className="mt-1 text-[11px] font-bold opacity-75">
+          <p className="font-hand line-clamp-4 text-[15px] leading-tight [overflow-wrap:anywhere]">{v.title}</p>
+          <p className="mt-1 text-[11px] font-bold opacity-60">
             {v.seen ? "✓ visto" : "● nuevo"} · {Math.floor(videoSeconds(v.script) / 60)}:{String(videoSeconds(v.script) % 60).padStart(2, "0")}
             {v.liked ? " · ❤️" : ""}
           </p>
@@ -315,6 +317,8 @@ export default function StudyApp() {
   const [section, setSection] = useState<string | null>(null);
   const [overlay, setOverlay] = useState<{ items: FeedItem[]; start: number } | null>(null);
   const [query, setQuery] = useState("");
+  const [score, setScore] = useState(0);
+  const [pop, setPop] = useState(0);
   const round = useRef(0);
   const videosRef = useRef<StudyVideo[]>([]);
   videosRef.current = videos;
@@ -412,7 +416,11 @@ export default function StudyApp() {
 
   const openList = (list: StudyVideo[], start: number) => setOverlay({ items: list.map((v) => ({ key: `o-${v.id}`, video: v })), start });
 
-  const feedProps = { soundOn, onToggleSound: toggleSound, onSeen, onLike };
+  const onCorrect = useCallback(() => {
+    setScore((n) => n + 1);
+    setPop((n) => n + 1);
+  }, []);
+  const feedProps = { soundOn, onToggleSound: toggleSound, onSeen, onLike, onCorrect };
 
   const nav: { id: Tab; icon: string; label: string }[] = [
     { id: "foryou", icon: "🏠", label: "Para ti" },
@@ -438,15 +446,15 @@ export default function StudyApp() {
         ) : overlay ? (
           <>
             <Feed items={fresh(overlay.items)} startIndex={overlay.start} {...feedProps} />
-            <button onClick={() => setOverlay(null)} className="absolute left-3 top-3 z-30 rounded-full bg-black/40 px-3 py-1.5 text-sm font-bold text-white">← Volver</button>
+            <button onClick={() => setOverlay(null)} className="absolute left-3 top-3 z-30 rounded-full bg-black/80 px-3 py-1.5 text-sm font-bold text-white">← Volver</button>
           </>
         ) : tab === "foryou" ? (
           forYou.length ? (
             <>
               <Feed items={fresh(forYou)} {...feedProps} onNearEnd={onNearEnd} />
-              <div className="pointer-events-none absolute inset-x-0 top-3 z-30 flex justify-center gap-5 text-[17px] font-black text-white drop-shadow">
+              <div className="pointer-events-none absolute inset-x-0 top-3 z-30 flex justify-center gap-5 text-[17px] font-black text-neutral-900">
                 <button className="pointer-events-auto opacity-60" onClick={() => setTab("sections")}>Secciones</button>
-                <span className="border-b-2 border-white pb-0.5">Para ti</span>
+                <span className="border-b-2 border-neutral-900 pb-0.5">Para ti</span>
               </div>
             </>
           ) : (
@@ -520,6 +528,12 @@ export default function StudyApp() {
             </div>
           </div>
         )}
+
+        {(overlay || (tab === "foryou" && forYou.length)) && !loading ? (
+          <span key={pop} className={`pointer-events-none absolute right-3 top-3 z-30 rounded-full bg-black/80 px-3 py-1 text-sm font-black text-white ${pop ? "study-score" : ""}`}>
+            🧠 {score}
+          </span>
+        ) : null}
 
         {!askedSound && !loading && (overlay || (tab === "foryou" && forYou.length)) ? (
           <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/50 px-8">

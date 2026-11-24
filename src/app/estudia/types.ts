@@ -16,6 +16,10 @@ export interface Scene {
   options?: string[];
   answer?: number;
   explanation?: string;
+  mood?: string;
+  say?: string;
+  choices?: { text: string; emoji?: string; reaction?: string }[];
+  hidden?: string;
 }
 
 export interface Script {
@@ -40,18 +44,26 @@ export interface StudyVideo {
   script: Script;
 }
 
-export const PALETTES: Record<string, { bg: string; glow: string }> = {
-  fire: { bg: "linear-gradient(160deg,#ff512f 0%,#dd2476 55%,#2b0a3d 100%)", glow: "#ffd166" },
-  ocean: { bg: "linear-gradient(160deg,#00c6ff 0%,#0072ff 50%,#081a4b 100%)", glow: "#7cf8ff" },
-  toxic: { bg: "linear-gradient(160deg,#16a34a 0%,#0f766e 50%,#04211c 100%)", glow: "#bef264" },
-  candy: { bg: "linear-gradient(160deg,#f953c6 0%,#b91d73 55%,#2d0620 100%)", glow: "#fde68a" },
-  galaxy: { bg: "linear-gradient(160deg,#3a1c71 0%,#7b2d8b 45%,#0b0322 100%)", glow: "#ffaf7b" },
-  sunset: { bg: "linear-gradient(160deg,#f7971e 0%,#e1306c 55%,#2a0b2e 100%)", glow: "#fff3a3" },
+// Color del rotulador principal de cada vídeo (estilo Draw My Life: folio blanco + rotuladores).
+export const MARKERS: Record<string, string> = {
+  red: "#e63946",
+  blue: "#1d6fe0",
+  green: "#22995a",
+  orange: "#f08a24",
+  purple: "#8e44ad",
+  pink: "#e84393",
+  // nombres antiguos de paleta (vídeos ya creados)
+  fire: "#e63946",
+  ocean: "#1d6fe0",
+  toxic: "#22995a",
+  candy: "#e84393",
+  galaxy: "#8e44ad",
+  sunset: "#f08a24",
 };
 
 export function sceneSeconds(scene: Scene): number {
   const words = (scene.narration ?? "").split(/\s+/).filter(Boolean).length;
-  return Math.max(3, words / 2.6 + (scene.type === "quiz" ? 2.5 : 0.6));
+  return Math.max(3.5, words / 2.6 + 0.8);
 }
 
 export function videoSeconds(script: Script): number {

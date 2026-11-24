@@ -32,7 +32,13 @@ body {
 .study-heart { animation: study-heart .9s ease-out forwards; }
 .study-feed { scrollbar-width: none; -webkit-overflow-scrolling: touch; }
 .study-feed::-webkit-scrollbar { display: none; }
+@keyframes tap-hint { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+.tap-hint { animation: tap-hint .8s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) {
+  .tap-hint { animation: none; }
   .study-blob, .study-heart { animation: none; }
   .study-heart { display: none; }
 }
+@keyframes study-score { 0% { transform: scale(1); } 40% { transform: scale(1.5); background: #22995a; } 100% { transform: scale(1); } }
+.study-score { animation: study-score .7s ease-out; }
+@media (prefers-reduced-motion: reduce) { .study-score { animation: none; } }

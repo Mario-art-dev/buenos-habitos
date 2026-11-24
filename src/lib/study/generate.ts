@@ -65,18 +65,31 @@ Return ONLY this JSON:
   return { topic: plan.topic?.trim() || params.topicHint || params.subject, lessons };
 }
 
-const SCENE_TYPES = `Scene types (pick the ones that fit THIS content, vary them, 5-9 scenes total):
-- {"type":"hook","text":"<=8 words shocking/funny opener","emoji":"🤯","narration":"..."}
-- {"type":"explain","text":"short headline","bullets":["<=7 words","..."],"emoji":"🧠","narration":"..."}
-- {"type":"analogy","text":"X is like Y","left":{"emoji":"🫀","label":"Heart"},"right":{"emoji":"🚒","label":"Fire pump"},"narration":"..."}
+const SCENE_TYPES = `The video is a "Draw My Life" style whiteboard animation: a real hand draws everything live with
+black markers on a glossy white board (red as accent color, scribbled colouring, impact bursts,
+"YOU ←" labels, "HA HA", "!" and arrows), and a STICK FIGURE (the narrator) reacts in every scene. Every scene may add:
+  "mood": stick figure face/pose — one of happy|shocked|thinking|laughing|pointing|sad|cool|angry
+  "say": a SHORT funny line the stick figure says in a comic speech bubble (<=7 words), optional
+In on-screen texts wrap the 1-2 most important words in *asterisks* (they get a yellow highlighter).
+
+Scene types (6-10 scenes, vary them, pick the ones that fit THIS content):
+- {"type":"hook","text":"<=8 words shocking/funny opener","emoji":"🤯","mood":"shocked","say":"WAIT, WHAT?!","narration":"..."}   (always first)
+- {"type":"explain","text":"short headline","bullets":["<=7 words"],"emoji":"🧠","mood":"pointing","narration":"..."}
+- {"type":"analogy","text":"X is like Y","left":{"emoji":"🫀","label":"Heart"},"right":{"emoji":"🚒","label":"Fire pump"},"say":"...","narration":"..."}
 - {"type":"list","text":"headline","items":[{"emoji":"1️⃣","text":"<=6 words"}],"narration":"..."}   (2-5 items)
-- {"type":"compare","text":"A vs B","left":{"label":"A","emoji":"🐢","points":["..."]},"right":{"label":"B","emoji":"🐇","points":["..."]},"narration":"..."}
-- {"type":"number","value":"1492","label":"what the number means","emoji":"⛵","narration":"..."}   (dates, stats, formulas: value can be "E=mc²")
+- {"type":"compare","text":"A vs B","left":{"label":"A","emoji":"🐢","points":["<=5 words"]},"right":{"label":"B","emoji":"🐇","points":["..."]},"narration":"..."}
+- {"type":"number","value":"1492","label":"what it means","emoji":"⛵","mood":"shocked","narration":"..."}   (dates, stats, formulas like "E=mc²")
+- {"type":"chart","text":"headline","value":"up or down","label":"WHAT IS MEASURED (axis label)","mood":"happy","narration":"..."}   (growth/decline, trends, more X → more Y)
 - {"type":"timeline","text":"headline","items":[{"emoji":"🏛️","text":"753 BC — Rome founded"}],"narration":"..."}
-- {"type":"mnemonic","acronym":"HOMES","words":["Huron","Ontario","Michigan","Erie","Superior"],"text":"memory trick","narration":"..."}
-- {"type":"story","text":"absurd mental image in <=12 words","emojis":["🦖","🍕","🚀"],"narration":"..."}   (a crazy, vivid, funny scene that encodes the fact)
-- {"type":"quiz","question":"...","options":["A","B","C"],"answer":0,"explanation":"<=12 words","narration":"..."}   (put one near the end)
-- {"type":"punchline","text":"<=10 word key takeaway","emoji":"🔥","narration":"..."}   (always last)`;
+- {"type":"mnemonic","acronym":"HOMES","words":["Huron","Ontario","Michigan","Erie","Superior"],"text":"memory trick","mood":"cool","narration":"..."}
+- {"type":"story","text":"absurd mental image <=14 words","emojis":["🦖","🍕","🚀"],"mood":"laughing","say":"...","narration":"..."}   (a crazy, vivid, funny scene that encodes the fact)
+- INTERACTIVE (the video waits for the viewer to tap):
+  {"type":"quiz","question":"...","options":["A","B","C"],"answer":0,"explanation":"<=12 words","narration":"reads the question"}
+  {"type":"choice","question":"funny 'what would YOU do?' or 'guess which one' question","choices":[{"emoji":"🅰️","text":"<=6 words","reaction":"funny reaction that also teaches the fact, <=18 words"}],"narration":"..."}   (2-3 choices)
+  {"type":"reveal","text":"Guess what… (teaser)","hidden":"the surprising fact <=10 words","emoji":"💥","mood":"thinking","narration":"builds suspense, asks the viewer to tap"}
+- {"type":"punchline","text":"<=10 word key takeaway","emoji":"🔥","mood":"cool","say":"...","narration":"..."}   (always last)
+
+Every video MUST contain at least 2 interactive scenes (one "quiz" near the end + one "choice" or "reveal").`;
 
 export async function writeVideo(params: {
   subject: string;
@@ -88,11 +101,14 @@ export async function writeVideo(params: {
   const provider = await getAIProvider();
   const raw = await provider.chatJson({
     system:
-      "You are the most addictive educational TikTok creator on Earth (think energetic science " +
-      "communicator + stand-up comedian). You write scripts in ENGLISH that make facts impossible " +
-      "to forget: shocking hooks, absurd vivid mental images, exaggerated analogies, jokes, " +
-      "memory tricks, and a quick quiz. Simple words (B1-B2 English). Every fact must be accurate " +
-      "and come from the key facts given. Reply with JSON only.",
+      "You are the most addictive educational TikTok creator on Earth and you make 'Draw My Life' " +
+      "style whiteboard videos: a hand draws stick figures and doodles while a funny, warm narrator " +
+      "tells the lesson as a STORY in first person ('So there I was…', 'Imagine you're…'). You write " +
+      "in ENGLISH (simple B1-B2 words) and you make facts impossible to forget with comic references " +
+      "everyone knows (memes, movies, video games, school life, TikTok trends, celebrities, food, " +
+      "group chats, Monday mornings…), absurd mental images, exaggerated analogies, jokes, memory " +
+      "tricks and questions the viewer answers by tapping. References are only mentioned, never the " +
+      "main content. Every fact must be accurate and come from the key facts given. Reply with JSON only.",
     prompt: `Subject: ${params.subject} — Topic: ${params.topic}
 Video ${params.index + 1} of ${params.total}: "${params.lesson.title}"
 Key facts this video MUST teach (all of them):
@@ -100,15 +116,17 @@ ${params.lesson.keyFacts.map((f) => `- ${f}`).join("\n")}
 
 Write the script for one vertical animated video of 45-110 seconds (max 2 minutes).
 "narration" is what the voice says in that scene: spoken, punchy, 12-40 words, total 130-260 words.
-On-screen texts must be SHORT. Use emojis creatively as the visuals (they get animated big on screen).
-Start with a hook in the first 2 seconds (shocking fact, crazy question or joke). Include at least one
-absurd/funny mental image ("story") or analogy and a memory trick when useful. Choose the scene types
-that best fit the content (dates → timeline/number, processes → list, contrasts → compare...).
+Tell it like a Draw My Life story: the narrator talks to the viewer, is funny and dramatic, and uses
+at least 2 comic references (e.g. "this enzyme is the Gordon Ramsay of your stomach"). On-screen texts
+must be SHORT. Emojis are the doodles (they get drawn on the paper). Start with a hook in the first 2
+seconds (shocking fact, crazy question or joke). Include an absurd mental image ("story") or analogy
+and a memory trick when useful. Choose the scene types that best fit the content (dates → timeline/number,
+processes → list, contrasts → compare...).
 
 ${SCENE_TYPES}
 
 Return ONLY this JSON:
-{"title":"catchy title <=60 chars","caption":"TikTok-style caption with 1 emoji","palette":"one of fire|ocean|toxic|candy|galaxy|sunset","scenes":[...],"hashtags":["#tag1","#tag2","#tag3"],"takeaway":"one-sentence summary"}`,
+{"title":"catchy title <=60 chars","caption":"TikTok-style caption with 1 emoji","palette":"marker color, one of red|blue|green|orange|purple|pink","scenes":[...],"hashtags":["#tag1","#tag2","#tag3"],"takeaway":"one-sentence summary"}`,
     maxTokens: 8_000,
   });
   const script = parseJson<Record<string, unknown>>(raw);
