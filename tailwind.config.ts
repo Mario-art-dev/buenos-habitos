@@ -4,6 +4,10 @@ const config: Config = {
   content: ["./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
+      fontFamily: {
+        hand: ["var(--font-hand)", "Comic Sans MS", "cursive"],
+        marker: ["var(--font-marker)", "var(--font-hand)", "cursive"],
+      },
       colors: {
         brand: {
           50: "#fdf2f8",
