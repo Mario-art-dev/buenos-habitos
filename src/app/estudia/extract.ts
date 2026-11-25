@@ -109,22 +109,9 @@ export async function extractFiles(files: File[]): Promise<{ text: string; image
   return { text: text.trim(), images };
 }
 
-/** Parte el texto en trozos de ~10.000 caracteres sin cortar párrafos. */
-export function chunkText(text: string, size = 10_000): string[] {
-  if (text.length <= size) return text ? [text] : [];
-  const chunks: string[] = [];
-  let current = "";
-  for (const para of text.split(/\n\s*\n/)) {
-    if ((current + para).length > size && current) {
-      chunks.push(current);
-      current = "";
-    }
-    current += para + "\n\n";
-    while (current.length > size * 1.5) {
-      chunks.push(current.slice(0, size));
-      current = current.slice(size);
-    }
-  }
-  if (current.trim()) chunks.push(current);
-  return chunks;
+/** Divide el texto en exactamente `parts` partes de palabras iguales (cortes donde toque). */
+export function splitIntoParts(text: string, parts: number): string[] {
+  const words = text.split(/\s+/).filter(Boolean);
+  const size = Math.ceil(words.length / parts);
+  return Array.from({ length: parts }, (_, i) => words.slice(i * size, (i + 1) * size).join(" "));
 }

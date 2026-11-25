@@ -1,34 +1,25 @@
 {
-  "name": "escenas-virales-studio",
+  "name": "estudia",
   "version": "0.1.0",
   "private": true,
-  "description": "Generador de shorts virales con IA: analiza cualquier video, corta los mejores momentos, puntua su probabilidad viral y los publica en YouTube y TikTok.",
+  "description": "Estudia: convierte tus apuntes en vídeos de 2 minutos estilo Draw My Life, en inglés, con IA.",
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
     "start": "next start",
-    "worker": "tsx watch worker/index.ts",
-    "worker:build": "tsx worker/index.ts",
-    "generate": "tsx scripts/run_job_cli.ts",
-    "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "db:push": "prisma db push",
-    "db:generate": "prisma generate",
-    "db:studio": "prisma studio"
+    "db:generate": "prisma generate"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1",
     "@prisma/client": "^5.22.0",
-    "@remotion/player": "^4.0.514",
-    "clsx": "^2.1.1",
-    "googleapis": "^144.0.0",
     "gsap": "^3.12.5",
     "next": "^14.2.15",
     "openai": "^4.68.4",
     "prisma": "^5.22.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "remotion": "^4.0.514",
     "zod": "^3.23.8"
   },
   "devDependencies": {
@@ -38,7 +29,6 @@
     "autoprefixer": "^10.4.20",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.13",
-    "tsx": "^4.19.1",
     "typescript": "^5.6.3"
   }
 }

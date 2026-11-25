@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import VideoPlayer from "./VideoPlayer";
-import { chunkText, extractFiles, type StudyImage } from "./extract";
+import { extractFiles, splitIntoParts, type StudyImage } from "./extract";
+import { VIDEOS_PER_DOCUMENT } from "@/lib/study/constants";
 import { videoSeconds, type StudyVideo } from "./types";
 
 type Tab = "foryou" | "sections" | "create" | "search";
@@ -164,51 +165,39 @@ function CreateView({ subjects, onCreated, onDone }: { subjects: string[]; onCre
       setPhase("reading");
       const extracted = await extractFiles(files);
       const text = [extracted.text, pasted.trim()].filter(Boolean).join("\n\n");
-      const chunks = chunkText(text);
-      const imageBatches: StudyImage[][] = [];
-      for (let i = 0; i < extracted.images.length; i += 6) imageBatches.push(extracted.images.slice(i, i + 6));
-      const calls = Math.max(chunks.length, imageBatches.length);
+      // Siempre 5 partes: cada una será un vídeo de unos 2 minutos.
+      const parts = splitIntoParts(text, VIDEOS_PER_DOCUMENT);
+      const images: StudyImage[][] = Array.from({ length: VIDEOS_PER_DOCUMENT }, () => []);
+      extracted.images.forEach((img, i) => images[i % VIDEOS_PER_DOCUMENT].push(img));
 
-      setPhase("planning");
-      type Plan = { topic: string; lessons: { title: string; keyFacts: string[] }[] };
-      // Todas las partes del temario a la vez (antes eran una tras otra).
-      const plans: Plan[] = await Promise.all(
-        Array.from({ length: calls }, (_, i) =>
-          post<Plan>("/api/study/plan", {
-            subject: subj,
-            topic: topic.trim(),
-            text: chunks[i] ?? "",
-            images: imageBatches[i] ?? [],
-            chunkInfo: calls > 1 ? `This is part ${i + 1} of ${calls} of the material.` : undefined,
-          })
-        )
-      );
-      const topicName = topic.trim() || plans[0].topic;
-      const lessons = plans.flatMap((p) => p.lessons);
-      setJobs(lessons.map((l) => ({ title: l.title, status: "wait" })));
+      const topicName = topic.trim() || subj;
+      setJobs(parts.map((_, i) => ({ title: `Parte ${i + 1} de ${VIDEOS_PER_DOCUMENT}`, status: "wait" })));
       setPhase("making");
 
-      // 3 vídeos a la vez: más rápido sin agotar el cupo de la IA de golpe.
-      let next = 0;
-      const worker = async () => {
-        while (next < lessons.length) {
-          const i = next++;
+      // Los 5 a la vez. La IA ya reparte el uso entre proveedores; así el tiempo total es el
+      // de un solo vídeo, no el de cinco seguidos.
+      await Promise.all(
+        parts.map(async (part, i) => {
+          if (!part && !images[i].length) return setJobs((js) => js.map((j, k) => (k === i ? { ...j, status: "fail", error: "Parte vacía" } : j)));
           setJobs((js) => js.map((j, k) => (k === i ? { ...j, status: "work" } : j)));
-          let ok = false;
-          for (let attempt = 0; attempt < 2 && !ok; attempt++) {
+          for (let attempt = 0; attempt < 2; attempt++) {
             try {
-              const raw = await post<RawVideo>("/api/study/video", { subject: subj, topic: topicName, lesson: lessons[i], index: i, total: lessons.length, order: i });
+              const raw = await post<RawVideo>("/api/study/video", {
+                subject: subj,
+                topic: topicName,
+                partIndex: i,
+                text: part,
+                images: images[i],
+              });
               const v = parse(raw);
               if (v) onCreated(v);
-              ok = true;
-              setJobs((js) => js.map((j, k) => (k === i ? { ...j, status: "ok" } : j)));
+              return setJobs((js) => js.map((j, k) => (k === i ? { ...j, status: "ok", title: v?.title ?? j.title } : j)));
             } catch (e) {
               if (attempt === 1) setJobs((js) => js.map((j, k) => (k === i ? { ...j, status: "fail", error: (e as Error).message } : j)));
             }
           }
-        }
-      };
-      await Promise.all([worker(), worker(), worker()]);
+        })
+      );
       setPhase("done");
     } catch (e) {
       setError((e as Error).message);
@@ -256,7 +245,7 @@ function CreateView({ subjects, onCreated, onDone }: { subjects: string[]; onCre
         <h1 className="text-2xl font-black">➕ Crear vídeos</h1>
         <Link href="/" className="text-sm text-white/50">Salir</Link>
       </div>
-      <p className="text-sm text-white/60">Sube tu temario y la IA lo convierte en TikToks animados en inglés (máx. 2 min) que te lo enseñan todo.</p>
+      <p className="text-sm text-white/60">Sube tu temario. La IA lo divide en 5 partes y crea 5 vídeos de 2 minutos en inglés, estilo Draw My Life.</p>
 
       <label className="space-y-1">
         <span className="text-sm font-bold">1. Asignatura</span>

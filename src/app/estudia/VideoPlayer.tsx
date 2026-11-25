@@ -12,6 +12,11 @@ const INK = "#1c1c1c";
 const HIGHLIGHT = "#ffe45c";
 const INTERACTIVE = new Set(["quiz", "choice", "reveal"]);
 
+function markerAt(i: number): string {
+  const order = ["#e63946", "#1d6fe0", "#22995a", "#f08a24", "#8e44ad"];
+  return order[((i % order.length) + order.length) % order.length];
+}
+
 const reducedMotion = () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 // ---------------------------------------------------------------- voz y efectos de sonido
@@ -624,6 +629,8 @@ export default function VideoPlayer({
 }) {
   const scenes = video.script.scenes;
   const color = MARKERS[video.script.palette ?? ""] ?? MARKERS.red;
+  // Cada escena cambia de rotulador (rojo, azul, verde, naranja, morado), como en los originales.
+  const baseColorIdx = Math.max(0, ["#e63946", "#1d6fe0", "#22995a", "#f08a24", "#8e44ad"].indexOf(color));
   const [idx, setIdx] = useState(0);
   const [paused, setPaused] = useState(false);
   const [wordIdx, setWordIdx] = useState(0);
@@ -635,6 +642,7 @@ export default function VideoPlayer({
   const wipeRef = useRef<HTMLDivElement>(null);
   const seenSent = useRef(false);
   const scene = scenes[idx] ?? scenes[0];
+  const sceneColor = markerAt(baseColorIdx + idx);
   const interactive = INTERACTIVE.has(scene.type);
   const words = useMemo(() => (scene.narration ?? "").split(/\s+/).filter(Boolean), [scene]);
 
@@ -819,7 +827,7 @@ export default function VideoPlayer({
 
       {/* folio con la escena */}
       <div ref={sceneRef} key={`${video.id}-${idx}`} className="absolute inset-x-0 bottom-44 top-20 flex items-center justify-center px-5">
-        <SceneView scene={scene} color={color} picked={picked} waiting={waiting} onPick={(i) => setPicked(i)} />
+        <SceneView scene={scene} color={sceneColor} picked={picked} waiting={waiting} onPick={(i) => setPicked(i)} />
         <span ref={penRef} className="pointer-events-none absolute left-0 top-0 z-20 -ml-[6px] -mt-[6px] opacity-0" aria-hidden>
           <MarkerHand color={color} />
         </span>
