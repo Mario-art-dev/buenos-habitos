@@ -20,6 +20,9 @@ export interface Scene {
   say?: string;
   choices?: { text: string; emoji?: string; reaction?: string }[];
   hidden?: string;
+  svg?: string;
+  headers?: string[];
+  rows?: string[][];
 }
 
 export interface Script {
@@ -63,7 +66,7 @@ export const MARKERS: Record<string, string> = {
 
 export function sceneSeconds(scene: Scene): number {
   const words = (scene.narration ?? "").split(/\s+/).filter(Boolean).length;
-  return Math.max(3.5, words / 2.6 + 0.8);
+  return Math.max(4, words / 2.1 + 1.4);
 }
 
 export function videoSeconds(script: Script): number {

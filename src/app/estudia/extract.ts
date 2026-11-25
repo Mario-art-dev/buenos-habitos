@@ -109,22 +109,31 @@ export async function extractFiles(files: File[]): Promise<{ text: string; image
   return { text: text.trim(), images };
 }
 
-/** Parte el texto en trozos de ~10.000 caracteres sin cortar párrafos. */
-export function chunkText(text: string, size = 10_000): string[] {
-  if (text.length <= size) return text ? [text] : [];
-  const chunks: string[] = [];
+/** Trocea el documento en secciones de hasta `max` caracteres, cortando siempre entre párrafos. */
+export function splitSections(text: string, max = 9000): string[] {
+  if (!text.trim()) return [];
+  const sections: string[] = [];
   let current = "";
   for (const para of text.split(/\n\s*\n/)) {
-    if ((current + para).length > size && current) {
-      chunks.push(current);
+    const p = para.trim();
+    if (!p) continue;
+    if (p.length > max) {
+      // párrafo gigante: se parte por frases
+      for (const sentence of p.split(/(?<=[.!?])\s+/)) {
+        if ((current + " " + sentence).length > max && current) {
+          sections.push(current.trim());
+          current = "";
+        }
+        current += sentence + " ";
+      }
+      continue;
+    }
+    if ((current + "\n\n" + p).length > max && current) {
+      sections.push(current.trim());
       current = "";
     }
-    current += para + "\n\n";
-    while (current.length > size * 1.5) {
-      chunks.push(current.slice(0, size));
-      current = current.slice(size);
-    }
+    current += p + "\n\n";
   }
-  if (current.trim()) chunks.push(current);
-  return chunks;
+  if (current.trim()) sections.push(current.trim());
+  return sections;
 }

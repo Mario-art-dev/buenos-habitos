@@ -1,19 +1,38 @@
 import { getAIProvider, type AIImage } from "@/lib/ai/provider";
 
-// Modo Estudia: la IA convierte los apuntes del usuario en una serie de "TikToks" educativos en
-// inglés. Dos pasos para que cada petición sea corta (el túnel corta a los ~100 s):
-//  1) planLessons: lee el temario y lo reparte en lecciones (cuántas depende de lo largo que sea).
-//  2) writeVideo: escribe el guion animado de UNA lección (escenas que el navegador reproduce).
+// Modo Estudia. Un documento se trocea en secciones; cada sección se analiza y de ahí salen
+// los clips necesarios para explicarlo entero. Cada clip es INDEPENDIENTE (se entiende solo),
+// con explicación lenta, ejemplos, diagramas, fechas, tablas y preguntas para tocar.
 
-export interface Lesson {
+export interface ClipBrief {
   title: string;
+  subject?: string;
+  topic?: string;
   keyFacts: string[];
+  sourceText: string;
 }
 
-export interface Plan {
-  topic: string;
-  lessons: Lesson[];
-}
+const SCENE_TYPES = `The video is a "Draw My Life" style whiteboard lesson: a hand draws coloured markers on a white
+board and a STICK FIGURE teacher explains slowly. Use these scene types (6-10 scenes):
+
+- {"type":"hook","text":"<=8 words: a question that makes the viewer want the answer","emoji":"🤔","mood":"thinking","narration":"..."}   (always first)
+- {"type":"explain","text":"headline","bullets":["<=8 words each, 2-4 bullets"],"narration":"..."}
+- {"type":"example","text":"For example…","label":"a concrete, real example","emoji":"🍎","narration":"walk through the example step by step"}
+- {"type":"diagram","text":"headline","svg":"<svg viewBox=\\"0 0 400 240\\">...</svg>","narration":"explain the diagram part by part"}
+   The svg: ONLY elements rect, circle, ellipse, line, polyline, path, polygon, text, g. Use stroke="#1c1c1c" stroke-width="3" fill="none" or light fills. Text font-size 18-22. Max 12 elements. Draw boxes, arrows, cycles, labelled parts, flows, cause→effect.
+- {"type":"table","text":"headline","headers":["A","B"],"rows":[["..","..."]],"narration":"..."}   (comparisons, data, dates)
+- {"type":"timeline","text":"headline","items":[{"emoji":"📅","text":"1492 — date and what happened"}],"narration":"..."}   (dates and order of events)
+- {"type":"number","value":"1492","label":"what it means","emoji":"📌","narration":"..."}   (a key date, number or formula)
+- {"type":"mnemonic","acronym":"HOMES","words":["..."],"text":"memory trick","narration":"..."}
+- {"type":"story","text":"vivid, funny mental image <=14 words","emojis":["🧬","🔬"],"narration":"..."}
+- INTERACTIVE (the video waits for the viewer to tap an answer). Put one after every 2 explanation scenes, at least 3 per clip:
+  {"type":"quiz","question":"checks the part just explained","options":["A","B","C"],"answer":0,"explanation":"<=14 words why","narration":"reads the question slowly"}
+  {"type":"choice","question":"which one is correct / what happens next?","choices":[{"emoji":"🅰️","text":"<=8 words","reaction":"<=20 words explaining why"}],"narration":"..."}
+  {"type":"reveal","text":"Think first…","hidden":"the answer <=12 words","emoji":"💡","narration":"asks the viewer to think, then tap"}
+- {"type":"summary","text":"Remember:","bullets":["3-5 key facts, <=8 words each"],"narration":"recap slowly"}   (always last, before nothing else)
+
+Narration rules: SLOW, clear, teacher voice. Short sentences of 6-14 words. Say the key words twice in
+different ways. Never more than 25 words per narration line.`;
 
 function parseJson<T>(raw: string): T {
   const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/```\s*$/i, "");
@@ -22,119 +41,96 @@ function parseJson<T>(raw: string): T {
   return JSON.parse(start >= 0 && end > start ? cleaned.slice(start, end + 1) : cleaned) as T;
 }
 
-export async function planLessons(params: {
+/** Paso 1 (por sección del documento): decide cuántos clips hacen falta y de qué trata cada uno. */
+export async function planClips(params: {
   subject: string;
-  topicHint?: string;
-  text: string;
+  topic: string;
+  sectionText: string;
+  sectionIndex: number;
+  totalSections: number;
   images?: AIImage[];
-  chunkInfo?: string;
-}): Promise<Plan> {
-  const words = params.text.split(/\s+/).filter(Boolean).length;
-  const target = Math.max(2, Math.min(10, Math.round(words / 300) + (params.images?.length ?? 0)));
+}): Promise<ClipBrief[]> {
   const provider = await getAIProvider();
   const raw = await provider.chatJson({
     system:
-      "You are a world-class teacher and viral TikTok educator. You split study material into " +
-      "bite-sized lessons that, together, cover ABSOLUTELY EVERYTHING an exam could ask. " +
-      "Never invent facts that are not supported by the material. Reply with JSON only.",
-    prompt: `Subject: ${params.subject}
-${params.topicHint ? `Topic name given by the student: ${params.topicHint}` : ""}
-${params.chunkInfo ?? ""}
-STUDY MATERIAL (may be in any language; photos of notes may be attached):
+      "You are an expert teacher planning study videos. You split material into self-contained clips: each " +
+      "clip is understandable on its own, covers one idea completely and never relies on other clips. " +
+      "Facts must come only from the material. Reply with JSON only.",
+    prompt: `Subject: ${params.subject}${params.topic ? ` — Topic: ${params.topic}` : ""}
+Section ${params.sectionIndex + 1} of ${params.totalSections} of the document.
+${params.images?.length ? "Photos of notes or diagrams are attached: use them (dates, diagrams, examples)." : ""}
+
+MATERIAL:
 """
-${params.text || "(see attached images)"}
+${params.sectionText || "(see the attached photos)"}
 """
 
-Split this material into about ${target} lessons (fewer if the material is short, up to 12 if it is dense).
-Each lesson = one TikTok video of 45-110 seconds. Together they must cover the WHOLE material: every
-definition, date, formula, name, cause, consequence, step and example. Order them logically.
+Decide how many clips this section needs to be explained COMPLETELY (1 clip for a small idea, up to 5 for dense
+material). Each clip covers one coherent idea. For each clip give:
+- "title": short English title
+- "keyFacts": 4-10 complete facts from the material (names, dates, numbers, causes, steps, formulas), in English
+- "sourceText": the exact part of the material this clip is based on (copy the relevant sentences, max 1500 chars)
 
-For each lesson list 3-8 "keyFacts": complete, precise facts copied/condensed from the material
-(write them in English, keep exact numbers, names, formulas).
-
-Return ONLY this JSON:
-{"topic": "short English name of the whole topic", "lessons": [{"title": "catchy English lesson title", "keyFacts": ["..."]}]}`,
+Return ONLY: {"clips":[{"title":"...","keyFacts":["..."],"sourceText":"..."}]}`,
     images: params.images,
     maxTokens: 8_000,
   });
-  const plan = parseJson<Plan>(raw);
-  const lessons = (plan.lessons ?? [])
-    .filter((l) => l && l.title && Array.isArray(l.keyFacts) && l.keyFacts.length)
-    .slice(0, 12);
-  if (!lessons.length) throw new Error("La IA no ha sacado lecciones de este material.");
-  return { topic: plan.topic?.trim() || params.topicHint || params.subject, lessons };
+  const plan = parseJson<{ clips?: { title?: string; keyFacts?: string[]; sourceText?: string }[] }>(raw);
+  return (plan.clips ?? [])
+    .filter((c) => c && c.title && Array.isArray(c.keyFacts) && c.keyFacts.length)
+    .map((c) => ({
+      title: String(c.title).slice(0, 90),
+      keyFacts: c.keyFacts!.map(String).slice(0, 10),
+      sourceText: String(c.sourceText ?? "").slice(0, 2000),
+      subject: params.subject,
+      topic: params.topic,
+    }));
 }
 
-const SCENE_TYPES = `The video is a "Draw My Life" style whiteboard animation: a real hand draws everything live with
-black markers on a glossy white board (red as accent color, scribbled colouring, impact bursts,
-"YOU ←" labels, "HA HA", "!" and arrows), and a STICK FIGURE (the narrator) reacts in every scene. Every scene may add:
-  "mood": stick figure face/pose — one of happy|shocked|thinking|laughing|pointing|sad|cool|angry
-  "say": a SHORT funny line the stick figure says in a comic speech bubble (<=7 words), optional
-In on-screen texts wrap the 1-2 most important words in *asterisks* (they get a yellow highlighter).
-
-Scene types (6-10 scenes, vary them, pick the ones that fit THIS content):
-- {"type":"hook","text":"<=8 words shocking/funny opener","emoji":"🤯","mood":"shocked","say":"WAIT, WHAT?!","narration":"..."}   (always first)
-- {"type":"explain","text":"short headline","bullets":["<=7 words"],"emoji":"🧠","mood":"pointing","narration":"..."}
-- {"type":"analogy","text":"X is like Y","left":{"emoji":"🫀","label":"Heart"},"right":{"emoji":"🚒","label":"Fire pump"},"say":"...","narration":"..."}
-- {"type":"list","text":"headline","items":[{"emoji":"1️⃣","text":"<=6 words"}],"narration":"..."}   (2-5 items)
-- {"type":"compare","text":"A vs B","left":{"label":"A","emoji":"🐢","points":["<=5 words"]},"right":{"label":"B","emoji":"🐇","points":["..."]},"narration":"..."}
-- {"type":"number","value":"1492","label":"what it means","emoji":"⛵","mood":"shocked","narration":"..."}   (dates, stats, formulas like "E=mc²")
-- {"type":"chart","text":"headline","value":"up or down","label":"WHAT IS MEASURED (axis label)","mood":"happy","narration":"..."}   (growth/decline, trends, more X → more Y)
-- {"type":"timeline","text":"headline","items":[{"emoji":"🏛️","text":"753 BC — Rome founded"}],"narration":"..."}
-- {"type":"mnemonic","acronym":"HOMES","words":["Huron","Ontario","Michigan","Erie","Superior"],"text":"memory trick","mood":"cool","narration":"..."}
-- {"type":"story","text":"absurd mental image <=14 words","emojis":["🦖","🍕","🚀"],"mood":"laughing","say":"...","narration":"..."}   (a crazy, vivid, funny scene that encodes the fact)
-- INTERACTIVE (the video waits for the viewer to tap):
-  {"type":"quiz","question":"...","options":["A","B","C"],"answer":0,"explanation":"<=12 words","narration":"reads the question"}
-  {"type":"choice","question":"funny 'what would YOU do?' or 'guess which one' question","choices":[{"emoji":"🅰️","text":"<=6 words","reaction":"funny reaction that also teaches the fact, <=18 words"}],"narration":"..."}   (2-3 choices)
-  {"type":"reveal","text":"Guess what… (teaser)","hidden":"the surprising fact <=10 words","emoji":"💥","mood":"thinking","narration":"builds suspense, asks the viewer to tap"}
-- {"type":"punchline","text":"<=10 word key takeaway","emoji":"🔥","mood":"cool","say":"...","narration":"..."}   (always last)
-
-Every video MUST contain at least 2 interactive scenes (one "quiz" near the end + one "choice" or "reveal").`;
-
+/** Paso 2 (por clip): escribe el guion animado y explicado de UN clip. */
 export async function writeVideo(params: {
-  subject: string;
-  topic: string;
-  lesson: Lesson;
+  clip: ClipBrief;
   index: number;
   total: number;
+  subject: string;
+  topic: string;
+  images?: AIImage[];
 }): Promise<Record<string, unknown>> {
   const provider = await getAIProvider();
   const raw = await provider.chatJson({
     system:
-      "You are the most addictive educational TikTok creator on Earth and you make 'Draw My Life' " +
-      "style whiteboard videos: a hand draws stick figures and doodles while a funny, warm narrator " +
-      "tells the lesson as a STORY in first person ('So there I was…', 'Imagine you're…'). You write " +
-      "in ENGLISH (simple B1-B2 words) and you make facts impossible to forget with comic references " +
-      "everyone knows (memes, movies, video games, school life, TikTok trends, celebrities, food, " +
-      "group chats, Monday mornings…), absurd mental images, exaggerated analogies, jokes, memory " +
-      "tricks and questions the viewer answers by tapping. References are only mentioned, never the " +
-      "main content. Every fact must be accurate and come from the key facts given. Reply with JSON only.",
+      "You are a brilliant, patient teacher who makes 'Draw My Life' whiteboard lessons. You explain SLOWLY, " +
+      "step by step, with concrete examples, diagrams, dates, tables and questions that check understanding. " +
+      "English, simple B1-B2 words. Every fact comes from the material. Each lesson stands alone. Reply with JSON only.",
     prompt: `Subject: ${params.subject} — Topic: ${params.topic}
-Video ${params.index + 1} of ${params.total}: "${params.lesson.title}"
-Key facts this video MUST teach (all of them):
-${params.lesson.keyFacts.map((f) => `- ${f}`).join("\n")}
+Clip ${params.index + 1} of ${params.total}: "${params.clip.title}". It must be understandable on its own.
 
-Write the script for one vertical animated video of 45-110 seconds (max 2 minutes).
-"narration" is what the voice says in that scene: spoken, punchy, 12-40 words, total 130-260 words.
-Tell it like a Draw My Life story: the narrator talks to the viewer, is funny and dramatic, and uses
-at least 2 comic references (e.g. "this enzyme is the Gordon Ramsay of your stomach"). On-screen texts
-must be SHORT. Emojis are the doodles (they get drawn on the paper). Start with a hook in the first 2
-seconds (shocking fact, crazy question or joke). Include an absurd mental image ("story") or analogy
-and a memory trick when useful. Choose the scene types that best fit the content (dates → timeline/number,
-processes → list, contrasts → compare...).
+Key facts to teach (ALL of them):
+${params.clip.keyFacts.map((f) => `- ${f}`).join("\n")}
+
+Source material:
+"""
+${params.clip.sourceText || "(see the attached photos)"}
+"""
+
+Write ONE lesson video of at most 2 minutes:
+- "narration" total: 150-230 words (slow teaching pace). Explain WHY, not only WHAT.
+- Include at least one "example" scene and at least one "diagram" or "table" or "timeline" scene when the material allows it.
+- Include at least 3 interactive scenes (quiz / choice / reveal), spread through the video.
+- Use the narrator's voice: "Let's slow down here…", "Look at this part…", "Here is the key idea…".
 
 ${SCENE_TYPES}
 
 Return ONLY this JSON:
-{"title":"catchy title <=60 chars","caption":"TikTok-style caption with 1 emoji","palette":"marker color, one of red|blue|green|orange|purple|pink","scenes":[...],"hashtags":["#tag1","#tag2","#tag3"],"takeaway":"one-sentence summary"}`,
+{"title":"English title <=60 chars","caption":"short caption with 1 emoji","palette":"marker colour: red|blue|green|orange|purple","scenes":[...],"hashtags":["#tag"],"takeaway":"one sentence","keyFacts":["..."]}`,
+    images: params.clip.sourceText ? undefined : params.images,
     maxTokens: 8_000,
   });
   const script = parseJson<Record<string, unknown>>(raw);
   const scenes = Array.isArray(script.scenes)
     ? (script.scenes as Record<string, unknown>[]).filter((s) => s && typeof s.type === "string")
     : [];
-  if (scenes.length < 2) throw new Error("La IA devolvió un guion vacío.");
-  script.scenes = scenes.slice(0, 12);
-  script.keyFacts = params.lesson.keyFacts;
+  if (scenes.length < 3) throw new Error("La IA devolvió un guion demasiado corto. Se reintentará.");
+  script.scenes = scenes.slice(0, 14);
   return script;
 }
