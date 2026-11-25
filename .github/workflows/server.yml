@@ -46,14 +46,14 @@ jobs:
           node-version: "20"
           cache: "npm"
 
-      - name: Instalar la voz natural (Piper, gratis). Si falla, la web usa la voz del navegador
+      - name: Instalar la voz natural (Kokoro, gratis). Si falla, la web usa la voz del navegador
         continue-on-error: true
         run: |
-          pip3 install --break-system-packages piper-tts
+          pip3 install --break-system-packages kokoro-onnx soundfile
           mkdir -p models
-          curl -fsSL -o models/en_US-lessac-medium.onnx "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx"
-          curl -fsSL -o models/en_US-lessac-medium.onnx.json "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json"
-          python3 -c "from piper import PiperVoice; PiperVoice.load('models/en_US-lessac-medium.onnx'); print('Voz Piper lista')"
+          curl -fsSL -o models/kokoro-v1.0.int8.onnx "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.int8.onnx"
+          curl -fsSL -o models/voices-v1.0.bin "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin"
+          python3 -c "import soundfile; from kokoro_onnx import Kokoro; Kokoro('models/kokoro-v1.0.int8.onnx','models/voices-v1.0.bin'); print('Voz Kokoro lista')"
 
       - name: Instalar dependencias
         run: npm ci
