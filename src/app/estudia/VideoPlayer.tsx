@@ -22,15 +22,23 @@ const reducedMotion = () => typeof window !== "undefined" && window.matchMedia("
 // ---------------------------------------------------------------- voz y efectos de sonido
 
 let cachedVoice: SpeechSynthesisVoice | null | undefined;
+/** Elige la mejor voz inglesa que tenga el iPhone: primero las «Enhanced»/«Premium» (gratis, se
+ *  descargan en Ajustes → Accesibilidad → Contenido hablado), luego Samantha, Ava, etc. */
 function englishVoice(): SpeechSynthesisVoice | null {
   if (cachedVoice) return cachedVoice;
   const en = (window.speechSynthesis?.getVoices() ?? []).filter((v) => v.lang.toLowerCase().startsWith("en"));
-  const preferred = ["Samantha", "Google US English", "Ava", "Allison", "Daniel", "Karen", "Microsoft Aria"];
-  cachedVoice = preferred.map((n) => en.find((v) => v.name.includes(n))).find(Boolean) ?? en.find((v) => v.lang === "en-US") ?? en[0] ?? null;
+  const best = en.find((v) => /enhanced|premium/i.test(v.name) && /samantha|ava|allison|zoe|nicky|evan/i.test(v.name));
+  const preferred = ["Samantha", "Ava", "Allison", "Google US English", "Karen", "Microsoft Aria", "Daniel"];
+  cachedVoice =
+    best ??
+    preferred.map((n) => en.find((v) => v.name.includes(n))).find(Boolean) ??
+    en.find((v) => v.lang === "en-US") ??
+    en[0] ??
+    null;
   return cachedVoice;
 }
 
-function speak(text: string, onEnd?: () => void, onWord?: (i: number) => void) {
+function speak(text: string, rate: number, onEnd?: () => void, onWord?: (i: number) => void) {
   const synth = window.speechSynthesis;
   if (!synth) return onEnd?.();
   synth.cancel();
@@ -38,8 +46,8 @@ function speak(text: string, onEnd?: () => void, onWord?: (i: number) => void) {
   const v = englishVoice();
   if (v) u.voice = v;
   u.lang = v?.lang ?? "en-US";
-  u.rate = 1.05;
-  u.pitch = 1.08;
+  u.rate = rate; // lento: se entiende mejor
+  u.pitch = 1;
   u.onboundary = (e) => {
     if (e.name && e.name !== "word") return;
     onWord?.(text.slice(0, e.charIndex).split(/\s+/).filter(Boolean).length);
@@ -210,7 +218,7 @@ function Label({ text, color }: { text: string; color: string }) {
 /** Mano de verdad con rotulador (lo más reconocible de un Draw My Life). La punta está en (0,0). */
 function MarkerHand({ color }: { color: string }) {
   return (
-    <svg width="230" height="230" viewBox="-6 -6 230 230" className="overflow-visible drop-shadow-[0_10px_14px_rgba(0,0,0,.28)]">
+    <svg width="140" height="140" viewBox="-6 -6 230 230" className="overflow-visible drop-shadow-[0_10px_14px_rgba(0,0,0,.28)]">
       <defs>
         <linearGradient id="skin" x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" stopColor="#f6d2b4" />
@@ -320,6 +328,65 @@ function Title({ text, color, big = false }: { text?: string; color: string; big
       </h2>
       <Underline color={color} />
     </div>
+  );
+}
+
+/** Limpia el SVG que escribe la IA: solo formas básicas, sin scripts ni eventos. */
+function cleanSvg(svg: string): string {
+  const allowed = /^(svg|g|rect|circle|ellipse|line|polyline|polygon|path|text|tspan|defs|marker)$/i;
+  if (typeof DOMParser === "undefined") return "";
+  const doc = new DOMParser().parseFromString(svg, "image/svg+xml");
+  const root = doc.documentElement;
+  if (!root || root.nodeName.toLowerCase() !== "svg") return "";
+  const walk = (el: Element) => {
+    for (const child of Array.from(el.children)) {
+      if (!allowed.test(child.nodeName)) {
+        child.remove();
+        continue;
+      }
+      for (const attr of Array.from(child.attributes)) {
+        if (/^on/i.test(attr.name) || /javascript:/i.test(attr.value)) child.removeAttribute(attr.name);
+      }
+      if (/^(path|line|polyline|polygon|circle|ellipse|rect)$/i.test(child.nodeName)) child.setAttribute("class", "stroke");
+      if (/^text$/i.test(child.nodeName)) child.setAttribute("class", "draw");
+      walk(child);
+    }
+  };
+  walk(root);
+  root.setAttribute("class", "w-full h-auto overflow-visible");
+  root.setAttribute("style", "max-height:230px");
+  return new XMLSerializer().serializeToString(root);
+}
+
+function Diagram({ svg }: { svg: string }) {
+  const html = useMemo(() => cleanSvg(svg), [svg]);
+  return <div className="flex w-full justify-center" dangerouslySetInnerHTML={{ __html: html }} />;
+}
+
+function Table({ headers = [], rows = [], color }: { headers?: string[]; rows?: string[][]; color: string }) {
+  return (
+    <table className="draw w-full border-collapse text-[16px]">
+      <thead>
+        <tr>
+          {headers.map((h, i) => (
+            <th key={i} className="border-2 px-2 py-1 text-left font-marker" style={{ borderColor: INK, color }}>
+              <Hand text={h} />
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r, i) => (
+          <tr key={i}>
+            {r.map((c, j) => (
+              <td key={j} className="border-2 px-2 py-1" style={{ borderColor: INK }}>
+                <Hand text={c} />
+              </td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 
@@ -576,6 +643,35 @@ function SceneView({
           <Character scene={scene} color={color} defaultMood={picked === null ? "thinking" : "shocked"} />
         </div>
       );
+    case "diagram":
+      return (
+        <div className="flex w-full flex-col items-center gap-3">
+          <Title text={scene.text} color={color} />
+          <Diagram svg={scene.svg ?? ""} />
+          <Character scene={scene} color={color} defaultMood="pointing" />
+        </div>
+      );
+    case "table":
+      return (
+        <div className="flex w-full flex-col items-center gap-3">
+          <Title text={scene.text} color={color} />
+          <Table headers={scene.headers} rows={scene.rows} color={color} />
+          <Character scene={scene} color={color} defaultMood="thinking" />
+        </div>
+      );
+    case "summary":
+      return (
+        <div className="flex w-full flex-col items-center gap-3">
+          <Hand text="📝 REMEMBER" className="font-marker text-[20px] tracking-widest" style={{ color }} />
+          <Title text={scene.text ?? "Remember:"} color={color} />
+          <ul className="w-full space-y-2 text-[19px] leading-snug">
+            {(scene.bullets ?? []).map((b, i) => (
+              <li key={i}><Hand text={`✔ ${b}`} /></li>
+            ))}
+          </ul>
+          <Character scene={scene} color={color} defaultMood="happy" />
+        </div>
+      );
     case "punchline":
       return (
         <div className="flex w-full flex-col items-center gap-4">
@@ -633,6 +729,7 @@ export default function VideoPlayer({
   const baseColorIdx = Math.max(0, ["#e63946", "#1d6fe0", "#22995a", "#f08a24", "#8e44ad"].indexOf(color));
   const [idx, setIdx] = useState(0);
   const [paused, setPaused] = useState(false);
+  const [speed, setSpeed] = useState(0.85);
   const [wordIdx, setWordIdx] = useState(0);
   const [picked, setPicked] = useState<number | null>(null);
   const [waiting, setWaiting] = useState(false);
@@ -668,7 +765,7 @@ export default function VideoPlayer({
     setPicked(null);
     setWaiting(false);
     if (!active || paused) return;
-    const seconds = sceneSeconds(scene);
+    const seconds = sceneSeconds(scene) / speed;
     let done = false;
     const timers: ReturnType<typeof setTimeout>[] = [];
     const finish = () => {
@@ -686,7 +783,7 @@ export default function VideoPlayer({
       if (!useVoice) setWordIdx(Math.min(words.length - 1, Math.floor(((performance.now() - start) / 1000 / seconds) * words.length)));
     }, 120);
     if (useVoice) {
-      speak(scene.narration!, finish, setWordIdx);
+      speak(scene.narration!, speed, finish, setWordIdx);
       timers.push(setTimeout(finish, (seconds * 1.8 + 3) * 1000));
     } else timers.push(setTimeout(finish, seconds * 1000));
     if (!seenSent.current) {
@@ -704,7 +801,7 @@ export default function VideoPlayer({
       window.speechSynthesis?.cancel();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, paused, idx, soundOn, video.id]);
+  }, [active, paused, idx, soundOn, video.id, speed]);
 
   // Tras responder: reacción (sonido + voz) y a la siguiente escena.
   useEffect(() => {
@@ -720,7 +817,7 @@ export default function VideoPlayer({
     let t: ReturnType<typeof setTimeout>;
     const after = () => (t = setTimeout(goNext, 1400));
     if (soundOn && line) {
-      speak(line, after);
+      speak(line, speed, after);
       t = setTimeout(goNext, 9000);
     } else t = setTimeout(goNext, 3200);
     if (!reducedMotion() && sceneRef.current) {
@@ -812,21 +909,33 @@ export default function VideoPlayer({
       {/* barras de progreso */}
       <div className="absolute inset-x-3 top-14 z-10 flex gap-1">
         {scenes.map((s, i) => (
-          <div key={i} className="h-1 flex-1 overflow-hidden rounded-full bg-black/10">
+          <div key={i} onClick={(e) => { e.stopPropagation(); setIdx(i); setPicked(null); }} className="h-2 flex-1 cursor-pointer overflow-hidden rounded-full bg-black/10">
             <div
               className={`h-full rounded-full ${i === idx && active && !paused && !waiting ? "study-progress" : ""}`}
               style={{
                 background: color,
                 width: i < idx || (i === idx && waiting) ? "100%" : i === idx && active && !paused ? undefined : "0%",
-                animationDuration: `${sceneSeconds(s) * (soundOn ? 1.15 : 1)}s`,
+                animationDuration: `${sceneSeconds(s) / speed}s`,
               }}
             />
           </div>
         ))}
       </div>
 
+      {/* controles: anterior, pausa/play, siguiente y velocidad */}
+      <div className="absolute inset-x-3 bottom-[10.25rem] z-20 flex items-center justify-between font-sans" onClick={(e) => e.stopPropagation()}>
+        <div className="flex gap-2">
+          <button aria-label="Anterior" onClick={() => { setIdx((i) => Math.max(0, i - 1)); setPicked(null); }} className="rounded-full bg-black/80 px-3 py-1.5 text-lg text-white active:scale-95">⏮</button>
+          <button aria-label="Pausa o seguir" onClick={() => setPaused((p) => !p)} className="rounded-full bg-black/80 px-4 py-1.5 text-lg text-white active:scale-95">{paused ? "▶️" : "⏸"}</button>
+          <button aria-label="Siguiente" onClick={() => { setIdx((i) => Math.min(scenes.length - 1, i + 1)); setPicked(null); }} className="rounded-full bg-black/80 px-3 py-1.5 text-lg text-white active:scale-95">⏭</button>
+        </div>
+        <button aria-label="Velocidad" onClick={() => setSpeed((v) => (v === 0.7 ? 0.85 : v === 0.85 ? 1 : 0.7))} className="rounded-full bg-black/80 px-3 py-1.5 text-sm font-bold text-white active:scale-95">
+          {speed === 0.7 ? "🐢 0.7×" : speed === 0.85 ? "0.85×" : "1×"}
+        </button>
+      </div>
+
       {/* folio con la escena */}
-      <div ref={sceneRef} key={`${video.id}-${idx}`} className="absolute inset-x-0 bottom-44 top-20 flex items-center justify-center px-5">
+      <div ref={sceneRef} key={`${video.id}-${idx}`} className="absolute inset-x-0 bottom-[13.5rem] top-[5.5rem] flex items-center justify-center px-5">
         <SceneView scene={scene} color={sceneColor} picked={picked} waiting={waiting} onPick={(i) => setPicked(i)} />
         <span ref={penRef} className="pointer-events-none absolute left-0 top-0 z-20 -ml-[6px] -mt-[6px] opacity-0" aria-hidden>
           <MarkerHand color={color} />
@@ -865,10 +974,7 @@ export default function VideoPlayer({
           <span className="text-[28px]">{soundOn ? "🔊" : "🔇"}</span>
           {soundOn ? "Voz" : "Sin voz"}
         </button>
-        <button onClick={() => { setIdx(0); setPaused(false); }} aria-label="Repetir" className="flex flex-col items-center text-xs font-bold">
-          <span className="text-[28px]">🔁</span>
-          Otra vez
-        </button>
+
       </div>
 
       {paused ? (

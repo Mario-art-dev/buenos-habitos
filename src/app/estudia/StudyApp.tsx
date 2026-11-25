@@ -3,9 +3,39 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import VideoPlayer from "./VideoPlayer";
-import { extractFiles, splitIntoParts, type StudyImage } from "./extract";
-import { VIDEOS_PER_DOCUMENT } from "@/lib/study/constants";
+import { extractFiles, splitSections, type StudyImage } from "./extract";
 import { videoSeconds, type StudyVideo } from "./types";
+
+import type { ClipBrief } from "@/lib/study/generate";
+
+/** Ejecuta fn sobre todos los items con como máximo `n` a la vez. */
+async function pool<T, R>(items: T[], n: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(n, items.length) }, async () => {
+      while (next < items.length) {
+        const k = next++;
+        out[k] = await fn(items[k]);
+      }
+    })
+  );
+  return out;
+}
+
+/** Reintenta con pausas crecientes (la IA gratuita a veces responde «demasiadas peticiones»). */
+async function withRetry<T>(fn: () => Promise<T>, tries = 3): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 0; i < tries; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      lastErr = e;
+      await new Promise((r) => setTimeout(r, 4000 * (i + 1)));
+    }
+  }
+  throw lastErr;
+}
 
 type Tab = "foryou" | "sections" | "create" | "search";
 type FeedItem = { key: string; video: StudyVideo };
@@ -147,6 +177,8 @@ function CreateView({ subjects, onCreated, onDone }: { subjects: string[]; onCre
   const [pasted, setPasted] = useState("");
   const [phase, setPhase] = useState<"form" | "reading" | "planning" | "making" | "done">("form");
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [briefs, setBriefs] = useState<ClipBrief[]>([]);
+  const [planInfo, setPlanInfo] = useState("");
   const [error, setError] = useState("");
 
   async function post<T>(url: string, body: unknown): Promise<T> {
@@ -165,44 +197,79 @@ function CreateView({ subjects, onCreated, onDone }: { subjects: string[]; onCre
       setPhase("reading");
       const extracted = await extractFiles(files);
       const text = [extracted.text, pasted.trim()].filter(Boolean).join("\n\n");
-      // Siempre 5 partes: cada una será un vídeo de unos 2 minutos.
-      const parts = splitIntoParts(text, VIDEOS_PER_DOCUMENT);
-      const images: StudyImage[][] = Array.from({ length: VIDEOS_PER_DOCUMENT }, () => []);
-      extracted.images.forEach((img, i) => images[i % VIDEOS_PER_DOCUMENT].push(img));
-
+      const sections = splitSections(text);
+      const sectionCount = Math.max(1, sections.length);
+      const images: StudyImage[][] = Array.from({ length: sectionCount }, () => []);
+      extracted.images.forEach((img, i) => images[i % sectionCount].push(img));
       const topicName = topic.trim() || subj;
-      setJobs(parts.map((_, i) => ({ title: `Parte ${i + 1} de ${VIDEOS_PER_DOCUMENT}`, status: "wait" })));
-      setPhase("making");
 
-      // Los 5 a la vez. La IA ya reparte el uso entre proveedores; así el tiempo total es el
-      // de un solo vídeo, no el de cinco seguidos.
-      await Promise.all(
-        parts.map(async (part, i) => {
-          if (!part && !images[i].length) return setJobs((js) => js.map((j, k) => (k === i ? { ...j, status: "fail", error: "Parte vacía" } : j)));
-          setJobs((js) => js.map((j, k) => (k === i ? { ...j, status: "work" } : j)));
-          for (let attempt = 0; attempt < 2; attempt++) {
-            try {
-              const raw = await post<RawVideo>("/api/study/video", {
-                subject: subj,
-                topic: topicName,
-                partIndex: i,
-                text: part,
-                images: images[i],
-              });
-              const v = parse(raw);
-              if (v) onCreated(v);
-              return setJobs((js) => js.map((j, k) => (k === i ? { ...j, status: "ok", title: v?.title ?? j.title } : j)));
-            } catch (e) {
-              if (attempt === 1) setJobs((js) => js.map((j, k) => (k === i ? { ...j, status: "fail", error: (e as Error).message } : j)));
-            }
-          }
-        })
-      );
+      // 1) Planear: cada sección decide cuántos clips necesita para explicarse entera.
+      setPhase("planning");
+      setPlanInfo(`0/${sectionCount} secciones`);
+      let done = 0;
+      const briefs = (await pool(
+        Array.from({ length: sectionCount }, (_, i) => i),
+        3,
+        async (i) => {
+          const clips = await withRetry(() =>
+            post<{ clips: ClipBrief[] }>("/api/study/plan", {
+              subject: subj,
+              topic: topicName,
+              sectionText: sections[i] ?? "",
+              sectionIndex: i,
+              totalSections: sectionCount,
+              images: images[i],
+            })
+          );
+          done++;
+          setPlanInfo(`${done}/${sectionCount} secciones`);
+          return clips.clips;
+        }
+      )).flat();
+      if (!briefs.length) throw new Error("No se han podido sacar clips de este material.");
+
+      // 2) Crear todos los clips (4 a la vez). Los que fallen se pueden reintentar.
+      setBriefs(briefs.map((b) => ({ ...b, subject: subj, topic: topicName })));
+      setJobs(briefs.map((b) => ({ title: b.title, status: "wait" })));
+      setPhase("making");
+      await runClips(briefs.map((b) => ({ ...b, subject: subj, topic: topicName })), subj, topicName, briefs.length);
       setPhase("done");
     } catch (e) {
       setError((e as Error).message);
       setPhase("form");
     }
+  }
+
+  async function runClips(list: ClipBrief[], subj: string, topicName: string, total: number) {
+    const indexes = list.map((_, i) => i);
+    await pool(indexes, 4, async (i) => {
+      const brief = list[i];
+      setJobs((js) => js.map((j) => (j.title === brief.title ? { ...j, status: "work", error: undefined } : j)));
+      try {
+        const raw = await withRetry(() =>
+          post<RawVideo>("/api/study/video", {
+            subject: subj,
+            topic: topicName,
+            clip: brief,
+            index: i,
+            total,
+          })
+        );
+        const v = parse(raw);
+        if (v) onCreated(v);
+        setJobs((js) => js.map((j) => (j.title === brief.title ? { ...j, status: "ok", title: v?.title ?? j.title } : j)));
+      } catch (e) {
+        setJobs((js) => js.map((j) => (j.title === brief.title ? { ...j, status: "fail", error: (e as Error).message } : j)));
+      }
+    });
+  }
+
+  async function retryFailed() {
+    const failed = briefs.filter((b) => jobs.some((j) => j.title === b.title && j.status === "fail"));
+    if (!failed.length) return;
+    setPhase("making");
+    await runClips(failed, failed[0].subject ?? subject.trim(), failed[0].topic ?? (topic.trim() || subject.trim()), failed.length);
+    setPhase("done");
   }
 
   const input = "w-full rounded-xl bg-white/10 px-4 py-3 text-[16px] text-white placeholder-white/40 outline-none ring-1 ring-white/15 focus:ring-pink-400";
@@ -214,8 +281,8 @@ function CreateView({ subjects, onCreated, onDone }: { subjects: string[]; onCre
         <h1 className="text-2xl font-black">
           {phase === "reading" && "📖 Leyendo tus archivos…"}
           {phase === "planning" && "🧠 Dividiendo el temario…"}
-          {phase === "making" && `🎬 Creando vídeos ${done}/${jobs.length}`}
-          {phase === "done" && `✅ ¡${done} vídeos listos!`}
+          {phase === "making" && `🎬 Creando clips ${done}/${jobs.length}`}
+          {phase === "done" && `✅ ${done} de ${jobs.length} clips listos`}
         </h1>
         {phase !== "done" ? <p className="text-sm text-white/60">No cierres esta pantalla. Cada vídeo tarda unos segundos.</p> : null}
         <ul className="space-y-2">
@@ -229,6 +296,10 @@ function CreateView({ subjects, onCreated, onDone }: { subjects: string[]; onCre
             </li>
           ))}
         </ul>
+        {phase === "planning" ? <p className="text-sm text-white/60">Analizando el documento: {planInfo}</p> : null}
+        {phase === "done" && jobs.some((j) => j.status === "fail") ? (
+          <button onClick={retryFailed} className="rounded-xl bg-amber-400 py-3 font-black text-black">🔁 Reintentar los que fallaron ({jobs.filter((j) => j.status === "fail").length})</button>
+        ) : null}
         {phase === "done" ? (
           <div className="flex gap-2">
             <button onClick={() => onDone(subject.trim())} className="flex-1 rounded-xl bg-pink-500 py-3 font-black">▶ Ver los vídeos</button>
@@ -245,7 +316,7 @@ function CreateView({ subjects, onCreated, onDone }: { subjects: string[]; onCre
         <h1 className="text-2xl font-black">➕ Crear vídeos</h1>
         <Link href="/" className="text-sm text-white/50">Salir</Link>
       </div>
-      <p className="text-sm text-white/60">Sube tu temario. La IA lo divide en 5 partes y crea 5 vídeos de 2 minutos en inglés, estilo Draw My Life.</p>
+      <p className="text-sm text-white/60">Sube tu documento, sin límite práctico de tamaño. La IA lo divide en secciones y crea todos los clips necesarios para explicarlo entero, cada uno entendible por sí solo.</p>
 
       <label className="space-y-1">
         <span className="text-sm font-bold">1. Asignatura</span>
@@ -441,10 +512,7 @@ export default function StudyApp() {
           forYou.length ? (
             <>
               <Feed items={fresh(forYou)} {...feedProps} onNearEnd={onNearEnd} />
-              <div className="pointer-events-none absolute inset-x-0 top-3 z-30 flex justify-center gap-5 text-[17px] font-black text-neutral-900">
-                <button className="pointer-events-auto opacity-60" onClick={() => setTab("sections")}>Secciones</button>
-                <span className="border-b-2 border-neutral-900 pb-0.5">Para ti</span>
-              </div>
+
             </>
           ) : (
             empty
@@ -519,7 +587,7 @@ export default function StudyApp() {
         )}
 
         {(overlay || (tab === "foryou" && forYou.length)) && !loading ? (
-          <span key={pop} className={`pointer-events-none absolute right-3 top-3 z-30 rounded-full bg-black/80 px-3 py-1 text-sm font-black text-white ${pop ? "study-score" : ""}`}>
+          <span key={pop} className={`pointer-events-none absolute right-3 top-14 z-30 rounded-full bg-black/80 px-3 py-1 text-sm font-black text-white ${pop ? "study-score" : ""}`}>
             🧠 {score}
           </span>
         ) : null}
