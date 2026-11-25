@@ -46,6 +46,15 @@ jobs:
           node-version: "20"
           cache: "npm"
 
+      - name: Instalar la voz natural (Piper, gratis). Si falla, la web usa la voz del navegador
+        continue-on-error: true
+        run: |
+          pip3 install --break-system-packages piper-tts
+          mkdir -p models
+          curl -fsSL -o models/en_US-lessac-medium.onnx "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx"
+          curl -fsSL -o models/en_US-lessac-medium.onnx.json "https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/lessac/medium/en_US-lessac-medium.onnx.json"
+          python3 -c "from piper import PiperVoice; PiperVoice.load('models/en_US-lessac-medium.onnx'); print('Voz Piper lista')"
+
       - name: Instalar dependencias
         run: npm ci
 

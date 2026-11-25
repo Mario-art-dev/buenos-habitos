@@ -38,6 +38,21 @@ function englishVoice(): SpeechSynthesisVoice | null {
   return cachedVoice;
 }
 
+// Voz natural del servidor (Piper). Cada frase se pide una vez y se guarda en memoria.
+const speechCache = new Map<string, Promise<string>>();
+function speechUrl(text: string): Promise<string> {
+  let p = speechCache.get(text);
+  if (!p) {
+    p = fetch("/api/study/tts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) }).then(async (r) => {
+      if (!r.ok) throw new Error("tts");
+      return URL.createObjectURL(await r.blob());
+    });
+    speechCache.set(text, p);
+    p.catch(() => speechCache.delete(text));
+  }
+  return p;
+}
+
 function speak(text: string, rate: number, onEnd?: () => void, onWord?: (i: number) => void) {
   const synth = window.speechSynthesis;
   if (!synth) return onEnd?.();
@@ -738,6 +753,8 @@ export default function VideoPlayer({
   const penRef = useRef<HTMLSpanElement>(null);
   const wipeRef = useRef<HTMLDivElement>(null);
   const seenSent = useRef(false);
+  const pausedRef = useRef(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const scene = scenes[idx] ?? scenes[0];
   const sceneColor = markerAt(baseColorIdx + idx);
   const interactive = INTERACTIVE.has(scene.type);
@@ -759,33 +776,68 @@ export default function VideoPlayer({
     }
   }, [active, paused, soundOn]);
 
-  // Reproducción de la escena: voz (o temporizador). Las interactivas esperan a que toques.
+  // Reproducción de la escena. Con voz: audio natural del servidor (se puede pausar y seguir).
+  // Sin voz: temporizador. Las escenas interactivas esperan a que toques.
   useEffect(() => {
     setWordIdx(0);
     setPicked(null);
     setWaiting(false);
-    if (!active || paused) return;
-    const seconds = sceneSeconds(scene) / speed;
+    if (!active) return;
+    const seconds = (sceneSeconds(scene) / speed) * 1000;
     let done = false;
+    let elapsed = 0;
+    let last = performance.now();
     const timers: ReturnType<typeof setTimeout>[] = [];
+    let audio: HTMLAudioElement | null = null;
     const finish = () => {
       if (done) return;
       done = true;
       if (interactive) {
         setWaiting(true);
-        // si no tocas en 12 s, se resuelve solo
         timers.push(setTimeout(() => setPicked((p) => (p === null ? (scene.type === "quiz" ? scene.answer ?? 0 : 0) : p)), 12_000));
-      } else timers.push(setTimeout(goNext, 400));
+      } else timers.push(setTimeout(goNext, 500));
     };
-    const start = performance.now();
-    const useVoice = soundOn && !!window.speechSynthesis && !!scene.narration;
-    const ticker = setInterval(() => {
-      if (!useVoice) setWordIdx(Math.min(words.length - 1, Math.floor(((performance.now() - start) / 1000 / seconds) * words.length)));
-    }, 120);
-    if (useVoice) {
-      speak(scene.narration!, speed, finish, setWordIdx);
-      timers.push(setTimeout(finish, (seconds * 1.8 + 3) * 1000));
-    } else timers.push(setTimeout(finish, seconds * 1000));
+    const words_ = words;
+    const tick = setInterval(() => {
+      const now = performance.now();
+      const dt = now - last;
+      last = now;
+      if (pausedRef.current || done) return;
+      if (!audio) {
+        elapsed += dt;
+        setWordIdx(Math.min(words_.length - 1, Math.floor((elapsed / seconds) * words_.length)));
+        if (elapsed >= seconds) finish();
+      }
+    }, 100);
+
+    if (soundOn && scene.narration) {
+      const text = scene.narration;
+      const fallback = () => {
+        if (done) return;
+        speak(text, speed, finish, setWordIdx);
+        timers.push(setTimeout(finish, seconds * 1.6 + 3000));
+      };
+      speechUrl(text)
+        .then((url) => {
+          if (done) return;
+          audio = new Audio(url);
+          audioRef.current = audio;
+          audio.playbackRate = speed;
+          audio.preservesPitch = true;
+          audio.ontimeupdate = () => {
+            if (audio && audio.duration) setWordIdx(Math.min(words_.length - 1, Math.floor((audio.currentTime / audio.duration) * words_.length)));
+          };
+          audio.onended = () => {
+            audio = null;
+            finish();
+          };
+          if (!pausedRef.current) audio.play().catch(fallback);
+        })
+        .catch(fallback);
+      // Se pide ya la siguiente frase para que no haya silencio entre escenas.
+      const next = scenes[(idx + 1) % scenes.length]?.narration;
+      if (next) speechUrl(next).catch(() => {});
+    }
     if (!seenSent.current) {
       timers.push(
         setTimeout(() => {
@@ -796,12 +848,27 @@ export default function VideoPlayer({
     }
     return () => {
       done = true;
-      clearInterval(ticker);
+      clearInterval(tick);
       timers.forEach(clearTimeout);
+      if (audio) {
+        audio.pause();
+        audio.src = "";
+      }
+      if (audioRef.current === audio) audioRef.current = null;
       window.speechSynthesis?.cancel();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, paused, idx, soundOn, video.id, speed]);
+  }, [active, idx, soundOn, video.id, speed]);
+
+  // Pausa y seguir: pausa el audio en el mismo punto.
+  useEffect(() => {
+    pausedRef.current = paused;
+    const a = audioRef.current;
+    if (a) {
+      if (paused) a.pause();
+      else a.play().catch(() => {});
+    }
+  }, [paused]);
 
   // Tras responder: reacción (sonido + voz) y a la siguiente escena.
   useEffect(() => {
@@ -817,7 +884,7 @@ export default function VideoPlayer({
     let t: ReturnType<typeof setTimeout>;
     const after = () => (t = setTimeout(goNext, 1400));
     if (soundOn && line) {
-      speak(line, speed, after);
+      speechUrl(line).then((url) => { const a = new Audio(url); a.playbackRate = speed; a.onended = after; a.play().catch(after); }).catch(() => speak(line, speed, after));
       t = setTimeout(goNext, 9000);
     } else t = setTimeout(goNext, 3200);
     if (!reducedMotion() && sceneRef.current) {
